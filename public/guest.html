@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>BNI SYNERGY — Регистрация</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:        #C41230;
+      --red-dark:   #9e0e26;
+      --text:       #1a1a1a;
+      --muted:      #6b7280;
+      --border:     #d1d5db;
+      --bg:         #f8f9fa;
+      --radius:     10px;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px 40px;
+    }
+
+    /* ── Logo / header ── */
+    .logo-block {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--red);
+      letter-spacing: -0.5px;
+    }
+
+    .logo-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #ffffff;
+      border-radius: var(--radius);
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.09);
+      width: 100%;
+      max-width: 420px;
+      padding: 28px 24px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-align: center;
+      color: var(--text);
+    }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 16px; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    label .req { color: var(--red); margin-left: 2px; }
+
+    input[type="text"],
+    input[type="tel"] {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;          /* prevents iOS zoom */
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      outline: none;
+      color: var(--text);
+      background: #fff;
+      -webkit-appearance: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus { border-color: var(--red); }
+
+    .ref-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--red);
+    }
+
+    /* ── Submit button ── */
+    .btn-submit {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: var(--red);
+      color: #ffffff;
+      font-size: 17px;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      -webkit-appearance: none;
+      transition: background 0.15s, transform 0.1s;
+      margin-top: 8px;
+    }
+
+    .btn-submit:hover:not(:disabled) { background: var(--red-dark); }
+    .btn-submit:active { transform: scale(0.98); }
+    .btn-submit:disabled { background: #d1d5db; cursor: not-allowed; }
+
+    /* ── Meeting info ── */
+    .meeting-info {
+      background: #fef2f2;
+      border-left: 3px solid var(--red);
+      border-radius: 4px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #7f1d1d;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    /* ── Error ── */
+    .error-msg {
+      background: #fee2e2;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 14px;
+      color: #b91c1c;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* ── Success screen ── */
+    .success-screen {
+      display: none;
+      text-align: center;
+      padding: 8px 0 4px;
+    }
+
+    .success-icon { font-size: 52px; margin-bottom: 12px; }
+
+    .success-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #15803d;
+      margin-bottom: 6px;
+    }
+
+    .success-sub {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      flex-direction: column;
+    }
+
+    .btn-action {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      -webkit-appearance: none;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn-action:active { transform: scale(0.98); }
+    .btn-action:hover  { opacity: 0.9; }
+
+    .btn-pay {
+      background: var(--red);
+      color: #ffffff;
+    }
+
+    .btn-nav {
+      background: #1b59f8;
+      color: #ffffff;
+    }
+
+    .note {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 18px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo-block">
+    <div class="logo-title">BNI SYNERGY</div>
+    <div class="logo-sub">Нетворкинг &amp; Бизнес</div>
+  </div>
+
+  <div class="card">
+    <div id="formView">
+      <h1 class="card-title">Регистрация гостя</h1>
+
+      <div class="meeting-info" id="meetingInfo" style="display:none"></div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <form id="regForm" novalidate>
+        <div class="form-group">
+          <label for="firstName">Имя<span class="req">*</span></label>
+          <input type="text" id="firstName" name="firstName"
+                 placeholder="Иван" autocomplete="given-name" required />
+        </div>
+
+        <div class="form-group">
+          <label for="lastName">Фамилия<span class="req">*</span></label>
+          <input type="text" id="lastName" name="lastName"
+                 placeholder="Иванов" autocomplete="family-name" required />
+        </div>
+
+        <div class="form-group">
+          <label for="phone">Телефон (WhatsApp)<span class="req">*</span></label>
+          <input type="tel" id="phone" name="phone"
+                 placeholder="052-000-0000" autocomplete="tel" required />
+        </div>
+
+        <div class="form-group">
+          <label for="specialty">Профессия / вид деятельности</label>
+          <input type="text" id="specialty" name="specialty"
+                 placeholder="Программист, Архитектор, …"
+                 maxlength="50" />
+        </div>
+
+        <!-- Invited by: shows input OR badge depending on ?ref= -->
+        <div class="form-group" id="invitedByGroup">
+          <label for="invitedBy">Кто пригласил</label>
+          <input type="text" id="invitedBy" name="invitedBy"
+                 placeholder="Имя члена BNI" />
+        </div>
+        <div class="form-group" id="refBadgeGroup" style="display:none">
+          <label>Приглашён</label>
+          <div class="ref-badge">
+            <span>🤝</span>
+            <span id="refBadgeText"></span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">
+          Зарегистрироваться →
+        </button>
+      </form>
+
+      <p class="note">
+        После регистрации вы получите подтверждение и ссылку для оплаты в WhatsApp.
+      </p>
+    </div>
+
+    <!-- ── Success screen ── -->
+    <div class="success-screen" id="successView">
+      <div class="success-icon">✅</div>
+      <div class="success-title" id="successTitle">Спасибо!</div>
+      <div class="success-sub">
+        Вы зарегистрированы.<br/>
+        Подтверждение отправлено в WhatsApp.
+      </div>
+      <div class="action-buttons">
+        <a href="https://links.payboxapp.com/2vFKGJA1VVb"
+           target="_blank" rel="noopener"
+           class="btn-action btn-pay">
+          💳 Оплатить 80₪
+        </a>
+        <a href="https://waze.com/ul/hsv8tzcptn"
+           target="_blank" rel="noopener"
+           class="btn-action btn-nav">
+          🗺️ Навигатор
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params   = new URLSearchParams(location.search);
+    const refParam = params.get('ref');
+
+    // Handle ?ref= param
+    if (refParam) {
+      const name = decodeURIComponent(refParam);
+      document.getElementById('invitedByGroup').style.display = 'none';
+      document.getElementById('refBadgeGroup').style.display  = 'block';
+      document.getElementById('refBadgeText').textContent     = name;
+    }
+
+    // Fetch and show next meeting date
+    fetch('/api/test')
+      .then(r => r.json())
+      .then(data => {
+        if (data.nextMeeting) {
+          const el = document.getElementById('meetingInfo');
+          el.style.display = 'block';
+          el.innerHTML =
+            `📅 Следующая встреча: <strong>${data.nextMeeting}</strong> в 7:30<br/>` +
+            `📍 סמילנסקי 43 ראשון לציון`;
+        }
+      })
+      .catch(() => {});
+
+    // Form submit
+    const form      = document.getElementById('regForm');
+    const errorEl   = document.getElementById('errorMsg');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      errorEl.style.display = 'none';
+
+      const firstName  = document.getElementById('firstName').value.trim();
+      const lastName   = document.getElementById('lastName').value.trim();
+      const phone      = document.getElementById('phone').value.trim();
+      const specialty  = document.getElementById('specialty').value.trim();
+      const invitedBy  = refParam
+        ? decodeURIComponent(refParam)
+        : document.getElementById('invitedBy').value.trim();
+
+      if (!firstName || !lastName || !phone) {
+        errorEl.textContent = 'Пожалуйста, заполните все обязательные поля.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled    = true;
+      submitBtn.textContent = 'Отправляем…';
+
+      try {
+        const resp = await fetch('/api/register', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ firstName, lastName, phone, specialty, invitedBy }),
+        });
+
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Ошибка ${resp.status}`);
+
+        // Show success screen
+        document.getElementById('successTitle').textContent = `Спасибо, ${data.firstName}!`;
+        document.getElementById('formView').style.display    = 'none';
+        document.getElementById('successView').style.display = 'block';
+
+      } catch (err) {
+        errorEl.textContent    = `Ошибка: ${err.message}`;
+        errorEl.style.display  = 'block';
+        submitBtn.disabled     = false;
+        submitBtn.textContent  = 'Зарегистрироваться →';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BNI SYNERGY — Панель управления</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:     #C41230;
+      --red-d:   #9e0e26;
+      --green:   #15803d;
+      --green-bg:#dcfce7;
+      --border:  #e5e7eb;
+      --bg:      #f3f4f6;
+      --text:    #111827;
+      --muted:   #6b7280;
+      --radius:  8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--red);
+      color: #fff;
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    .topbar .brand {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      flex: 1;
+    }
+
+    .topbar .brand span { font-weight: 400; opacity: 0.7; font-size: 13px; margin-left: 8px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn:hover   { opacity: 0.85; }
+    .btn:active  { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-white  { background: #fff;         color: var(--red); }
+    .btn-red    { background: var(--red);   color: #fff; }
+    .btn-green  { background: var(--green); color: #fff; }
+    .btn-gray   { background: #374151;      color: #fff; }
+    .btn-outline{ background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.6); }
+
+    /* ── Main layout ── */
+    .main { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+
+    .toolbar label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+    select {
+      padding: 7px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      background: #fff;
+    }
+
+    select:focus { border-color: var(--red); }
+
+    .toolbar-sep {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    /* ── Stats ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+
+    .stat .num  { font-size: 30px; font-weight: 800; color: var(--red); }
+    .stat .lbl  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      padding: 11px 14px;
+      background: #f9fafb;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1.5px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+      line-height: 1.4;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+
+    /* Alternating rows */
+    tbody tr:nth-child(even) { background: #fafafa; }
+    tbody tr:hover           { background: #fff4f4; }
+
+    /* Paid row highlight */
+    tbody tr.paid-row { background: #f0fdf4 !important; }
+    tbody tr.paid-row:hover { background: #dcfce7 !important; }
+
+    .badge-paid   { display: inline-block; background: #dcfce7; color: var(--green); padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-unpaid { display: inline-block; background: #fee2e2; color: #dc2626;      padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+    .btn-sm { padding: 5px 11px; font-size: 12px; }
+
+    .empty-msg {
+      text-align: center;
+      padding: 48px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      width: 480px;
+      max-width: 95vw;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .modal h3 { font-size: 17px; margin-bottom: 14px; }
+
+    .modal label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+    .modal input,
+    .modal textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      resize: vertical;
+    }
+
+    .modal input:focus,
+    .modal textarea:focus { border-color: var(--red); }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      justify-content: flex-end;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1f2937;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      z-index: 300;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      max-width: 360px;
+    }
+
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.ok   { background: #15803d; }
+    #toast.err  { background: #dc2626; }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ────────────────────────────────────────────────── -->
+<nav class="topbar">
+  <div class="brand">BNI SYNERGY <span>Панель управления</span></div>
+  <a href="/guest" target="_blank" class="btn btn-outline btn-sm">+ Форма гостя</a>
+</nav>
+
+<!-- ── Main ───────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <label for="dateSelect">📅 Встреча:</label>
+    <select id="dateSelect" onchange="onDateChange()">
+      <option value="">— Все встречи —</option>
+    </select>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="btn btn-gray btn-sm" onclick="downloadPDF('list')">📄 Список PDF</button>
+    <button class="btn btn-gray btn-sm" onclick="downloadPDF('badges')">🏷️ Бейджики PDF</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="btn btn-red btn-sm"   onclick="openModal('voting')">📨 Разослать голосование</button>
+    <button class="btn btn-green btn-sm" onclick="openModal('contacts')">📋 Разослать контакты</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="num" id="statTotal">—</div>
+      <div class="lbl">Всего гостей</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="statPaid">—</div>
+      <div class="lbl">Оплатили</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="statUnpaid">—</div>
+      <div class="lbl">Не оплатили</div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="guestTable">
+      <thead>
+        <tr>
+          <th>№</th>
+          <th>Имя и Фамилия</th>
+          <th>Профессия</th>
+          <th>Телефон</th>
+          <th>Кто пригласил</th>
+          <th>Встреча</th>
+          <th>Оплата</th>
+          <th>Действие</th>
+        </tr>
+      </thead>
+      <tbody id="guestBody"></tbody>
+    </table>
+    <div id="emptyMsg" class="empty-msg" style="display:none">Нет зарегистрированных гостей</div>
+  </div>
+</div>
+
+<!-- ── Modal: Voting broadcast ────────────────────────────────── -->
+<div class="modal-overlay" id="modalVoting">
+  <div class="modal">
+    <h3>📨 Разослать ссылку для голосования</h3>
+    <div style="margin-bottom:12px">
+      <label>Дата встречи</label>
+      <input type="text" id="votingDate" placeholder="09/03" />
+    </div>
+    <div>
+      <label>Ссылка для голосования</label>
+      <input type="url" id="votingLink" placeholder="https://..." />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gray btn-sm" onclick="closeModal('voting')">Отмена</button>
+      <button class="btn btn-red  btn-sm" onclick="sendVoting()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Contacts broadcast ─────────────────────────────── -->
+<div class="modal-overlay" id="modalContacts">
+  <div class="modal">
+    <h3>📋 Разослать контакты</h3>
+    <div style="margin-bottom:12px">
+      <label>Дата встречи</label>
+      <input type="text" id="contactsDate" placeholder="09/03" />
+    </div>
+    <div>
+      <label>Текст контактов</label>
+      <textarea id="contactsText" rows="8" placeholder="1. Иван Иванов — Программист | 052-000-0000&#10;2. …"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gray  btn-sm" onclick="closeModal('contacts')">Отмена</button>
+      <button class="btn btn-green btn-sm" onclick="sendContacts()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ─── State ───────────────────────────────────────────────────────────────────
+  let allGuests = [];
+
+  // ─── Init ────────────────────────────────────────────────────────────────────
+  (async () => {
+    await loadMeetingDates();
+    await loadGuests();
+  })();
+
+  // ─── Toast ───────────────────────────────────────────────────────────────────
+  let _toastTimer;
+  function toast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `show ${type}`;
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+  }
+
+  // ─── API ─────────────────────────────────────────────────────────────────────
+  async function api(url, opts = {}) {
+    const r = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  }
+
+  // ─── Meeting dates ────────────────────────────────────────────────────────────
+  async function loadMeetingDates() {
+    const dates  = await api('/api/meetings');
+    const select = document.getElementById('dateSelect');
+    while (select.options.length > 1) select.remove(1);
+    dates.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.text  = d;
+      select.add(opt);
+    });
+    if (dates.length) select.value = dates[0];
+  }
+
+  // ─── Guests table ─────────────────────────────────────────────────────────────
+  async function loadGuests() {
+    const date = document.getElementById('dateSelect').value;
+    const url  = date ? `/api/guests?date=${encodeURIComponent(date)}` : '/api/guests';
+    allGuests = await api(url);
+    renderTable(allGuests);
+  }
+
+  function onDateChange() { loadGuests(); }
+
+  function renderTable(guests) {
+    const tbody   = document.getElementById('guestBody');
+    const emptyEl = document.getElementById('emptyMsg');
+
+    tbody.innerHTML = '';
+    document.getElementById('statTotal').textContent  = guests.length;
+    document.getElementById('statPaid').textContent   = guests.filter(g => g.paid).length;
+    document.getElementById('statUnpaid').textContent = guests.filter(g => !g.paid).length;
+
+    if (!guests.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    guests.forEach((g, i) => {
+      const tr = document.createElement('tr');
+      if (g.paid) tr.classList.add('paid-row');
+
+      const paidBadge = g.paid
+        ? '<span class="badge-paid">✓ Оплачено</span>'
+        : '<span class="badge-unpaid">✗ Не оплачено</span>';
+
+      const actionBtn = g.paid
+        ? `<button class="btn btn-gray btn-sm" disabled>Оплачено</button>`
+        : `<button class="btn btn-green btn-sm" onclick="markPaid('${g.id}')">Отметить оплату</button>`;
+
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td><strong>${esc(g.firstName)} ${esc(g.lastName)}</strong></td>
+        <td>${esc(g.specialty || '—')}</td>
+        <td>${esc(g.phone)}</td>
+        <td>${esc(g.invitedBy || '—')}</td>
+        <td>${esc(g.meetingDate)}</td>
+        <td>${paidBadge}</td>
+        <td>${actionBtn}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ─── Mark paid ────────────────────────────────────────────────────────────────
+  async function markPaid(id) {
+    try {
+      await api(`/api/guests/${id}/paid`, { method: 'PUT' });
+      await loadGuests();
+      toast('Оплата отмечена ✓', 'ok');
+    } catch (e) {
+      toast(`Ошибка: ${e.message}`, 'err');
+    }
+  }
+
+  // ─── PDF ──────────────────────────────────────────────────────────────────────
+  function downloadPDF(type) {
+    const date = document.getElementById('dateSelect').value;
+    if (!date) { toast('Выберите дату встречи'); return; }
+    window.open(`/api/pdf/${type}?date=${encodeURIComponent(date)}`, '_blank');
+  }
+
+  // ─── Modals ───────────────────────────────────────────────────────────────────
+  function openModal(name) {
+    const date = document.getElementById('dateSelect').value;
+    if (name === 'voting') {
+      document.getElementById('votingDate').value = date;
+    } else {
+      document.getElementById('contactsDate').value = date;
+    }
+    document.getElementById(`modal${cap(name)}`).classList.add('open');
+  }
+
+  function closeModal(name) {
+    document.getElementById(`modal${cap(name)}`).classList.remove('open');
+  }
+
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  // Close on backdrop click
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  });
+
+  // ─── Voting broadcast ─────────────────────────────────────────────────────────
+  async function sendVoting() {
+    const date       = document.getElementById('votingDate').value.trim();
+    const votingLink = document.getElementById('votingLink').value.trim();
+    if (!date || !votingLink) { toast('Заполните все поля', 'err'); return; }
+
+    try {
+      const r = await api('/api/send-voting', {
+        method: 'POST',
+        body: JSON.stringify({ date, votingLink }),
+      });
+      closeModal('voting');
+      toast(`Рассылка запущена — ${r.total} гостей 🗳️`, 'ok');
+    } catch (e) {
+      toast(`Ошибка: ${e.message}`, 'err');
+    }
+  }
+
+  // ─── Contacts broadcast ───────────────────────────────────────────────────────
+  async function sendContacts() {
+    const date         = document.getElementById('contactsDate').value.trim();
+    const contactsText = document.getElementById('contactsText').value.trim();
+    if (!date || !contactsText) { toast('Заполните все поля', 'err'); return; }
+
+    try {
+      const r = await api('/api/send-contacts', {
+        method: 'POST',
+        body: JSON.stringify({ date, contactsText }),
+      });
+      closeModal('contacts');
+      toast(`Рассылка запущена — ${r.total} гостей 📋`, 'ok');
+    } catch (e) {
+      toast(`Ошибка: ${e.message}`, 'err');
+    }
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>
