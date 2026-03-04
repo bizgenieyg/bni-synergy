@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>BNI SYNERGY — Пригласить гостя</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:      #C41230;
+      --red-dark: #9e0e26;
+      --border:   #d1d5db;
+      --muted:    #6b7280;
+      --radius:   10px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 28px 16px 48px;
+      color: #1a1a1a;
+    }
+
+    /* ── Logo ── */
+    .logo { text-align: center; margin-bottom: 24px; }
+    .logo-title { font-family: Arial Black, Arial, sans-serif; font-size: 28px; color: var(--red); letter-spacing: -1px; }
+    .logo-title span { font-size: 16px; color: #333; font-family: inherit; }
+    .logo-sub { font-size: 12px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 2px 16px rgba(0,0,0,0.09);
+      width: 100%;
+      max-width: 440px;
+      padding: 28px 24px;
+    }
+
+    h1 { font-size: 17px; font-weight: 700; margin-bottom: 22px; text-align: center; color: #111; }
+
+    /* ── Form elements ── */
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+
+    select {
+      width: 100%;
+      padding: 13px 14px;
+      font-size: 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      outline: none;
+      background: #fff;
+      color: #111;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+
+    select:focus { border-color: var(--red); }
+
+    /* ── Radio group ── */
+    .radio-group { display: flex; flex-direction: column; gap: 10px; }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .radio-option:has(input:checked) {
+      border-color: var(--red);
+      background: #fff4f4;
+    }
+
+    .radio-option input[type="radio"] {
+      accent-color: var(--red);
+      width: 17px;
+      height: 17px;
+      flex-shrink: 0;
+    }
+
+    /* ── Button ── */
+    .btn-generate {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      background: var(--red);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-generate:hover { background: var(--red-dark); }
+    .btn-generate:active { transform: scale(0.98); }
+
+    /* ── Result box ── */
+    .result-box {
+      display: none;
+      margin-top: 20px;
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .result-box .result-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #15803d;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .result-url {
+      font-family: monospace;
+      font-size: 12px;
+      color: #1a1a1a;
+      background: #fff;
+      border: 1px solid #d1fae5;
+      border-radius: 6px;
+      padding: 10px;
+      word-break: break-all;
+      margin-bottom: 12px;
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-action {
+      flex: 1;
+      padding: 11px 8px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      text-align: center;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-action:active { transform: scale(0.97); }
+    .btn-copy { background: #374151; color: #fff; }
+    .btn-wa   { background: #25D366; color: #fff; }
+
+    .copy-feedback {
+      font-size: 12px;
+      color: #15803d;
+      text-align: center;
+      margin-top: 8px;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo">
+    <div class="logo-title">BNI <span>SYNERGY</span></div>
+    <div class="logo-sub">Генератор ссылок</div>
+  </div>
+
+  <div class="card">
+    <h1>Пригласить на встречу BNI SYNERGY</h1>
+
+    <div class="form-group">
+      <label for="memberSelect">Ваше имя</label>
+      <select id="memberSelect">
+        <option value="">— Выберите ваше имя —</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Тип приглашения</label>
+      <div class="radio-group">
+        <label class="radio-option">
+          <input type="radio" name="inviteType" value="guest" checked />
+          Приглашаю гостя
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="inviteType" value="sub" />
+          Я не смогу прийти — ищу замену
+        </label>
+      </div>
+    </div>
+
+    <button class="btn-generate" onclick="generateLink()">Сгенерировать ссылку →</button>
+
+    <div class="result-box" id="resultBox">
+      <div class="result-label">✅ Ссылка готова</div>
+      <div class="result-url" id="resultUrl"></div>
+      <div class="result-actions">
+        <button class="btn-action btn-copy" onclick="copyLink()">📋 Копировать</button>
+        <a  class="btn-action btn-wa"   id="waBtn" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+      </div>
+      <div class="copy-feedback" id="copyFeedback"></div>
+    </div>
+  </div>
+
+  <script>
+    // Load active members into dropdown
+    fetch('/api/members?active=true')
+      .then(r => r.json())
+      .then(members => {
+        const sel = document.getElementById('memberSelect');
+        members.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.name;
+          opt.text  = m.name;
+          sel.add(opt);
+        });
+      })
+      .catch(err => console.error('Failed to load members:', err));
+
+    let generatedUrl = '';
+
+    function generateLink() {
+      const name = document.getElementById('memberSelect').value;
+      const type = document.querySelector('input[name="inviteType"]:checked').value;
+
+      if (!name) {
+        alert('Пожалуйста, выберите ваше имя.');
+        return;
+      }
+
+      const base = `${location.origin}/guest`;
+      generatedUrl = `${base}?ref=${encodeURIComponent(name)}&type=${type}`;
+
+      document.getElementById('resultUrl').textContent = generatedUrl;
+
+      // WhatsApp share link
+      const waText = type === 'sub'
+        ? `Привет! Я ищу замену на встречу BNI SYNERGY. Зарегистрируйся по ссылке:\n${generatedUrl}`
+        : `Привет! Приглашаю тебя на встречу BNI SYNERGY. Зарегистрируйся:\n${generatedUrl}`;
+
+      document.getElementById('waBtn').href =
+        `https://wa.me/?text=${encodeURIComponent(waText)}`;
+
+      document.getElementById('resultBox').style.display = 'block';
+      document.getElementById('copyFeedback').textContent = '';
+    }
+
+    function copyLink() {
+      if (!generatedUrl) return;
+      navigator.clipboard.writeText(generatedUrl)
+        .then(() => {
+          document.getElementById('copyFeedback').textContent = '✓ Скопировано в буфер обмена';
+          setTimeout(() => {
+            document.getElementById('copyFeedback').textContent = '';
+          }, 2500);
+        })
+        .catch(() => {
+          // Fallback for older browsers
+          const el = document.getElementById('resultUrl');
+          const range = document.createRange();
+          range.selectNode(el);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+          document.execCommand('copy');
+          window.getSelection().removeAllRanges();
+          document.getElementById('copyFeedback').textContent = '✓ Скопировано';
+        });
+    }
+  </script>
+</body>
+</html>

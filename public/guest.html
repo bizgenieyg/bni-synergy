@@ -31,21 +31,17 @@
       padding: 24px 16px 40px;
     }
 
-    /* ── Logo / header ── */
-    .logo-block {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .logo-title {
-      font-size: 26px;
-      font-weight: 800;
+    /* ── Logo ── */
+    .logo-block { text-align: center; margin-bottom: 24px; }
+    .logo-title  {
+      font-family: Arial Black, Arial, sans-serif;
+      font-size: 28px;
       color: var(--red);
-      letter-spacing: -0.5px;
+      letter-spacing: -1px;
     }
-
+    .logo-title span { font-size: 16px; color: #333; }
     .logo-sub {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted);
       margin-top: 2px;
       letter-spacing: 1.5px;
@@ -70,6 +66,20 @@
       color: var(--text);
     }
 
+    /* ── Sub banner ── */
+    .sub-banner {
+      background: #fefce8;
+      border: 1.5px solid #fde047;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #713f12;
+      margin-bottom: 18px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
     /* ── Form ── */
     .form-group { margin-bottom: 16px; }
 
@@ -87,7 +97,7 @@
     input[type="tel"] {
       width: 100%;
       padding: 14px 16px;
-      font-size: 16px;          /* prevents iOS zoom */
+      font-size: 16px;
       border: 1.5px solid var(--border);
       border-radius: var(--radius);
       outline: none;
@@ -112,6 +122,18 @@
       color: var(--red);
     }
 
+    /* ── Meeting info ── */
+    .meeting-info {
+      background: #fef2f2;
+      border-left: 3px solid var(--red);
+      border-radius: 4px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #7f1d1d;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
     /* ── Submit button ── */
     .btn-submit {
       display: block;
@@ -133,18 +155,6 @@
     .btn-submit:active { transform: scale(0.98); }
     .btn-submit:disabled { background: #d1d5db; cursor: not-allowed; }
 
-    /* ── Meeting info ── */
-    .meeting-info {
-      background: #fef2f2;
-      border-left: 3px solid var(--red);
-      border-radius: 4px;
-      padding: 12px 14px;
-      font-size: 13px;
-      color: #7f1d1d;
-      margin-bottom: 20px;
-      line-height: 1.6;
-    }
-
     /* ── Error ── */
     .error-msg {
       background: #fee2e2;
@@ -163,15 +173,13 @@
       padding: 8px 0 4px;
     }
 
-    .success-icon { font-size: 52px; margin-bottom: 12px; }
-
+    .success-icon  { font-size: 52px; margin-bottom: 12px; }
     .success-title {
       font-size: 22px;
       font-weight: 800;
       color: #15803d;
       margin-bottom: 6px;
     }
-
     .success-sub {
       font-size: 14px;
       color: var(--muted);
@@ -179,11 +187,7 @@
       line-height: 1.5;
     }
 
-    .action-buttons {
-      display: flex;
-      gap: 12px;
-      flex-direction: column;
-    }
+    .action-buttons { display: flex; gap: 12px; flex-direction: column; }
 
     .btn-action {
       display: flex;
@@ -195,23 +199,13 @@
       font-size: 16px;
       font-weight: 700;
       text-decoration: none;
-      cursor: pointer;
-      -webkit-appearance: none;
       transition: opacity 0.15s, transform 0.1s;
     }
 
     .btn-action:active { transform: scale(0.98); }
     .btn-action:hover  { opacity: 0.9; }
-
-    .btn-pay {
-      background: var(--red);
-      color: #ffffff;
-    }
-
-    .btn-nav {
-      background: #1b59f8;
-      color: #ffffff;
-    }
+    .btn-pay { background: var(--red);  color: #ffffff; }
+    .btn-nav { background: #1b59f8; color: #ffffff; }
 
     .note {
       font-size: 11px;
@@ -225,16 +219,18 @@
 <body>
 
   <div class="logo-block">
-    <div class="logo-title">BNI SYNERGY</div>
+    <div class="logo-title">BNI <span>SYNERGY</span></div>
     <div class="logo-sub">Нетворкинг &amp; Бизнес</div>
   </div>
 
   <div class="card">
     <div id="formView">
-      <h1 class="card-title">Регистрация гостя</h1>
+      <h1 class="card-title" id="formTitle">Регистрация гостя</h1>
+
+      <!-- Sub-mode banner (shown only for type=sub) -->
+      <div class="sub-banner" id="subBanner" style="display:none"></div>
 
       <div class="meeting-info" id="meetingInfo" style="display:none"></div>
-
       <div class="error-msg" id="errorMsg"></div>
 
       <form id="regForm" novalidate>
@@ -259,11 +255,10 @@
         <div class="form-group">
           <label for="specialty">Профессия / вид деятельности</label>
           <input type="text" id="specialty" name="specialty"
-                 placeholder="Программист, Архитектор, …"
-                 maxlength="50" />
+                 placeholder="Программист, Архитектор, …" maxlength="50" />
         </div>
 
-        <!-- Invited by: shows input OR badge depending on ?ref= -->
+        <!-- Invited by: input OR badge from ?ref= -->
         <div class="form-group" id="invitedByGroup">
           <label for="invitedBy">Кто пригласил</label>
           <input type="text" id="invitedBy" name="invitedBy"
@@ -282,8 +277,8 @@
         </button>
       </form>
 
-      <p class="note">
-        После регистрации вы получите подтверждение и ссылку для оплаты в WhatsApp.
+      <p class="note" id="formNote">
+        После регистрации вы получите подтверждение в WhatsApp.
       </p>
     </div>
 
@@ -291,14 +286,15 @@
     <div class="success-screen" id="successView">
       <div class="success-icon">✅</div>
       <div class="success-title" id="successTitle">Спасибо!</div>
-      <div class="success-sub">
+      <div class="success-sub" id="successSub">
         Вы зарегистрированы.<br/>
         Подтверждение отправлено в WhatsApp.
       </div>
       <div class="action-buttons">
+        <!-- Hidden for substitutions -->
         <a href="https://links.payboxapp.com/2vFKGJA1VVb"
            target="_blank" rel="noopener"
-           class="btn-action btn-pay">
+           class="btn-action btn-pay" id="payBtn">
           💳 Оплатить 80₪
         </a>
         <a href="https://waze.com/ul/hsv8tzcptn"
@@ -313,8 +309,10 @@
   <script>
     const params   = new URLSearchParams(location.search);
     const refParam = params.get('ref');
+    const typeParam = params.get('type'); // 'guest' | 'sub'
+    const isSub    = typeParam === 'sub';
 
-    // Handle ?ref= param
+    // ── Handle ?ref= ──────────────────────────────────────────────────────────
     if (refParam) {
       const name = decodeURIComponent(refParam);
       document.getElementById('invitedByGroup').style.display = 'none';
@@ -322,7 +320,19 @@
       document.getElementById('refBadgeText').textContent     = name;
     }
 
-    // Fetch and show next meeting date
+    // ── Handle type=sub ───────────────────────────────────────────────────────
+    if (isSub) {
+      const memberName = refParam ? decodeURIComponent(refParam) : '';
+      const banner     = document.getElementById('subBanner');
+      banner.style.display = 'block';
+      banner.textContent   = `🎉 Вы приходите как замена${memberName ? ' за ' + memberName : ''}. Оплата не требуется!`;
+
+      document.getElementById('formTitle').textContent = 'Регистрация — замена';
+      document.getElementById('formNote').textContent  =
+        'После регистрации вы получите подтверждение в WhatsApp.';
+    }
+
+    // ── Meeting info ──────────────────────────────────────────────────────────
     fetch('/api/test')
       .then(r => r.json())
       .then(data => {
@@ -336,7 +346,7 @@
       })
       .catch(() => {});
 
-    // Form submit
+    // ── Form submit ───────────────────────────────────────────────────────────
     const form      = document.getElementById('regForm');
     const errorEl   = document.getElementById('errorMsg');
     const submitBtn = document.getElementById('submitBtn');
@@ -345,16 +355,16 @@
       e.preventDefault();
       errorEl.style.display = 'none';
 
-      const firstName  = document.getElementById('firstName').value.trim();
-      const lastName   = document.getElementById('lastName').value.trim();
-      const phone      = document.getElementById('phone').value.trim();
-      const specialty  = document.getElementById('specialty').value.trim();
-      const invitedBy  = refParam
+      const firstName = document.getElementById('firstName').value.trim();
+      const lastName  = document.getElementById('lastName').value.trim();
+      const phone     = document.getElementById('phone').value.trim();
+      const specialty = document.getElementById('specialty').value.trim();
+      const invitedBy = refParam
         ? decodeURIComponent(refParam)
         : document.getElementById('invitedBy').value.trim();
 
       if (!firstName || !lastName || !phone) {
-        errorEl.textContent = 'Пожалуйста, заполните все обязательные поля.';
+        errorEl.textContent   = 'Пожалуйста, заполните все обязательные поля.';
         errorEl.style.display = 'block';
         return;
       }
@@ -366,22 +376,32 @@
         const resp = await fetch('/api/register', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ firstName, lastName, phone, specialty, invitedBy }),
+          body:    JSON.stringify({
+            firstName, lastName, phone, specialty, invitedBy,
+            type: typeParam || 'guest',
+          }),
         });
 
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || `Ошибка ${resp.status}`);
 
-        // Show success screen
+        // ── Success screen ──
         document.getElementById('successTitle').textContent = `Спасибо, ${data.firstName}!`;
+
+        if (isSub) {
+          document.getElementById('successSub').textContent =
+            'Вы зарегистрированы как замена.\nПодтверждение отправлено в WhatsApp.';
+          document.getElementById('payBtn').style.display = 'none'; // no payment for subs
+        }
+
         document.getElementById('formView').style.display    = 'none';
         document.getElementById('successView').style.display = 'block';
 
       } catch (err) {
-        errorEl.textContent    = `Ошибка: ${err.message}`;
-        errorEl.style.display  = 'block';
-        submitBtn.disabled     = false;
-        submitBtn.textContent  = 'Зарегистрироваться →';
+        errorEl.textContent   = `Ошибка: ${err.message}`;
+        errorEl.style.display = 'block';
+        submitBtn.disabled    = false;
+        submitBtn.textContent = 'Зарегистрироваться →';
       }
     });
   </script>

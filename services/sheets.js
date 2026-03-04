@@ -140,7 +140,7 @@ async function getNextRowNumber(sheets, tabTitle) {
  * Creates the tab if it doesn't exist.
  * Returns the 1-based sheet row index that was written.
  */
-async function appendGuest({ firstName, lastName, phone, specialty, invitedBy, meetingDate }) {
+async function appendGuest({ firstName, lastName, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн' }) {
   const sheets = await getSheetsClient();
 
   // Ensure the tab exists
@@ -153,7 +153,7 @@ async function appendGuest({ firstName, lastName, phone, specialty, invitedBy, m
   const fullName = `${firstName} ${lastName}`;
 
   // A=ВСТРЕЧА(empty) B=Способ оплаты C=№ D=Имя и Фамилия E=Профессия F=Телефон G=Кто пригласил H=Заметки(empty)
-  const row = ['', 'онлайн', rowNum, fullName, specialty || '', phone, invitedBy || '', ''];
+  const row = ['', paymentMethod, rowNum, fullName, specialty || '', phone, invitedBy || '', ''];
 
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
