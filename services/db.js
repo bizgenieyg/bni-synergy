@@ -110,6 +110,8 @@ const stmtSeedMember = db.prepare(
   `INSERT OR IGNORE INTO members (name, profession, phone, birthday, active, createdAt)
    VALUES (?, ?, ?, ?, 1, datetime('now'))`
 );
+// Always run seeds — INSERT OR IGNORE means existing rows are safely skipped.
+// Also re-runs if the table was wiped (count = 0).
 const seedAll = db.transaction(() => {
   for (const m of seedMembers) {
     stmtSeedMember.run(m.name, m.profession, m.phone, m.birthday);
