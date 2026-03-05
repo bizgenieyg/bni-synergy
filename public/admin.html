@@ -509,15 +509,25 @@
 
   // ─── Meetings ────────────────────────────────────────────────────────────────
   async function loadMeetingDates() {
-    const dates  = await api('/api/meetings');
+    const [testData, dates] = await Promise.all([api('/api/test'), api('/api/meetings')]);
+    const nextMeeting = testData.nextMeeting;
     const select = document.getElementById('dateSelect');
     while (select.options.length > 1) select.remove(1);
-    dates.forEach(d => {
+
+    if (nextMeeting) {
+      const opt = document.createElement('option');
+      opt.value = nextMeeting; opt.text = nextMeeting;
+      select.add(opt);
+    }
+
+    dates.filter(d => d !== nextMeeting).forEach(d => {
       const opt = document.createElement('option');
       opt.value = d; opt.text = d;
       select.add(opt);
     });
-    if (dates.length) select.value = dates[0];
+
+    if (nextMeeting) select.value = nextMeeting;
+    else if (dates.length) select.value = dates[0];
   }
 
   // ─── Guests ──────────────────────────────────────────────────────────────────

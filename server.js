@@ -140,7 +140,9 @@ app.get('/api/guests', (req, res) => {
 });
 
 app.get('/api/meetings', (req, res) => {
-  res.json(db.getMeetingDates());
+  const dates = db.getMeetingDates().filter(d => d !== NEXT_MEETING_DATE);
+  const all   = NEXT_MEETING_DATE ? [NEXT_MEETING_DATE, ...dates] : dates;
+  res.json(all);
 });
 
 app.put('/api/guests/:id/paid', (req, res) => {
