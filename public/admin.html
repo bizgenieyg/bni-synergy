@@ -303,6 +303,78 @@
     #toast.show { opacity:1; transform:translateY(0); }
     #toast.ok   { background: #15803d; }
     #toast.err  { background: #dc2626; }
+
+    /* ── Next-meeting edit in topbar ── */
+    .next-meeting-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      white-space: nowrap;
+      opacity: 0.95;
+    }
+
+    .btn-inline {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.55);
+      color: #fff;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-inline:hover { background: rgba(255,255,255,0.18); }
+
+    .next-meeting-input {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: none;
+      font-size: 13px;
+      width: 70px;
+      outline: none;
+    }
+
+    /* ── Birthdays section ── */
+    .birthdays-section {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+
+    .birthdays-section .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .birthday-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .birthday-item:last-child { border-bottom: none; }
+    .birthday-item.today-bday { color: var(--red); font-weight: 600; }
+    .birthday-item .bday-text { flex: 1; }
+
+    /* ── Voting tab ── */
+    .vote-bar-wrap {
+      background: #fee2e2;
+      border-radius: 4px;
+      height: 14px;
+      overflow: hidden;
+      min-width: 120px;
+    }
+
+    .vote-bar { background: var(--red); height: 100%; transition: width 0.4s; }
   </style>
 </head>
 <body>
@@ -310,6 +382,17 @@
 <!-- ── Topbar ─────────────────────────────────────────────────────────── -->
 <nav class="topbar">
   <div class="brand">BNI <span>SYNERGY — Панель управления</span></div>
+
+  <div class="next-meeting-wrap" id="nmDisplay">
+    📅 Следующая встреча: <strong id="nextMeetingDisplay">—</strong>
+    <button class="btn-inline" onclick="editNextMeeting()">изменить</button>
+  </div>
+  <div class="next-meeting-wrap hidden" id="nmEdit">
+    📅 <input type="text" id="nextMeetingInput" class="next-meeting-input" placeholder="09/03" maxlength="5" />
+    <button class="btn-inline" onclick="saveNextMeeting()">✓ Сохранить</button>
+    <button class="btn-inline" onclick="cancelNextMeeting()">✕</button>
+  </div>
+
   <a href="/member" target="_blank" class="btn btn-white btn-sm">🔗 Ссылка</a>
 </nav>
 
@@ -317,6 +400,7 @@
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('guests')">🧾 Гости</button>
   <button class="tab-btn"        onclick="switchTab('members')">👥 Члены группы</button>
+  <button class="tab-btn"        onclick="switchTab('voting')">🗳️ Голосование</button>
 </div>
 
 <div class="main">
@@ -343,6 +427,11 @@
       <div class="stat"><div class="num" id="statUnpaid">—</div><div class="lbl">Не оплатили</div></div>
     </div>
 
+    <div class="birthdays-section" id="birthdaysSection" style="display:none">
+      <div class="section-title">🎂 Дни рождения — ближайшие 14 дней</div>
+      <div id="birthdaysList"></div>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -361,6 +450,42 @@
         <tbody id="guestBody"></tbody>
       </table>
       <div id="emptyMsg" class="empty-msg" style="display:none">Нет зарегистрированных гостей</div>
+    </div>
+  </div>
+
+  <!-- ════════════════ VOTING TAB ════════════════ -->
+  <div id="tabVoting" class="hidden">
+
+    <div class="toolbar">
+      <label for="votingDateSelect">📅 Встреча:</label>
+      <select id="votingDateSelect" onchange="loadVotingResults()">
+        <option value="">— Выберите встречу —</option>
+      </select>
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-gray btn-sm" onclick="loadVotingResults()">🔄 Обновить</button>
+    </div>
+
+    <div id="votingTotalWrap" style="display:none;margin-bottom:16px">
+      <div class="stat" style="display:inline-block;min-width:200px">
+        <div class="num" id="votingTotal">0</div>
+        <div class="lbl">Всего голосов</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:center">Место</th>
+            <th>Имя</th>
+            <th>Профессия</th>
+            <th>Голосов</th>
+            <th style="min-width:160px">Рейтинг</th>
+          </tr>
+        </thead>
+        <tbody id="votingBody"></tbody>
+      </table>
+      <div id="emptyVotingMsg" class="empty-msg" style="display:none">Голосов пока нет</div>
     </div>
   </div>
 
@@ -473,17 +598,18 @@
   // ─── Init ────────────────────────────────────────────────────────────────────
   (async () => {
     await loadMeetingDates();
-    await loadGuests();
-    await loadMembers();
+    await Promise.all([loadGuests(), loadMembers(), loadBirthdays()]);
   })();
 
   // ─── Tabs ────────────────────────────────────────────────────────────────────
+  const TAB_NAMES = ['guests', 'members', 'voting'];
   function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      b.classList.toggle('active', ['guests','members'][i] === name);
+      b.classList.toggle('active', TAB_NAMES[i] === name);
     });
     document.getElementById('tabGuests').classList.toggle('hidden',  name !== 'guests');
     document.getElementById('tabMembers').classList.toggle('hidden', name !== 'members');
+    document.getElementById('tabVoting').classList.toggle('hidden',  name !== 'voting');
   }
 
   // ─── Toast ───────────────────────────────────────────────────────────────────
@@ -511,23 +637,28 @@
   async function loadMeetingDates() {
     const [testData, dates] = await Promise.all([api('/api/test'), api('/api/meetings')]);
     const nextMeeting = testData.nextMeeting;
-    const select = document.getElementById('dateSelect');
-    while (select.options.length > 1) select.remove(1);
 
-    if (nextMeeting) {
-      const opt = document.createElement('option');
-      opt.value = nextMeeting; opt.text = nextMeeting;
-      select.add(opt);
+    document.getElementById('nextMeetingDisplay').textContent = nextMeeting || '—';
+
+    for (const selectId of ['dateSelect', 'votingDateSelect']) {
+      const select = document.getElementById(selectId);
+      while (select.options.length > 1) select.remove(1);
+
+      if (nextMeeting) {
+        const opt = document.createElement('option');
+        opt.value = nextMeeting; opt.text = nextMeeting;
+        select.add(opt);
+      }
+
+      dates.filter(d => d !== nextMeeting).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d; opt.text = d;
+        select.add(opt);
+      });
+
+      if (nextMeeting) select.value = nextMeeting;
+      else if (dates.length) select.value = dates[0];
     }
-
-    dates.filter(d => d !== nextMeeting).forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d; opt.text = d;
-      select.add(opt);
-    });
-
-    if (nextMeeting) select.value = nextMeeting;
-    else if (dates.length) select.value = dates[0];
   }
 
   // ─── Guests ──────────────────────────────────────────────────────────────────
@@ -721,7 +852,8 @@
     const date = document.getElementById('dateSelect').value;
 
     if (name === 'voting') {
-      document.getElementById('votingDate').value = date;
+      document.getElementById('votingDate').value    = date;
+      document.getElementById('votingLink').value    = 'http://45.93.95.122:3000/voting';
     }
 
     if (name === 'contacts') {
@@ -762,7 +894,7 @@
         body: JSON.stringify({ date, votingLink }),
       });
       closeModal('voting');
-      toast(`Рассылка запущена — ${r.total} гостей 🗳️`, 'ok');
+      toast(`Рассылка запущена — ${r.total} получателей 🗳️`, 'ok');
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
@@ -778,6 +910,136 @@
       closeModal('contacts');
       toast(`Рассылка запущена — ${r.total} гостей 📋`, 'ok');
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  // ─── Next-meeting date edit ───────────────────────────────────────────────────
+  function editNextMeeting() {
+    const current = document.getElementById('nextMeetingDisplay').textContent;
+    document.getElementById('nextMeetingInput').value = current === '—' ? '' : current;
+    document.getElementById('nmDisplay').classList.add('hidden');
+    document.getElementById('nmEdit').classList.remove('hidden');
+    document.getElementById('nextMeetingInput').focus();
+  }
+
+  function cancelNextMeeting() {
+    document.getElementById('nmDisplay').classList.remove('hidden');
+    document.getElementById('nmEdit').classList.add('hidden');
+  }
+
+  async function saveNextMeeting() {
+    const date = document.getElementById('nextMeetingInput').value.trim();
+    if (!date) { toast('Введите дату', 'err'); return; }
+    try {
+      await api('/api/settings/next-meeting', {
+        method: 'PATCH',
+        body: JSON.stringify({ date }),
+      });
+      document.getElementById('nextMeetingDisplay').textContent = date;
+      cancelNextMeeting();
+      await loadMeetingDates();
+      await loadGuests();
+      toast('Дата встречи обновлена ✓', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  document.getElementById('nextMeetingInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter')  saveNextMeeting();
+    if (e.key === 'Escape') cancelNextMeeting();
+  });
+
+  // ─── Birthdays ────────────────────────────────────────────────────────────────
+  const RU_MONTHS = ['января','февраля','марта','апреля','мая','июня',
+                     'июля','августа','сентября','октября','ноября','декабря'];
+
+  async function loadBirthdays() {
+    try {
+      const members = await api('/api/birthdays/upcoming?days=14');
+      const section = document.getElementById('birthdaysSection');
+      const list    = document.getElementById('birthdaysList');
+
+      if (!members.length) { section.style.display = 'none'; return; }
+
+      list.innerHTML = members.map(m => {
+        const parts = m.birthday.split('/');
+        const day   = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const dateStr = `${day} ${RU_MONTHS[month - 1]}`;
+
+        let daysStr;
+        if      (m.daysUntil === 0) daysStr = 'сегодня 🎂';
+        else if (m.daysUntil === 1) daysStr = 'завтра';
+        else if (m.daysUntil <= 4)  daysStr = `через ${m.daysUntil} дня`;
+        else                         daysStr = `через ${m.daysUntil} дней`;
+
+        return `
+          <div class="birthday-item${m.daysUntil === 0 ? ' today-bday' : ''}">
+            <span class="bday-text">${esc(m.name)} — ${dateStr} (${daysStr})</span>
+            ${m.phone
+              ? `<button class="btn btn-outline-red btn-sm"
+                         onclick="wishBirthday(${m.id})">🎂 Поздравить в WA</button>`
+              : ''}
+          </div>`;
+      }).join('');
+
+      section.style.display = 'block';
+    } catch { /* silent — non-critical */ }
+  }
+
+  async function wishBirthday(id) {
+    try {
+      await api(`/api/members/${id}/wish-birthday`, { method: 'POST' });
+      toast('Поздравление отправлено! 🎉', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  // ─── Voting results ───────────────────────────────────────────────────────────
+  async function loadVotingResults() {
+    const date = document.getElementById('votingDateSelect').value;
+    if (!date) {
+      document.getElementById('votingBody').innerHTML = '';
+      document.getElementById('emptyVotingMsg').style.display = 'none';
+      document.getElementById('votingTotalWrap').style.display = 'none';
+      return;
+    }
+    try {
+      const results = await api(`/api/voting/results?date=${encodeURIComponent(date)}`);
+      renderVotingResults(results);
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  function renderVotingResults(results) {
+    const tbody     = document.getElementById('votingBody');
+    const emptyEl   = document.getElementById('emptyVotingMsg');
+    const totalWrap = document.getElementById('votingTotalWrap');
+    tbody.innerHTML = '';
+
+    const total = results.reduce((s, r) => s + r.votes, 0);
+    document.getElementById('votingTotal').textContent = total;
+    totalWrap.style.display = total > 0 ? 'block' : 'none';
+
+    if (!results.length) { emptyEl.style.display = 'block'; return; }
+    emptyEl.style.display = 'none';
+
+    const medals = ['🥇', '🥈', '🥉'];
+    const max    = results[0].votes;
+
+    results.forEach((r, i) => {
+      const pct    = max > 0 ? Math.round(r.votes / max * 100) : 0;
+      const member = allMembers.find(m => m.id === r.candidateId);
+      const tr     = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align:center;font-size:18px">${medals[i] || (i + 1)}</td>
+        <td><strong>${esc(r.candidateName)}</strong></td>
+        <td>${esc(member?.profession || '—')}</td>
+        <td><strong>${r.votes}</strong></td>
+        <td>
+          <div class="vote-bar-wrap">
+            <div class="vote-bar" style="width:${pct}%"></div>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

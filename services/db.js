@@ -254,6 +254,70 @@ function getMembersBirthday(ddmm) {
   ).all(`${ddmm}%`);
 }
 
+// ─── Schema: settings ─────────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  );
+`);
+
+function getSetting(key) {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+function setSetting(key, value) {
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, String(value));
+}
+
+// ─── Schema: votes ────────────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS votes (
+    id            TEXT PRIMARY KEY,
+    meetingDate   TEXT NOT NULL,
+    voterPhone    TEXT NOT NULL,
+    voterName     TEXT NOT NULL,
+    candidateId   INTEGER NOT NULL,
+    candidateName TEXT NOT NULL,
+    createdAt     TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_voter ON votes(meetingDate, voterPhone);
+  CREATE INDEX IF NOT EXISTS idx_votes_date ON votes(meetingDate);
+`);
+
+// ─── Votes CRUD ───────────────────────────────────────────────────────────────
+
+function hasVoted(meetingDate, rawPhone) {
+  const phone = normalizePhone(rawPhone);
+  return !!db.prepare(
+    'SELECT 1 FROM votes WHERE meetingDate = ? AND voterPhone = ?'
+  ).get(meetingDate, phone);
+}
+
+function insertVote({ meetingDate, voterPhone, voterName, candidateId, candidateName }) {
+  const id        = randomUUID();
+  const createdAt = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, meetingDate, normalizePhone(voterPhone), voterName.trim(), candidateId, candidateName, createdAt);
+  return id;
+}
+
+function getVoteResults(meetingDate) {
+  return db.prepare(`
+    SELECT candidateId, candidateName, COUNT(*) as votes
+    FROM votes
+    WHERE meetingDate = ?
+    GROUP BY candidateId, candidateName
+    ORDER BY votes DESC
+  `).all(meetingDate);
+}
+
 module.exports = {
   db,
   // guests
@@ -277,4 +341,11 @@ module.exports = {
   updateMember,
   setMemberActive,
   getMembersBirthday,
+  // settings
+  getSetting,
+  setSetting,
+  // votes
+  hasVoted,
+  insertVote,
+  getVoteResults,
 };

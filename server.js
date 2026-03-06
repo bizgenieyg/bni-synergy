@@ -14,7 +14,14 @@ const pdf      = require('./services/pdf');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const NEXT_MEETING_DATE = process.env.NEXT_MEETING_DATE || '';
+// NEXT_MEETING_DATE: DB value takes priority over .env
+// If DB has nothing yet, seed it from .env so future edits persist in DB.
+const _envDate = process.env.NEXT_MEETING_DATE || '';
+if (db.getSetting('next_meeting_date') === null && _envDate) {
+  db.setSetting('next_meeting_date', _envDate);
+}
+let NEXT_MEETING_DATE = db.getSetting('next_meeting_date') ?? _envDate;
+
 const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
 const WAZE_LINK         = 'https://waze.com/ul/hsv8tzcptn';
 const WAZE_ADDRESS      = 'סמילנסקי 43 ראשון לציון';
@@ -30,6 +37,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/guest',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
 app.get('/admin',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/member', (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
+app.get('/voting', (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -223,6 +231,96 @@ app.get('/api/pdf/badges', (req, res) => {
   pdf.generateBadges(res, guests, date);
 });
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+app.get('/api/settings/next-meeting', (req, res) => {
+  res.json({ date: NEXT_MEETING_DATE });
+});
+
+app.patch('/api/settings/next-meeting', (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.status(400).json({ error: 'date обязателен' });
+  const trimmed = String(date).trim();
+  db.setSetting('next_meeting_date', trimmed);
+  NEXT_MEETING_DATE = trimmed;
+  res.json({ success: true, date: NEXT_MEETING_DATE });
+});
+
+// ─── Birthdays ────────────────────────────────────────────────────────────────
+
+app.get('/api/birthdays/upcoming', (req, res) => {
+  const days    = Math.min(parseInt(req.query.days || '14', 10), 365);
+  const today   = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const members = db.getActiveMembers();
+  const result  = [];
+
+  for (const member of members) {
+    if (!member.birthday) continue;
+    const parts = member.birthday.split('/');
+    if (parts.length < 2) continue;
+    const day   = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (isNaN(day) || isNaN(month)) continue;
+
+    // Check this year, then next year (handles year-end wrap)
+    for (const yearOffset of [0, 1]) {
+      const bday = new Date(today.getFullYear() + yearOffset, month - 1, day);
+      bday.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((bday - today) / 86_400_000);
+      if (diffDays >= 0 && diffDays <= days) {
+        result.push({ ...member, daysUntil: diffDays });
+        break;
+      }
+    }
+  }
+
+  result.sort((a, b) => a.daysUntil - b.daysUntil);
+  res.json(result);
+});
+
+app.post('/api/members/:id/wish-birthday', async (req, res) => {
+  const member = db.getMemberById(Number(req.params.id));
+  if (!member)        return res.status(404).json({ error: 'Член не найден' });
+  if (!member.phone)  return res.status(400).json({ error: 'Нет номера телефона' });
+
+  const msg =
+    `🎂 С Днём рождения, ${member.name.split(' ')[0]}!\n\n` +
+    `Вся группа BNI SYNERGY поздравляет вас с праздником! 🎉\n` +
+    `Желаем процветания бизнесу и здоровья! 🥂`;
+
+  try {
+    await whatsapp.sendMessage(member.phone, msg);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Voting ───────────────────────────────────────────────────────────────────
+
+app.post('/api/voting', (req, res) => {
+  const { voterPhone, voterName, candidateId, candidateName } = req.body;
+  if (!voterPhone || !voterName || !candidateId || !candidateName) {
+    return res.status(400).json({ error: 'Все поля обязательны' });
+  }
+
+  const meetingDate = NEXT_MEETING_DATE;
+
+  if (db.hasVoted(meetingDate, voterPhone)) {
+    return res.json({ error: 'already_voted' });
+  }
+
+  db.insertVote({ meetingDate, voterPhone, voterName, candidateId: Number(candidateId), candidateName });
+  res.json({ success: true });
+});
+
+app.get('/api/voting/results', (req, res) => {
+  const date = req.query.date || NEXT_MEETING_DATE;
+  res.json(db.getVoteResults(date));
+});
+
 // ─── Broadcasts ───────────────────────────────────────────────────────────────
 
 app.post('/api/send-voting', async (req, res) => {
@@ -231,13 +329,24 @@ app.post('/api/send-voting', async (req, res) => {
     return res.status(400).json({ error: 'date и votingLink обязательны' });
   }
 
-  const guests = db.getGuestsByDate(date).filter(g => g.wa_enabled !== 0);
-  res.json({ success: true, total: guests.length, message: 'Рассылка запущена' });
+  const guests  = db.getGuestsByDate(date).filter(g => g.wa_enabled !== 0);
+  const members = db.getActiveMembers().filter(m => m.phone);
 
-  whatsapp.broadcast(guests, g =>
-    `${g.firstName}, спасибо что пришли на встречу BNI SYNERGY! 🙏\n` +
-    `Проголосуйте пожалуйста:\n${votingLink}`
-  ).catch(err => console.error('[Broadcast] send-voting error:', err.message));
+  // Deduplicate: skip members whose phone matches a guest already in the list
+  const guestPhones = new Set(guests.map(g => db.normalizePhone(g.phone)));
+  const uniqueMembers = members.filter(m => !guestPhones.has(db.normalizePhone(m.phone)));
+
+  const total = guests.length + uniqueMembers.length;
+  res.json({ success: true, total, message: 'Рассылка запущена' });
+
+  const buildText = (r) =>
+    `${r.firstName || r.name}, спасибо что пришли на встречу BNI SYNERGY! 🙏\n` +
+    `Проголосуйте пожалуйста:\n${votingLink}`;
+
+  Promise.all([
+    whatsapp.broadcast(guests, buildText),
+    whatsapp.broadcast(uniqueMembers.map(m => ({ ...m, firstName: m.name })), buildText),
+  ]).catch(err => console.error('[Broadcast] send-voting error:', err.message));
 });
 
 app.post('/api/send-contacts', async (req, res) => {
@@ -298,6 +407,7 @@ app.listen(PORT, () => {
   console.log(`\n🟢 BNI SYNERGY server running on http://localhost:${PORT}`);
   console.log(`   Guest form   : http://localhost:${PORT}/guest`);
   console.log(`   Member form  : http://localhost:${PORT}/member`);
+  console.log(`   Voting       : http://localhost:${PORT}/voting`);
   console.log(`   Admin panel  : http://localhost:${PORT}/admin`);
   console.log(`   Test API     : http://localhost:${PORT}/api/test`);
   console.log(`   Next meeting : ${NEXT_MEETING_DATE || '(not set)'}\n`);

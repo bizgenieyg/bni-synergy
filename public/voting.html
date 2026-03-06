@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BNI SYNERGY — Голосование</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root { --red: #C41230; --red-d: #9e0e26; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--red);
+      color: #fff;
+      text-align: center;
+      padding: 20px 16px 18px;
+    }
+
+    .logo-title {
+      font-family: Arial Black, Arial, sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-title span {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.8;
+      display: block;
+      margin-top: 3px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px auto;
+      max-width: 540px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .card h2    { font-size: 18px; margin-bottom: 4px; }
+    .card .sub  { font-size: 13px; color: #6b7280; margin-bottom: 22px; }
+
+    .form-group { margin-bottom: 16px; }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+
+    .form-group input[type="tel"],
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus { border-color: var(--red); }
+
+    .member-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+
+    .member-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+
+    .member-item:hover    { border-color: var(--red); background: #fff8f8; }
+    .member-item.selected { border-color: var(--red); background: #fff0f2; }
+
+    .member-item input[type="radio"] {
+      accent-color: var(--red);
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .member-name { font-weight: 600; font-size: 14px; }
+    .member-prof { font-size: 12px; color: #6b7280; margin-top: 1px; }
+
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: opacity 0.2s;
+    }
+
+    .btn-submit:hover    { opacity: 0.9; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .result-card { display: none; text-align: center; padding: 36px 24px; }
+    .result-card .emoji { font-size: 54px; margin-bottom: 14px; }
+    .result-card h2     { font-size: 20px; margin-bottom: 8px; }
+    .result-card p      { color: #6b7280; font-size: 15px; }
+
+    .loading-msg { text-align: center; color: #9ca3af; padding: 24px 0; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-title">BNI <span>SYNERGY — Голосование</span></div>
+</div>
+
+<div class="card" id="formCard">
+  <h2>Выберите лучшего участника</h2>
+  <p class="sub">Проголосуйте за члена группы, который произвёл на вас наибольшее впечатление</p>
+
+  <div class="form-group">
+    <label for="voterPhone">Ваш телефон *</label>
+    <input type="tel" id="voterPhone" placeholder="052-000-0000" />
+  </div>
+
+  <div class="form-group">
+    <label for="voterName">Ваше имя *</label>
+    <input type="text" id="voterName" placeholder="Иван Иванов" />
+  </div>
+
+  <div class="form-group">
+    <label>Голосую за:</label>
+    <div class="member-list" id="memberList">
+      <div class="loading-msg">Загружаем список участников…</div>
+    </div>
+  </div>
+
+  <button class="btn-submit" id="submitBtn" onclick="submitVote()">Проголосовать</button>
+</div>
+
+<div class="card result-card" id="successCard">
+  <div class="emoji">🎉</div>
+  <h2>Спасибо! Ваш голос принят</h2>
+  <p>Результаты будут объявлены на следующей встрече BNI SYNERGY</p>
+</div>
+
+<div class="card result-card" id="alreadyCard">
+  <div class="emoji">⚠️</div>
+  <h2>Вы уже голосовали</h2>
+  <p>На этой встрече от вашего номера уже был подан голос</p>
+</div>
+
+<script>
+  let selectedCandidateId   = null;
+  let selectedCandidateName = null;
+
+  async function loadMembers() {
+    try {
+      const members = await fetch('/api/members?active=true').then(r => r.json());
+      const list    = document.getElementById('memberList');
+
+      if (!members.length) {
+        list.innerHTML = '<div class="loading-msg">Нет активных участников</div>';
+        return;
+      }
+
+      list.innerHTML = members.map(m => `
+        <label class="member-item" data-id="${m.id}" data-name="${esc(m.name)}"
+               onclick="selectMember(${m.id}, ${JSON.stringify(m.name)}, this)">
+          <input type="radio" name="candidate" value="${m.id}" />
+          <div>
+            <div class="member-name">${esc(m.name)}</div>
+            ${m.profession ? `<div class="member-prof">${esc(m.profession)}</div>` : ''}
+          </div>
+        </label>
+      `).join('');
+    } catch {
+      document.getElementById('memberList').innerHTML =
+        '<div class="loading-msg">Ошибка загрузки участников</div>';
+    }
+  }
+
+  function selectMember(id, name, el) {
+    selectedCandidateId   = id;
+    selectedCandidateName = name;
+    document.querySelectorAll('.member-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    el.querySelector('input[type="radio"]').checked = true;
+  }
+
+  async function submitVote() {
+    const phone = document.getElementById('voterPhone').value.trim();
+    const name  = document.getElementById('voterName').value.trim();
+
+    if (!phone || !name)        { alert('Пожалуйста, заполните имя и телефон'); return; }
+    if (!selectedCandidateId)   { alert('Выберите участника для голосования');  return; }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled    = true;
+    btn.textContent = 'Отправляем…';
+
+    try {
+      const r = await fetch('/api/voting', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          voterPhone:    phone,
+          voterName:     name,
+          candidateId:   selectedCandidateId,
+          candidateName: selectedCandidateName,
+        }),
+      });
+      const data = await r.json();
+
+      document.getElementById('formCard').style.display = 'none';
+
+      if (data.error === 'already_voted') {
+        document.getElementById('alreadyCard').style.display = 'block';
+      } else if (data.success) {
+        document.getElementById('successCard').style.display = 'block';
+      } else {
+        btn.disabled    = false;
+        btn.textContent = 'Проголосовать';
+        alert(data.error || 'Неизвестная ошибка');
+      }
+    } catch {
+      btn.disabled    = false;
+      btn.textContent = 'Проголосовать';
+      alert('Ошибка сети — попробуйте ещё раз');
+    }
+  }
+
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  loadMembers();
+</script>
+</body>
+</html>
