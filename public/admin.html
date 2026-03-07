@@ -417,7 +417,6 @@
       <button class="btn btn-gray btn-sm"  onclick="downloadPDF('list')">📄 Список PDF</button>
       <button class="btn btn-gray btn-sm"  onclick="downloadPDF('badges')">🏷️ Бейджики PDF</button>
       <div class="toolbar-sep"></div>
-      <button class="btn btn-red btn-sm"   onclick="openModal('voting')">📨 Разослать голосование</button>
       <button class="btn btn-green btn-sm" onclick="openModal('contacts')">📋 Разослать контакты</button>
     </div>
 
@@ -458,6 +457,8 @@
       </select>
       <div class="toolbar-sep"></div>
       <button class="btn btn-gray btn-sm" onclick="loadVotingResults()">🔄 Обновить</button>
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-red btn-sm" onclick="openModal('voting')">📨 Разослать голосование</button>
     </div>
 
     <div id="votingTotalWrap" style="display:none;margin-bottom:16px">
