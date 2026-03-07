@@ -308,6 +308,22 @@ function insertVote({ meetingDate, voterPhone, voterName, candidateId, candidate
   return id;
 }
 
+function hasVotedByIp(meetingDate, ip) {
+  return !!db.prepare(
+    'SELECT 1 FROM votes WHERE meetingDate = ? AND voterPhone = ?'
+  ).get(meetingDate, ip);
+}
+
+function insertVoteByIp({ meetingDate, voterIp, candidateId, candidateName }) {
+  const id        = randomUUID();
+  const createdAt = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, meetingDate, voterIp, '', candidateId, candidateName, createdAt);
+  return id;
+}
+
 function getVoteResults(meetingDate) {
   return db.prepare(`
     SELECT candidateId, candidateName, COUNT(*) as votes
@@ -347,5 +363,7 @@ module.exports = {
   // votes
   hasVoted,
   insertVote,
+  hasVotedByIp,
+  insertVoteByIp,
   getVoteResults,
 };

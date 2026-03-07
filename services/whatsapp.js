@@ -5,7 +5,12 @@ const axios = require('axios');
 const WAHA_URL     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
 const WAHA_SESSION = process.env.WAHA_SESSION  || 'bni-synergy';
 
-const BROADCAST_DELAY_MS = 2000;
+const DELAY_MIN_MS = 1500;
+const DELAY_MAX_MS = 4000;
+
+function randomDelay() {
+  return Math.floor(Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS + 1)) + DELAY_MIN_MS;
+}
 
 // ─── Phone normalisation ──────────────────────────────────────────────────────
 
@@ -24,10 +29,6 @@ function toChatId(phone) {
 
 // ─── Core send ────────────────────────────────────────────────────────────────
 
-/**
- * Send a WhatsApp text message via WAHA.
- * Wraps in try/catch so one failure never crashes the server.
- */
 async function sendMessage(phone, text) {
   const chatId = toChatId(phone);
   try {
@@ -44,27 +45,45 @@ async function sendMessage(phone, text) {
   }
 }
 
+/**
+ * Send a message to a WhatsApp group using its raw group chat ID.
+ * The groupChatId should be in the format "120363XXXX@g.us".
+ */
+async function sendGroupMessage(groupChatId, text) {
+  try {
+    const res = await axios.post(
+      `${WAHA_URL}/api/sendText`,
+      { session: WAHA_SESSION, chatId: groupChatId, text },
+      { timeout: 15_000 },
+    );
+    return res.data;
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    console.error(`[WhatsApp] sendGroupMessage to ${groupChatId} failed:`, detail);
+    throw err;
+  }
+}
+
 // ─── Broadcast ────────────────────────────────────────────────────────────────
 
 /**
- * Send a message to each guest with a delay between sends.
+ * Send a message to each recipient with a random delay (1500–4000 ms) between sends.
  *
- * @param {Array<{phone, firstName, ...}>} guests
- * @param {(guest) => string} buildText — returns the message body for a guest
+ * @param {Array<{phone, firstName, ...}>} recipients
+ * @param {(recipient) => string} buildText — returns the message body
  */
-async function broadcast(guests, buildText) {
+async function broadcast(recipients, buildText) {
   const results = [];
 
-  for (const guest of guests) {
+  for (const r of recipients) {
     try {
-      const text = buildText(guest);
-      await sendMessage(guest.phone, text);
-      results.push({ phone: guest.phone, status: 'sent' });
+      const text = buildText(r);
+      await sendMessage(r.phone, text);
+      results.push({ phone: r.phone, status: 'sent' });
     } catch (err) {
-      results.push({ phone: guest.phone, status: 'error', error: err.message });
+      results.push({ phone: r.phone, status: 'error', error: err.message });
     }
-    // Always wait before the next send, even after an error
-    await new Promise(r => setTimeout(r, BROADCAST_DELAY_MS));
+    await new Promise(resolve => setTimeout(resolve, randomDelay()));
   }
 
   const ok   = results.filter(r => r.status === 'sent').length;
@@ -73,4 +92,4 @@ async function broadcast(guests, buildText) {
   return results;
 }
 
-module.exports = { sendMessage, broadcast, toChatId };
+module.exports = { sendMessage, sendGroupMessage, broadcast, toChatId };

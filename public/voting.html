@@ -20,7 +20,7 @@
       background: var(--red);
       color: #fff;
       text-align: center;
-      padding: 20px 16px 18px;
+      padding: 18px 16px 16px;
     }
 
     .logo-title {
@@ -41,49 +41,26 @@
     .card {
       background: #fff;
       border-radius: 12px;
-      padding: 24px;
-      margin: 20px auto;
+      padding: 20px;
+      margin: 16px auto;
       max-width: 540px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    .card h2    { font-size: 18px; margin-bottom: 4px; }
-    .card .sub  { font-size: 13px; color: #6b7280; margin-bottom: 22px; }
+    .card h2   { font-size: 17px; margin-bottom: 3px; }
+    .card .sub { font-size: 12px; color: #6b7280; margin-bottom: 14px; }
 
-    .form-group { margin-bottom: 16px; }
-
-    .form-group label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      color: #374151;
-    }
-
-    .form-group input[type="tel"],
-    .form-group input[type="text"] {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1.5px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 16px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .form-group input:focus { border-color: var(--red); }
-
-    .member-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .member-list { display: flex; flex-direction: column; gap: 4px; }
 
     .member-item {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 11px 14px;
+      gap: 10px;
+      padding: 7px 12px;
       border: 1.5px solid #e5e7eb;
-      border-radius: 8px;
+      border-radius: 7px;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.12s, background 0.12s;
       user-select: none;
     }
 
@@ -92,25 +69,25 @@
 
     .member-item input[type="radio"] {
       accent-color: var(--red);
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       flex-shrink: 0;
     }
 
-    .member-name { font-weight: 600; font-size: 14px; }
-    .member-prof { font-size: 12px; color: #6b7280; margin-top: 1px; }
+    .member-name { font-weight: 600; font-size: 13px; line-height: 1.3; }
+    .member-prof { font-size: 11px; color: #6b7280; }
 
     .btn-submit {
       width: 100%;
-      padding: 14px;
+      padding: 13px;
       background: var(--red);
       color: #fff;
       border: none;
       border-radius: 8px;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       cursor: pointer;
-      margin-top: 20px;
+      margin-top: 14px;
       transition: opacity 0.2s;
     }
 
@@ -122,7 +99,7 @@
     .result-card h2     { font-size: 20px; margin-bottom: 8px; }
     .result-card p      { color: #6b7280; font-size: 15px; }
 
-    .loading-msg { text-align: center; color: #9ca3af; padding: 24px 0; }
+    .loading-msg { text-align: center; color: #9ca3af; padding: 20px 0; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -133,23 +110,10 @@
 
 <div class="card" id="formCard">
   <h2>Выберите лучшего участника</h2>
-  <p class="sub">Проголосуйте за члена группы, который произвёл на вас наибольшее впечатление</p>
+  <p class="sub">Проголосуйте анонимно — один голос с устройства</p>
 
-  <div class="form-group">
-    <label for="voterPhone">Ваш телефон *</label>
-    <input type="tel" id="voterPhone" placeholder="052-000-0000" />
-  </div>
-
-  <div class="form-group">
-    <label for="voterName">Ваше имя *</label>
-    <input type="text" id="voterName" placeholder="Иван Иванов" />
-  </div>
-
-  <div class="form-group">
-    <label>Голосую за:</label>
-    <div class="member-list" id="memberList">
-      <div class="loading-msg">Загружаем список участников…</div>
-    </div>
+  <div class="member-list" id="memberList">
+    <div class="loading-msg">Загружаем список участников…</div>
   </div>
 
   <button class="btn-submit" id="submitBtn" onclick="submitVote()">Проголосовать</button>
@@ -164,7 +128,7 @@
 <div class="card result-card" id="alreadyCard">
   <div class="emoji">⚠️</div>
   <h2>Вы уже голосовали</h2>
-  <p>На этой встрече от вашего номера уже был подан голос</p>
+  <p>С этого устройства уже был подан голос на данной встрече</p>
 </div>
 
 <script>
@@ -182,7 +146,7 @@
       }
 
       list.innerHTML = members.map(m => `
-        <label class="member-item" data-id="${m.id}" data-name="${esc(m.name)}"
+        <label class="member-item"
                onclick="selectMember(${m.id}, ${JSON.stringify(m.name)}, this)">
           <input type="radio" name="candidate" value="${m.id}" />
           <div>
@@ -206,11 +170,7 @@
   }
 
   async function submitVote() {
-    const phone = document.getElementById('voterPhone').value.trim();
-    const name  = document.getElementById('voterName').value.trim();
-
-    if (!phone || !name)        { alert('Пожалуйста, заполните имя и телефон'); return; }
-    if (!selectedCandidateId)   { alert('Выберите участника для голосования');  return; }
+    if (!selectedCandidateId) { alert('Выберите участника для голосования'); return; }
 
     const btn = document.getElementById('submitBtn');
     btn.disabled    = true;
@@ -221,8 +181,6 @@
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          voterPhone:    phone,
-          voterName:     name,
           candidateId:   selectedCandidateId,
           candidateName: selectedCandidateName,
         }),

@@ -427,11 +427,6 @@
       <div class="stat"><div class="num" id="statUnpaid">—</div><div class="lbl">Не оплатили</div></div>
     </div>
 
-    <div class="birthdays-section" id="birthdaysSection" style="display:none">
-      <div class="section-title">🎂 Дни рождения — ближайшие 14 дней</div>
-      <div id="birthdaysList"></div>
-    </div>
-
     <div class="table-wrap">
       <table>
         <thead>
@@ -491,6 +486,11 @@
 
   <!-- ════════════════ MEMBERS TAB ════════════════ -->
   <div id="tabMembers" class="hidden">
+
+    <div class="birthdays-section" id="birthdaysSection" style="display:none">
+      <div class="section-title">🎂 Дни рождения — ближайшие 14 дней</div>
+      <div id="birthdaysList"></div>
+    </div>
 
     <div class="members-toolbar">
       <button class="btn btn-red btn-sm" onclick="openMemberModal()">+ Добавить члена</button>
@@ -894,7 +894,8 @@
         body: JSON.stringify({ date, votingLink }),
       });
       closeModal('voting');
-      toast(`Рассылка запущена — ${r.total} получателей 🗳️`, 'ok');
+      const groupInfo = r.groupSent ? ' + группа' : '';
+      toast(`Рассылка запущена — ${r.total} гостей${groupInfo} 🗳️`, 'ok');
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 

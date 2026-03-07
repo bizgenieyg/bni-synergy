@@ -26,8 +26,33 @@ const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
 const WAZE_LINK         = 'https://waze.com/ul/hsv8tzcptn';
 const WAZE_ADDRESS      = 'סמילנסקי 43 ראשון לציון';
 
+// ─── Message variants (anti-spam) ─────────────────────────────────────────────
+
+function pickVariant(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+const VOTING_VARIANTS = [
+  (name, link) => `${name}, спасибо что были на встрече BNI SYNERGY! 🙏\nПроголосуйте пожалуйста:\n${link}`,
+  (name, link) => `Шалом, ${name}! 👋 Ваш голос важен — голосование BNI открыто:\n${link}`,
+  (name, link) => `${name}, встреча прошла отлично! 🎯 Ваш голос решает:\n${link}`,
+  (name, link) => `Привет, ${name}! Поддержите лучшего участника BNI SYNERGY 🏆\n${link}`,
+  (name, link) => `${name}, один клик — ваш голос засчитан ✅\nГолосование:\n${link}`,
+  (name, link) => `Дорогой(ая) ${name}, голосование BNI SYNERGY ждёт вас! 🗳️\n${link}`,
+  (name, link) => `${name}, спасибо за визит! Выберите лучшего участника BNI 🌟\n${link}`,
+];
+
+const CONTACTS_VARIANTS = [
+  (name, contacts) => `${name}, вот контакты членов группы BNI SYNERGY:\n\n${contacts}\n\nБудем рады видеть вас снова! 🤝`,
+  (name, contacts) => `Шалом, ${name}! 👋 Контакты наших специалистов BNI:\n\n${contacts}`,
+  (name, contacts) => `${name}, спасибо за визит в BNI SYNERGY! 🙌\nПолезные контакты:\n\n${contacts}`,
+  (name, contacts) => `Привет, ${name}! Держите контакты группы BNI 📇\n\n${contacts}`,
+  (name, contacts) => `${name}, рады были познакомиться! Контакты BNI:\n\n${contacts}`,
+];
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
+app.set('trust proxy', 1); // trust Nginx X-Forwarded-For
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -301,18 +326,19 @@ app.post('/api/members/:id/wish-birthday', async (req, res) => {
 // ─── Voting ───────────────────────────────────────────────────────────────────
 
 app.post('/api/voting', (req, res) => {
-  const { voterPhone, voterName, candidateId, candidateName } = req.body;
-  if (!voterPhone || !voterName || !candidateId || !candidateName) {
-    return res.status(400).json({ error: 'Все поля обязательны' });
+  const { candidateId, candidateName } = req.body;
+  if (!candidateId || !candidateName) {
+    return res.status(400).json({ error: 'Выберите участника' });
   }
 
   const meetingDate = NEXT_MEETING_DATE;
+  const voterIp     = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'unknown';
 
-  if (db.hasVoted(meetingDate, voterPhone)) {
+  if (db.hasVotedByIp(meetingDate, voterIp)) {
     return res.json({ error: 'already_voted' });
   }
 
-  db.insertVote({ meetingDate, voterPhone, voterName, candidateId: Number(candidateId), candidateName });
+  db.insertVoteByIp({ meetingDate, voterIp, candidateId: Number(candidateId), candidateName });
   res.json({ success: true });
 });
 
@@ -329,24 +355,22 @@ app.post('/api/send-voting', async (req, res) => {
     return res.status(400).json({ error: 'date и votingLink обязательны' });
   }
 
-  const guests  = db.getGuestsByDate(date).filter(g => g.wa_enabled !== 0);
-  const members = db.getActiveMembers().filter(m => m.phone);
+  const guests  = db.getGuestsByDate(date).filter(g => g.wa_enabled === 1);
+  const groupId = process.env.WAHA_GROUP_ID || '';
 
-  // Deduplicate: skip members whose phone matches a guest already in the list
-  const guestPhones = new Set(guests.map(g => db.normalizePhone(g.phone)));
-  const uniqueMembers = members.filter(m => !guestPhones.has(db.normalizePhone(m.phone)));
+  res.json({ success: true, total: guests.length, groupSent: !!groupId, message: 'Рассылка запущена' });
 
-  const total = guests.length + uniqueMembers.length;
-  res.json({ success: true, total, message: 'Рассылка запущена' });
+  // Individual messages to guests (random variant per message)
+  whatsapp.broadcast(guests, g =>
+    pickVariant(VOTING_VARIANTS)(g.firstName, votingLink)
+  ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
 
-  const buildText = (r) =>
-    `${r.firstName || r.name}, спасибо что пришли на встречу BNI SYNERGY! 🙏\n` +
-    `Проголосуйте пожалуйста:\n${votingLink}`;
-
-  Promise.all([
-    whatsapp.broadcast(guests, buildText),
-    whatsapp.broadcast(uniqueMembers.map(m => ({ ...m, firstName: m.name })), buildText),
-  ]).catch(err => console.error('[Broadcast] send-voting error:', err.message));
+  // One group message to members chat
+  if (groupId) {
+    whatsapp.sendGroupMessage(groupId,
+      `🗳️ Голосование BNI SYNERGY открыто!\nПроголосуйте пожалуйста:\n${votingLink}`
+    ).catch(err => console.error('[Broadcast] send-voting group error:', err.message));
+  }
 });
 
 app.post('/api/send-contacts', async (req, res) => {
@@ -359,9 +383,7 @@ app.post('/api/send-contacts', async (req, res) => {
   res.json({ success: true, total: guests.length, message: 'Рассылка запущена' });
 
   whatsapp.broadcast(guests, g =>
-    `${g.firstName}, вот контакты членов группы BNI SYNERGY:\n\n` +
-    `${contactsText}\n\n` +
-    `Будем рады видеть вас снова! 🤝`
+    pickVariant(CONTACTS_VARIANTS)(g.firstName, contactsText)
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
 });
 
