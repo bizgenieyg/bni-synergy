@@ -147,7 +147,8 @@
 
       list.innerHTML = members.map(m => `
         <label class="member-item"
-               onclick="selectMember(${m.id}, ${JSON.stringify(m.name)}, this)">
+               data-id="${m.id}" data-name="${esc(m.name)}"
+               onclick="selectMember(+this.dataset.id, this.dataset.name, this)">
           <input type="radio" name="candidate" value="${m.id}" />
           ${memberAvatar(m, 50)}
           <div>
