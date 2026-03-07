@@ -5,6 +5,8 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const fs      = require('fs');
+const multer  = require('multer');
 
 const db       = require('./services/db');
 const sheets   = require('./services/sheets');
@@ -25,6 +27,24 @@ let NEXT_MEETING_DATE = db.getSetting('next_meeting_date') ?? _envDate;
 const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
 const WAZE_LINK         = 'https://waze.com/ul/hsv8tzcptn';
 const WAZE_ADDRESS      = 'סמילנסקי 43 ראשון לציון';
+
+// ─── Multer (photo uploads) ───────────────────────────────────────────────────
+
+const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    filename:    (req, file, cb) => {
+      const ext = file.mimetype === 'image/png' ? '.png' : '.jpg';
+      cb(null, `member_${req.params.id}${ext}`);
+    },
+  }),
+  limits:     { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)),
+});
 
 // ─── Message variants (anti-spam) ─────────────────────────────────────────────
 
@@ -59,10 +79,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── HTML pages ───────────────────────────────────────────────────────────────
 
-app.get('/guest',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
-app.get('/admin',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/member', (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
-app.get('/voting', (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
+app.get('/guest',   (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
+app.get('/admin',   (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/member',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
+app.get('/voting',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
+app.get('/profile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -233,6 +254,38 @@ app.delete('/api/members/:id', (req, res) => {
   if (!member) return res.status(404).json({ error: 'Член не найден' });
   db.setMemberActive(member.id, 0);
   res.json({ success: true });
+});
+
+app.get('/api/members/:id', (req, res) => {
+  const member = db.getMemberById(Number(req.params.id));
+  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  res.json(member);
+});
+
+app.get('/api/members/:id/photo', (req, res) => {
+  const member = db.getMemberById(Number(req.params.id));
+  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  res.json({ url: member.photo ? `/uploads/${member.photo}` : null });
+});
+
+app.post('/api/members/:id/photo', upload.single('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
+  const member = db.getMemberById(Number(req.params.id));
+  if (!member) return res.status(404).json({ error: 'Член не найден' });
+
+  // Delete old photo file if filename changed
+  if (member.photo && member.photo !== req.file.filename) {
+    try { fs.unlinkSync(path.join(UPLOADS_DIR, member.photo)); } catch {}
+  }
+
+  db.updateMemberPhoto(member.id, req.file.filename);
+  res.json({ success: true, url: `/uploads/${req.file.filename}` });
+});
+
+app.patch('/api/members/:id/profile', (req, res) => {
+  const member = db.updateMemberProfile(Number(req.params.id), req.body);
+  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  res.json({ success: true, member });
 });
 
 app.patch('/api/members/:id/activate', (req, res) => {

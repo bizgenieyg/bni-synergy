@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BNI SYNERGY — Профиль участника</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:    #C41230;
+      --red-d:  #9e0e26;
+      --border: #d1d5db;
+      --muted:  #6b7280;
+      --radius: 10px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--red);
+      color: #fff;
+      text-align: center;
+      padding: 18px 16px 16px;
+    }
+
+    .logo-title {
+      font-family: Arial Black, Arial, sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-title span {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.8;
+      display: block;
+      margin-top: 3px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px auto;
+      max-width: 480px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* ── Photo area ── */
+    .photo-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+
+    .photo-circle {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      overflow: hidden;
+      cursor: pointer;
+      border: 3px solid var(--border);
+      position: relative;
+      transition: border-color 0.2s;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .photo-circle:hover { border-color: var(--red); }
+    .photo-circle:hover .photo-overlay { opacity: 1; }
+
+    .photo-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .photo-placeholder {
+      font-size: 48px;
+      color: #9ca3af;
+    }
+
+    .photo-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(196, 18, 48, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      font-size: 28px;
+    }
+
+    .photo-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    /* ── Member name ── */
+    .member-name-display {
+      font-size: 20px;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 20px;
+      color: #111827;
+    }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 16px; }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.15s;
+      color: #111827;
+    }
+
+    .form-group input:focus { border-color: var(--red); }
+
+    .char-count {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 3px;
+    }
+
+    /* ── Buttons ── */
+    .btn-save {
+      width: 100%;
+      padding: 14px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: opacity 0.2s;
+    }
+
+    .btn-save:hover    { opacity: 0.9; }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Messages ── */
+    .save-msg {
+      display: none;
+      text-align: center;
+      padding: 12px;
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      border-radius: 8px;
+      color: #15803d;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+
+    .error-msg {
+      display: none;
+      text-align: center;
+      padding: 12px;
+      background: #fee2e2;
+      border: 1.5px solid #fca5a5;
+      border-radius: 8px;
+      color: #b91c1c;
+      margin-top: 12px;
+    }
+
+    .loading-card { text-align: center; padding: 48px; color: var(--muted); }
+
+    /* ── Upload progress ── */
+    .upload-msg {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      min-height: 16px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-title">BNI <span>SYNERGY — Профиль участника</span></div>
+</div>
+
+<div class="card loading-card" id="loadingCard">Загружаем профиль…</div>
+
+<div class="card" id="profileCard" style="display:none">
+
+  <div class="photo-area">
+    <div class="photo-circle" onclick="document.getElementById('photoInput').click()">
+      <img id="memberPhoto" src="" alt="" style="display:none" />
+      <div id="photoPlaceholder" class="photo-placeholder">📷</div>
+      <div class="photo-overlay">📷</div>
+    </div>
+    <div class="upload-msg" id="uploadMsg"></div>
+    <div class="photo-hint">Нажмите для загрузки фото (JPG/PNG, до 2 МБ)</div>
+    <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp"
+           style="display:none" onchange="uploadPhoto(event)" />
+  </div>
+
+  <div class="member-name-display" id="memberNameDisplay"></div>
+
+  <div class="form-group">
+    <label>Профессия / вид деятельности</label>
+    <input type="text" id="profession" maxlength="50"
+           oninput="updateCharCount()" placeholder="Программист, Архитектор, …" />
+    <div class="char-count"><span id="charCount">0</span>/50</div>
+  </div>
+
+  <div class="form-group">
+    <label>Телефон</label>
+    <input type="tel" id="phone" placeholder="052-000-0000" />
+  </div>
+
+  <div class="form-group">
+    <label>Дата рождения</label>
+    <input type="text" id="birthday" placeholder="31/01/1990" />
+  </div>
+
+  <button class="btn-save" id="saveBtn" onclick="saveProfile()">Сохранить изменения</button>
+
+  <div class="save-msg"  id="saveMsg">Профиль обновлён ✅</div>
+  <div class="error-msg" id="errorMsg"></div>
+</div>
+
+<div class="card loading-card" id="notFoundCard" style="display:none">
+  Участник не найден
+</div>
+
+<script>
+  const memberId = new URLSearchParams(location.search).get('id');
+
+  async function loadProfile() {
+    if (!memberId) { showNotFound(); return; }
+    try {
+      const r = await fetch(`/api/members/${memberId}`);
+      if (!r.ok) { showNotFound(); return; }
+      const m = await r.json();
+
+      document.getElementById('memberNameDisplay').textContent = m.name;
+      document.getElementById('profession').value = m.profession || '';
+      document.getElementById('phone').value      = m.phone      || '';
+      document.getElementById('birthday').value   = m.birthday   || '';
+      updateCharCount();
+
+      if (m.photo) {
+        setPhoto(`/uploads/${m.photo}`);
+      }
+
+      document.getElementById('loadingCard').style.display  = 'none';
+      document.getElementById('profileCard').style.display  = 'block';
+    } catch {
+      showNotFound();
+    }
+  }
+
+  function showNotFound() {
+    document.getElementById('loadingCard').style.display   = 'none';
+    document.getElementById('notFoundCard').style.display  = 'block';
+  }
+
+  function setPhoto(url) {
+    const img = document.getElementById('memberPhoto');
+    const ph  = document.getElementById('photoPlaceholder');
+    img.src            = url;
+    img.style.display  = 'block';
+    ph.style.display   = 'none';
+  }
+
+  function updateCharCount() {
+    const len = document.getElementById('profession').value.length;
+    document.getElementById('charCount').textContent = len;
+  }
+
+  async function uploadPhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadMsg('Файл слишком большой (максимум 2 МБ)', 'err');
+      return;
+    }
+
+    setUploadMsg('Загружаем фото…', '');
+
+    const formData = new FormData();
+    formData.append('photo', file);
+
+    try {
+      const r    = await fetch(`/api/members/${memberId}/photo`, { method: 'POST', body: formData });
+      const data = await r.json();
+      if (data.url) {
+        setPhoto(data.url + '?t=' + Date.now()); // cache-bust
+        setUploadMsg('Фото обновлено ✓', 'ok');
+      } else {
+        setUploadMsg(data.error || 'Ошибка загрузки', 'err');
+      }
+    } catch {
+      setUploadMsg('Ошибка сети', 'err');
+    }
+
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+  }
+
+  function setUploadMsg(text, type) {
+    const el = document.getElementById('uploadMsg');
+    el.textContent = text;
+    el.style.color = type === 'ok' ? '#15803d' : type === 'err' ? '#b91c1c' : '#6b7280';
+  }
+
+  async function saveProfile() {
+    const profession = document.getElementById('profession').value.trim();
+    const phone      = document.getElementById('phone').value.trim();
+    const birthday   = document.getElementById('birthday').value.trim();
+
+    const saveBtn = document.getElementById('saveBtn');
+    const saveMsg = document.getElementById('saveMsg');
+    const errorEl = document.getElementById('errorMsg');
+
+    saveBtn.disabled    = true;
+    saveMsg.style.display  = 'none';
+    errorEl.style.display  = 'none';
+
+    try {
+      const r    = await fetch(`/api/members/${memberId}/profile`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ profession, phone, birthday }),
+      });
+      const data = await r.json();
+
+      if (data.success) {
+        saveMsg.style.display = 'block';
+        setTimeout(() => { saveMsg.style.display = 'none'; }, 3000);
+      } else {
+        errorEl.textContent   = data.error || 'Ошибка сохранения';
+        errorEl.style.display = 'block';
+      }
+    } catch {
+      errorEl.textContent   = 'Ошибка сети — попробуйте снова';
+      errorEl.style.display = 'block';
+    }
+
+    saveBtn.disabled = false;
+  }
+
+  loadProfile();
+</script>
+</body>
+</html>

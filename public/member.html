@@ -219,6 +219,10 @@
         <button class="btn-action btn-copy" onclick="copyLink()">📋 Копировать</button>
         <a  class="btn-action btn-wa"   id="waBtn" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
       </div>
+      <a class="btn-action" id="profileBtn" href="#" target="_blank" rel="noopener"
+         style="display:none;background:#374151;color:#fff;margin-top:8px">
+        📷 Мой профиль
+      </a>
       <div class="copy-feedback" id="copyFeedback"></div>
     </div>
   </div>
@@ -231,8 +235,9 @@
         const sel = document.getElementById('memberSelect');
         members.forEach(m => {
           const opt = document.createElement('option');
-          opt.value = m.name;
-          opt.text  = m.name;
+          opt.value       = m.name;
+          opt.dataset.id  = m.id;
+          opt.text        = m.name;
           sel.add(opt);
         });
       })
@@ -264,6 +269,14 @@
 
       document.getElementById('resultBox').style.display = 'block';
       document.getElementById('copyFeedback').textContent = '';
+
+      const sel       = document.getElementById('memberSelect');
+      const memberId  = sel.options[sel.selectedIndex]?.dataset.id;
+      const profileBtn = document.getElementById('profileBtn');
+      if (memberId) {
+        profileBtn.href         = `/profile?id=${memberId}`;
+        profileBtn.style.display = 'flex';
+      }
     }
 
     function copyLink() {

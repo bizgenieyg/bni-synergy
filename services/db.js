@@ -245,6 +245,24 @@ function setMemberActive(id, active) {
   db.prepare('UPDATE members SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
 }
 
+function updateMemberPhoto(id, filename) {
+  db.prepare('UPDATE members SET photo = ? WHERE id = ?').run(filename, id);
+}
+
+function updateMemberProfile(id, { profession, phone, birthday }) {
+  const current = getMemberById(id);
+  if (!current) return null;
+  db.prepare(
+    'UPDATE members SET profession = ?, phone = ?, birthday = ? WHERE id = ?'
+  ).run(
+    (profession ?? current.profession).trim(),
+    (phone      ?? current.phone).trim(),
+    (birthday   ?? current.birthday).trim(),
+    id,
+  );
+  return getMemberById(id);
+}
+
 /**
  * Find members whose birthday starts with the given "DD/MM" prefix.
  */
@@ -253,6 +271,11 @@ function getMembersBirthday(ddmm) {
     "SELECT * FROM members WHERE birthday LIKE ? AND active = 1"
   ).all(`${ddmm}%`);
 }
+
+// Migrate existing DBs: add photo column to members
+try {
+  db.exec("ALTER TABLE members ADD COLUMN photo TEXT");
+} catch { /* already exists */ }
 
 // ─── Schema: settings ─────────────────────────────────────────────────────────
 
@@ -356,6 +379,8 @@ module.exports = {
   insertMember,
   updateMember,
   setMemberActive,
+  updateMemberPhoto,
+  updateMemberProfile,
   getMembersBirthday,
   // settings
   getSetting,

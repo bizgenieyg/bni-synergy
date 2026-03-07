@@ -149,6 +149,7 @@
         <label class="member-item"
                onclick="selectMember(${m.id}, ${JSON.stringify(m.name)}, this)">
           <input type="radio" name="candidate" value="${m.id}" />
+          ${memberAvatar(m, 50)}
           <div>
             <div class="member-name">${esc(m.name)}</div>
             ${m.profession ? `<div class="member-prof">${esc(m.profession)}</div>` : ''}
@@ -209,6 +210,22 @@
     return String(str ?? '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function initials(name) {
+    const parts = (name || '').trim().split(/\s+/);
+    return parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : (parts[0]?.[0] || '?').toUpperCase();
+  }
+
+  function memberAvatar(m, size) {
+    const s = `width:${size}px;height:${size}px;border-radius:50%;flex-shrink:0`;
+    if (m.photo) {
+      return `<img src="/uploads/${esc(m.photo)}" style="${s};object-fit:cover" />`;
+    }
+    const fs = Math.round(size * 0.36);
+    return `<div style="${s};background:#d1d5db;display:flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:700;color:#6b7280">${initials(m.name)}</div>`;
   }
 
   loadMembers();
