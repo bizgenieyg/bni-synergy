@@ -357,6 +357,43 @@ function getVoteResults(meetingDate) {
   `).all(meetingDate);
 }
 
+// ─── Schema: member_socials ───────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS member_socials (
+    id         TEXT PRIMARY KEY,
+    member_id  INTEGER NOT NULL,
+    platform   TEXT NOT NULL,
+    url        TEXT NOT NULL,
+    label      TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_socials_member ON member_socials(member_id);
+`);
+
+// ─── Socials CRUD ─────────────────────────────────────────────────────────────
+
+function getMemberSocials(memberId) {
+  return db.prepare(
+    'SELECT * FROM member_socials WHERE member_id = ? ORDER BY sort_order ASC, rowid ASC'
+  ).all(memberId);
+}
+
+function setMemberSocials(memberId, socials) {
+  const del = db.prepare('DELETE FROM member_socials WHERE member_id = ?');
+  const ins = db.prepare(
+    `INSERT INTO member_socials (id, member_id, platform, url, label, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  db.transaction(() => {
+    del.run(memberId);
+    socials.forEach((s, i) => {
+      ins.run(randomUUID(), memberId, s.platform, s.url.trim(), (s.label || '').trim(), i);
+    });
+  })();
+}
+
 module.exports = {
   db,
   // guests
@@ -382,6 +419,9 @@ module.exports = {
   updateMemberPhoto,
   updateMemberProfile,
   getMembersBirthday,
+  // socials
+  getMemberSocials,
+  setMemberSocials,
   // settings
   getSetting,
   setSetting,

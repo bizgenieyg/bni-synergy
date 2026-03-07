@@ -79,11 +79,12 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── HTML pages ───────────────────────────────────────────────────────────────
 
-app.get('/guest',   (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
-app.get('/admin',   (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/member',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
-app.get('/voting',  (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
-app.get('/profile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
+app.get('/guest',           (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
+app.get('/admin',           (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/member',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
+app.get('/voting',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
+app.get('/profile',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
+app.get('/members-catalog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'members-catalog.html')));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -295,6 +296,28 @@ app.patch('/api/members/:id/activate', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/members/:id/socials', (req, res) => {
+  const socials = db.getMemberSocials(Number(req.params.id));
+  res.json(socials);
+});
+
+app.put('/api/members/:id/socials', (req, res) => {
+  const member = db.getMemberById(Number(req.params.id));
+  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  const { socials } = req.body;
+  if (!Array.isArray(socials)) return res.status(400).json({ error: 'socials должен быть массивом' });
+  db.setMemberSocials(member.id, socials.filter(s => s.platform && s.url));
+  res.json({ success: true });
+});
+
+// ─── Public catalog ───────────────────────────────────────────────────────────
+
+app.get('/api/catalog', (req, res) => {
+  const members = db.getActiveMembers();
+  const result  = members.map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
+  res.json(result);
+});
+
 // ─── PDF endpoints ────────────────────────────────────────────────────────────
 
 app.get('/api/pdf/list', (req, res) => {
@@ -307,6 +330,11 @@ app.get('/api/pdf/badges', (req, res) => {
   const date   = req.query.date || NEXT_MEETING_DATE;
   const guests = db.getGuestsByDate(date);
   pdf.generateBadges(res, guests, date);
+});
+
+app.get('/api/pdf/members', (req, res) => {
+  const members = db.getActiveMembers().map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
+  pdf.generateMembersCatalog(res, members, UPLOADS_DIR);
 });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────

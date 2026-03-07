@@ -128,7 +128,7 @@
       color: #374151;
     }
 
-    .form-group input {
+    .form-group input, .form-group select {
       width: 100%;
       padding: 12px 14px;
       border: 1.5px solid var(--border);
@@ -137,9 +137,10 @@
       outline: none;
       transition: border-color 0.15s;
       color: #111827;
+      background: #fff;
     }
 
-    .form-group input:focus { border-color: var(--red); }
+    .form-group input:focus, .form-group select:focus { border-color: var(--red); }
 
     .char-count {
       font-size: 11px;
@@ -147,6 +148,82 @@
       text-align: right;
       margin-top: 3px;
     }
+
+    /* ── Social links ── */
+    .social-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .social-row select {
+      flex: 0 0 130px;
+      padding: 9px 10px;
+      font-size: 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      color: #111827;
+      outline: none;
+    }
+
+    .social-row select:focus { border-color: var(--red); }
+
+    .social-url-input {
+      flex: 1;
+      padding: 9px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      color: #111827;
+      min-width: 0;
+    }
+
+    .social-url-input:focus { border-color: var(--red); }
+
+    .social-label-input {
+      flex: 0 0 80px;
+      padding: 9px 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      outline: none;
+      color: #111827;
+      min-width: 0;
+    }
+
+    .social-label-input:focus { border-color: var(--red); }
+
+    .btn-del-social {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 22px;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+
+    .btn-del-social:hover { color: #ef4444; }
+
+    .btn-add-social {
+      width: 100%;
+      padding: 9px;
+      background: none;
+      border: 1.5px dashed var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      margin-top: 4px;
+    }
+
+    .btn-add-social:hover { border-color: var(--red); color: var(--red); }
 
     /* ── Buttons ── */
     .btn-save {
@@ -177,6 +254,7 @@
       color: #15803d;
       font-weight: 600;
       margin-top: 12px;
+      font-size: 16px;
     }
 
     .error-msg {
@@ -243,9 +321,16 @@
     <input type="text" id="birthday" placeholder="31/01/1990" />
   </div>
 
+  <!-- ── Social links ── -->
+  <div class="form-group">
+    <label>Мои соцсети</label>
+    <div id="socialsList"></div>
+    <button type="button" class="btn-add-social" onclick="addSocialRow()">➕ Добавить соцсеть</button>
+  </div>
+
   <button class="btn-save" id="saveBtn" onclick="saveProfile()">Сохранить изменения</button>
 
-  <div class="save-msg"  id="saveMsg">Профиль обновлён ✅</div>
+  <div class="save-msg"  id="saveMsg">✅ Профиль сохранён!</div>
   <div class="error-msg" id="errorMsg"></div>
 </div>
 
@@ -256,12 +341,55 @@
 <script>
   const memberId = new URLSearchParams(location.search).get('id');
 
+  const PLATFORMS = [
+    { value: 'instagram', label: 'Instagram'  },
+    { value: 'facebook',  label: 'Facebook'   },
+    { value: 'tiktok',    label: 'TikTok'     },
+    { value: 'telegram',  label: 'Telegram'   },
+    { value: 'linkedin',  label: 'LinkedIn'   },
+    { value: 'youtube',   label: 'YouTube'    },
+    { value: 'website',   label: 'Сайт'       },
+    { value: 'other',     label: 'Другое'     },
+  ];
+
+  function platformOptions(selected) {
+    return PLATFORMS.map(p =>
+      `<option value="${p.value}"${p.value === selected ? ' selected' : ''}>${p.label}</option>`
+    ).join('');
+  }
+
+  function addSocialRow(platform = 'instagram', url = '', label = '') {
+    const row = document.createElement('div');
+    row.className = 'social-row';
+    row.innerHTML = `
+      <select class="social-platform">${platformOptions(platform)}</select>
+      <input type="text" class="social-url-input" value="${esc(url)}"
+             placeholder="URL или @username" />
+      <input type="text" class="social-label-input" value="${esc(label)}"
+             placeholder="Подпись" />
+      <button type="button" class="btn-del-social" onclick="this.parentElement.remove()">×</button>
+    `;
+    document.getElementById('socialsList').appendChild(row);
+  }
+
+  function collectSocials() {
+    return [...document.querySelectorAll('#socialsList .social-row')].map(row => ({
+      platform: row.querySelector('.social-platform').value,
+      url:      row.querySelector('.social-url-input').value.trim(),
+      label:    row.querySelector('.social-label-input').value.trim(),
+    })).filter(s => s.url);
+  }
+
   async function loadProfile() {
     if (!memberId) { showNotFound(); return; }
     try {
-      const r = await fetch(`/api/members/${memberId}`);
+      const [r, rs] = await Promise.all([
+        fetch(`/api/members/${memberId}`),
+        fetch(`/api/members/${memberId}/socials`),
+      ]);
       if (!r.ok) { showNotFound(); return; }
-      const m = await r.json();
+      const m       = await r.json();
+      const socials = rs.ok ? await rs.json() : [];
 
       document.getElementById('memberNameDisplay').textContent = m.name;
       document.getElementById('profession').value = m.profession || '';
@@ -272,6 +400,8 @@
       if (m.photo) {
         setPhoto(`/uploads/${m.photo}`);
       }
+
+      socials.forEach(s => addSocialRow(s.platform, s.url, s.label));
 
       document.getElementById('loadingCard').style.display  = 'none';
       document.getElementById('profileCard').style.display  = 'block';
@@ -339,36 +469,51 @@
     const profession = document.getElementById('profession').value.trim();
     const phone      = document.getElementById('phone').value.trim();
     const birthday   = document.getElementById('birthday').value.trim();
+    const socials    = collectSocials();
 
     const saveBtn = document.getElementById('saveBtn');
     const saveMsg = document.getElementById('saveMsg');
     const errorEl = document.getElementById('errorMsg');
 
-    saveBtn.disabled    = true;
+    saveBtn.disabled       = true;
     saveMsg.style.display  = 'none';
     errorEl.style.display  = 'none';
 
     try {
-      const r    = await fetch(`/api/members/${memberId}/profile`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ profession, phone, birthday }),
-      });
-      const data = await r.json();
+      const [r1, r2] = await Promise.all([
+        fetch(`/api/members/${memberId}/profile`, {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ profession, phone, birthday }),
+        }),
+        fetch(`/api/members/${memberId}/socials`, {
+          method:  'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ socials }),
+        }),
+      ]);
+
+      const data = await r1.json();
 
       if (data.success) {
         saveMsg.style.display = 'block';
-        setTimeout(() => { saveMsg.style.display = 'none'; }, 3000);
+        setTimeout(() => window.close(), 2000);
       } else {
         errorEl.textContent   = data.error || 'Ошибка сохранения';
         errorEl.style.display = 'block';
+        saveBtn.disabled = false;
       }
     } catch {
       errorEl.textContent   = 'Ошибка сети — попробуйте снова';
       errorEl.style.display = 'block';
+      saveBtn.disabled = false;
     }
+  }
 
-    saveBtn.disabled = false;
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   loadProfile();
