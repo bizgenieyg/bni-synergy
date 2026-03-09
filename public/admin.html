@@ -991,8 +991,9 @@
           <div class="birthday-item${m.daysUntil === 0 ? ' today-bday' : ''}">
             <span class="bday-text">${esc(m.name)} — ${dateStr} (${daysStr})</span>
             ${m.phone
-              ? `<button class="btn btn-outline-red btn-sm"
-                         onclick="wishBirthday(${m.id})">🎂 Поздравить в WA</button>`
+              ? `<a class="btn btn-outline-red btn-sm"
+                    href="https://wa.me/${waPhone(m.phone)}"
+                    target="_blank">🎂 Поздравить в WA</a>`
               : ''}
           </div>`;
       }).join('');
@@ -1129,6 +1130,13 @@
   function esc(str) {
     return String(str ?? '')
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function waPhone(phone) {
+    let d = String(phone).replace(/\D/g, '');
+    if (d.startsWith('0')) d = '972' + d.slice(1);
+    else if (!d.startsWith('972')) d = '972' + d;
+    return d;
   }
 </script>
 </body>

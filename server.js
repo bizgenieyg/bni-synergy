@@ -447,6 +447,13 @@ app.post('/api/voting/open', (req, res) => {
   db.setSetting('voting_open', '1');
   db.deleteVotesByDate(meetingDate);
   res.json({ success: true });
+
+  const groupId = process.env.WAHA_GROUP_ID || '';
+  if (groupId) {
+    whatsapp.sendGroupMessage(groupId,
+      `🗳 *Голосование открыто!*\nПроголосуйте за лучшего члена встречи:\nhttps://bnisynergy.biz/voting`
+    ).catch(err => console.error('[Voting/open] group notify failed:', err.message));
+  }
 });
 
 app.post('/api/voting/close', (req, res) => {

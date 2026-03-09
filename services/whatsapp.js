@@ -4,6 +4,9 @@ const axios = require('axios');
 
 const WAHA_URL     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
 const WAHA_SESSION = process.env.WAHA_SESSION  || 'bni-synergy';
+const WAHA_API_KEY = process.env.WAHA_API_KEY  || '';
+
+const WAHA_HEADERS = WAHA_API_KEY ? { 'X-Api-Key': WAHA_API_KEY } : {};
 
 const DELAY_MIN_MS = 1500;
 const DELAY_MAX_MS = 4000;
@@ -35,7 +38,7 @@ async function sendMessage(phone, text) {
     const res = await axios.post(
       `${WAHA_URL}/api/sendText`,
       { session: WAHA_SESSION, chatId, text },
-      { timeout: 15_000 },
+      { headers: WAHA_HEADERS, timeout: 15_000 },
     );
     return res.data;
   } catch (err) {
@@ -54,7 +57,7 @@ async function sendGroupMessage(groupChatId, text) {
     const res = await axios.post(
       `${WAHA_URL}/api/sendText`,
       { session: WAHA_SESSION, chatId: groupChatId, text },
-      { timeout: 15_000 },
+      { headers: WAHA_HEADERS, timeout: 15_000 },
     );
     return res.data;
   } catch (err) {
