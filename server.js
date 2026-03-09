@@ -478,13 +478,6 @@ app.post('/api/send-voting', async (req, res) => {
   whatsapp.broadcast(guests, g =>
     pickVariant(VOTING_VARIANTS)(g.firstName, votingLink)
   ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
-
-  // One group message to members chat
-  if (groupId) {
-    whatsapp.sendGroupMessage(groupId,
-      `🗳️ Голосование BNI SYNERGY открыто!\nПроголосуйте пожалуйста:\n${votingLink}`
-    ).catch(err => console.error('[Broadcast] send-voting group error:', err.message));
-  }
 });
 
 app.post('/api/send-contacts', async (req, res) => {
