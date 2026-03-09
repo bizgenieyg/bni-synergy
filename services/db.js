@@ -286,6 +286,9 @@ db.exec(`
   );
 `);
 
+// Seed defaults
+db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('voting_open', '0')").run();
+
 function getSetting(key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : null;
@@ -355,6 +358,23 @@ function getVoteResults(meetingDate) {
     GROUP BY candidateId, candidateName
     ORDER BY votes DESC
   `).all(meetingDate);
+}
+
+function getVoteCount(meetingDate) {
+  return db.prepare('SELECT COUNT(*) as c FROM votes WHERE meetingDate = ?').get(meetingDate).c;
+}
+
+function deleteVotesByDate(meetingDate) {
+  db.prepare('DELETE FROM votes WHERE meetingDate = ?').run(meetingDate);
+}
+
+function insertAnonymousVote({ meetingDate, candidateId, candidateName }) {
+  const id        = randomUUID();
+  const createdAt = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, meetingDate, id, '', candidateId, candidateName, createdAt);
 }
 
 // ─── Schema: member_socials ───────────────────────────────────────────────────
@@ -431,4 +451,7 @@ module.exports = {
   hasVotedByIp,
   insertVoteByIp,
   getVoteResults,
+  getVoteCount,
+  deleteVotesByDate,
+  insertAnonymousVote,
 };

@@ -131,9 +131,29 @@
   <p>С этого устройства уже был подан голос на данной встрече</p>
 </div>
 
+<div class="card result-card" id="closedCard">
+  <div class="emoji">🔒</div>
+  <h2>Голосование закрыто</h2>
+  <p>Голосование на этой встрече ещё не открыто или уже завершено</p>
+</div>
+
 <script>
   let selectedCandidateId   = null;
   let selectedCandidateName = null;
+
+  async function checkVotingOpen() {
+    try {
+      const s = await fetch('/api/voting/status').then(r => r.json());
+      if (!s.open) {
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('closedCard').style.display = 'block';
+        return false;
+      }
+      return true;
+    } catch {
+      return true; // fail open on network error
+    }
+  }
 
   async function loadMembers() {
     try {
@@ -187,8 +207,14 @@
           candidateName: selectedCandidateName,
         }),
       });
-      const data = await r.json();
 
+      if (r.status === 403) {
+        document.getElementById('formCard').style.display = 'none';
+        document.getElementById('closedCard').style.display = 'block';
+        return;
+      }
+
+      const data = await r.json();
       document.getElementById('formCard').style.display = 'none';
 
       if (data.error === 'already_voted') {
@@ -229,7 +255,10 @@
     return `<div style="${s};background:#d1d5db;display:flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:700;color:#6b7280">${initials(m.name)}</div>`;
   }
 
-  loadMembers();
+  (async () => {
+    const isOpen = await checkVotingOpen();
+    if (isOpen) await loadMembers();
+  })();
 </script>
 </body>
 </html>

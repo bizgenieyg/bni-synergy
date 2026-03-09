@@ -412,20 +412,46 @@ app.post('/api/voting', (req, res) => {
     return res.status(400).json({ error: 'Выберите участника' });
   }
 
-  const meetingDate = NEXT_MEETING_DATE;
-  const voterIp     = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'unknown';
-
-  if (db.hasVotedByIp(meetingDate, voterIp)) {
-    return res.json({ error: 'already_voted' });
+  if (db.getSetting('voting_open') !== '1') {
+    return res.status(403).json({ error: 'voting_closed' });
   }
 
-  db.insertVoteByIp({ meetingDate, voterIp, candidateId: Number(candidateId), candidateName });
+  const meetingDate = NEXT_MEETING_DATE;
+  db.insertAnonymousVote({ meetingDate, candidateId: Number(candidateId), candidateName });
+
+  // Auto-close when all expected voters have voted
+  const voteCount = db.getVoteCount(meetingDate);
+  const expected  = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).length;
+  if (expected > 0 && voteCount >= expected) {
+    db.setSetting('voting_open', '0');
+  }
+
   res.json({ success: true });
 });
 
 app.get('/api/voting/results', (req, res) => {
   const date = req.query.date || NEXT_MEETING_DATE;
   res.json(db.getVoteResults(date));
+});
+
+app.get('/api/voting/status', (req, res) => {
+  const meetingDate = NEXT_MEETING_DATE;
+  const open        = db.getSetting('voting_open') === '1';
+  const voteCount   = db.getVoteCount(meetingDate);
+  const expected    = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).length;
+  res.json({ open, voteCount, expected, meetingDate });
+});
+
+app.post('/api/voting/open', (req, res) => {
+  const meetingDate = NEXT_MEETING_DATE;
+  db.setSetting('voting_open', '1');
+  db.deleteVotesByDate(meetingDate);
+  res.json({ success: true });
+});
+
+app.post('/api/voting/close', (req, res) => {
+  db.setSetting('voting_open', '0');
+  res.json({ success: true });
 });
 
 // ─── Broadcasts ───────────────────────────────────────────────────────────────

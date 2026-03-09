@@ -450,13 +450,14 @@
   <!-- ════════════════ VOTING TAB ════════════════ -->
   <div id="tabVoting" class="hidden">
 
+    <div id="votingStatusBar" style="margin-bottom:8px;padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600;background:#f3f4f6;color:#374151">
+      🔄 Загрузка...
+    </div>
+
     <div class="toolbar">
-      <label for="votingDateSelect">📅 Встреча:</label>
-      <select id="votingDateSelect" onchange="loadVotingResults()">
-        <option value="">— Выберите встречу —</option>
-      </select>
+      <button class="btn btn-gray btn-sm" onclick="refreshVotingTab()">🔄 Обновить</button>
       <div class="toolbar-sep"></div>
-      <button class="btn btn-gray btn-sm" onclick="loadVotingResults()">🔄 Обновить</button>
+      <button class="btn btn-gray btn-sm" id="closeVotingBtn" onclick="closeVoting()" style="display:none">🔴 Закрыть голосование</button>
       <div class="toolbar-sep"></div>
       <button class="btn btn-red btn-sm" onclick="openModal('voting')">📨 Разослать голосование</button>
     </div>
@@ -615,6 +616,7 @@
     document.getElementById('tabGuests').classList.toggle('hidden',  name !== 'guests');
     document.getElementById('tabMembers').classList.toggle('hidden', name !== 'members');
     document.getElementById('tabVoting').classList.toggle('hidden',  name !== 'voting');
+    if (name === 'voting') refreshVotingTab();
   }
 
   // ─── Toast ───────────────────────────────────────────────────────────────────
@@ -645,7 +647,7 @@
 
     document.getElementById('nextMeetingDisplay').textContent = nextMeeting || '—';
 
-    for (const selectId of ['dateSelect', 'votingDateSelect']) {
+    for (const selectId of ['dateSelect']) {
       const select = document.getElementById(selectId);
       while (select.options.length > 1) select.remove(1);
 
@@ -900,6 +902,7 @@
     const votingLink = document.getElementById('votingLink').value.trim();
     if (!date || !votingLink) { toast('Заполните все поля', 'err'); return; }
     try {
+      await api('/api/voting/open', { method: 'POST' });
       const r = await api('/api/send-voting', {
         method: 'POST',
         body: JSON.stringify({ date, votingLink }),
@@ -907,6 +910,7 @@
       closeModal('voting');
       const groupInfo = r.groupSent ? ' + группа' : '';
       toast(`Рассылка запущена — ${r.total} гостей${groupInfo} 🗳️`, 'ok');
+      await refreshVotingStatus();
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
@@ -1004,53 +1008,104 @@
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
-  // ─── Voting results ───────────────────────────────────────────────────────────
-  async function loadVotingResults() {
-    const date = document.getElementById('votingDateSelect').value;
-    if (!date) {
-      document.getElementById('votingBody').innerHTML = '';
-      document.getElementById('emptyVotingMsg').style.display = 'none';
-      document.getElementById('votingTotalWrap').style.display = 'none';
-      return;
-    }
+  // ─── Voting status / open / close ────────────────────────────────────────────
+  async function refreshVotingStatus() {
     try {
-      const results = await api(`/api/voting/results?date=${encodeURIComponent(date)}`);
-      renderVotingResults(results);
+      const s   = await api('/api/voting/status');
+      const bar = document.getElementById('votingStatusBar');
+      const btn = document.getElementById('closeVotingBtn');
+      if (s.open) {
+        bar.style.cssText = 'margin-bottom:8px;padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600;background:#d1fae5;color:#065f46';
+        bar.textContent   = `🟢 Голосование открыто (${s.voteCount}/${s.expected} голосов)`;
+        btn.style.display = '';
+      } else {
+        bar.style.cssText = 'margin-bottom:8px;padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600;background:#fee2e2;color:#991b1b';
+        bar.textContent   = '🔴 Голосование закрыто';
+        btn.style.display = 'none';
+      }
+    } catch { /* silent */ }
+  }
+
+  async function closeVoting() {
+    try {
+      await api('/api/voting/close', { method: 'POST' });
+      await refreshVotingStatus();
+      toast('Голосование закрыто 🔴', 'ok');
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
-  function renderVotingResults(results) {
+  async function refreshVotingTab() {
+    await Promise.all([refreshVotingStatus(), loadVotingResults()]);
+  }
+
+  // ─── Voting results ───────────────────────────────────────────────────────────
+  async function loadVotingResults() {
+    try {
+      const [testData, dates] = await Promise.all([api('/api/test'), api('/api/meetings')]);
+      const nextMeeting = testData.nextMeeting;
+      const allDates    = nextMeeting
+        ? [nextMeeting, ...dates.filter(d => d !== nextMeeting)]
+        : dates;
+      const last3 = allDates.slice(0, 3);
+
+      if (!last3.length) {
+        document.getElementById('votingBody').innerHTML = '';
+        document.getElementById('emptyVotingMsg').style.display = 'block';
+        document.getElementById('votingTotalWrap').style.display = 'none';
+        return;
+      }
+
+      const perDate = await Promise.all(
+        last3.map(d => api(`/api/voting/results?date=${encodeURIComponent(d)}`).then(r => ({ date: d, results: r })))
+      );
+      renderVotingResults(perDate);
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  function renderVotingResults(perDate) {
     const tbody     = document.getElementById('votingBody');
     const emptyEl   = document.getElementById('emptyVotingMsg');
     const totalWrap = document.getElementById('votingTotalWrap');
     tbody.innerHTML = '';
+    totalWrap.style.display = 'none';
 
-    const total = results.reduce((s, r) => s + r.votes, 0);
-    document.getElementById('votingTotal').textContent = total;
-    totalWrap.style.display = total > 0 ? 'block' : 'none';
-
-    if (!results.length) { emptyEl.style.display = 'block'; return; }
+    const hasAny = perDate.some(({ results }) => results.length > 0);
+    if (!hasAny) { emptyEl.style.display = 'block'; return; }
     emptyEl.style.display = 'none';
 
     const medals = ['🥇', '🥈', '🥉'];
-    const max    = results[0].votes;
 
-    results.forEach((r, i) => {
-      const pct    = max > 0 ? Math.round(r.votes / max * 100) : 0;
-      const member = allMembers.find(m => m.id === r.candidateId);
-      const tr     = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="text-align:center;font-size:18px">${medals[i] || (i + 1)}</td>
-        <td><strong>${esc(r.candidateName)}</strong></td>
-        <td>${esc(member?.profession || '—')}</td>
-        <td><strong>${r.votes}</strong></td>
-        <td>
-          <div class="vote-bar-wrap">
-            <div class="vote-bar" style="width:${pct}%"></div>
-          </div>
+    perDate.forEach(({ date, results }) => {
+      if (!results.length) return;
+
+      const dateTotal = results.reduce((s, r) => s + r.votes, 0);
+      const suffix    = dateTotal === 1 ? '' : (dateTotal < 5 ? 'а' : 'ов');
+      const headerRow = document.createElement('tr');
+      headerRow.innerHTML = `
+        <td colspan="5" style="background:#f3f4f6;font-weight:700;font-size:13px;padding:6px 12px;color:#374151">
+          📅 ${esc(date)} — ${dateTotal} голос${suffix}
         </td>
       `;
-      tbody.appendChild(tr);
+      tbody.appendChild(headerRow);
+
+      const max = results[0].votes;
+      results.forEach((r, i) => {
+        const pct    = max > 0 ? Math.round(r.votes / max * 100) : 0;
+        const member = allMembers.find(m => m.id === r.candidateId);
+        const tr     = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="text-align:center;font-size:18px">${medals[i] || (i + 1)}</td>
+          <td><strong>${esc(r.candidateName)}</strong></td>
+          <td>${esc(member?.profession || '—')}</td>
+          <td><strong>${r.votes}</strong></td>
+          <td>
+            <div class="vote-bar-wrap">
+              <div class="vote-bar" style="width:${pct}%"></div>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
     });
   }
 
