@@ -421,7 +421,7 @@ app.post('/api/voting', (req, res) => {
 
   // Auto-close when all expected voters have voted
   const voteCount = db.getVoteCount(meetingDate);
-  const expected  = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).length;
+  const expected  = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled !== 0).length;
   if (expected > 0 && voteCount >= expected) {
     db.setSetting('voting_open', '0');
   }
@@ -438,7 +438,7 @@ app.get('/api/voting/status', (req, res) => {
   const meetingDate = NEXT_MEETING_DATE;
   const open        = db.getSetting('voting_open') === '1';
   const voteCount   = db.getVoteCount(meetingDate);
-  const expected    = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).length;
+  const expected    = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled !== 0).length;
   res.json({ open, voteCount, expected, meetingDate });
 });
 
