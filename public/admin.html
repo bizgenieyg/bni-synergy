@@ -401,6 +401,7 @@
   <button class="tab-btn active" onclick="switchTab('guests')">🧾 Гости</button>
   <button class="tab-btn"        onclick="switchTab('members')">👥 Члены группы</button>
   <button class="tab-btn"        onclick="switchTab('voting')">🗳️ Голосование</button>
+  <a class="tab-btn" href="/presentations" style="text-decoration:none">📊 Презентации</a>
 </div>
 
 <div class="main">
@@ -567,9 +568,21 @@
 
 <!-- ── Modal: Add / Edit member ───────────────────────────────────────── -->
 <div class="modal-overlay" id="modalMember">
-  <div class="modal">
+  <div class="modal" style="width:600px">
     <h3 id="memberModalTitle">Добавить члена группы</h3>
     <input type="hidden" id="memberEditId" value="" />
+
+    <!-- Photo -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <div id="mAvatarWrap" style="flex-shrink:0"></div>
+      <div style="flex:1">
+        <label>Фото (JPG/PNG, до 2 МБ)</label>
+        <input type="file" id="mPhotoFile" accept="image/jpeg,image/png,image/webp"
+               onchange="previewPhoto(this)" style="font-size:12px" />
+      </div>
+    </div>
+
+    <!-- Basic fields -->
     <div class="modal-grid">
       <div class="full">
         <label>Имя (полное) *</label>
@@ -587,7 +600,24 @@
         <label>Дата рождения</label>
         <input type="text" id="mBirthday" placeholder="31/01/1990" />
       </div>
+      <div>
+        <label>Статус</label>
+        <select id="mActive">
+          <option value="1">Активен</option>
+          <option value="0">Неактивен</option>
+        </select>
+      </div>
     </div>
+
+    <!-- Socials -->
+    <div style="margin-bottom:4px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label style="margin:0;font-size:12px;font-weight:600;color:#374151">Соцсети</label>
+        <button class="btn btn-outline-gray btn-sm" type="button" onclick="addSocial()">+ Добавить</button>
+      </div>
+      <div id="mSocialsList"></div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-outline-gray btn-sm" onclick="closeModal('member')">Отмена</button>
       <button class="btn btn-red btn-sm"           onclick="saveMember()">Сохранить</button>
@@ -600,6 +630,13 @@
 <script>
   // ─── State ───────────────────────────────────────────────────────────────────
   let allMembers = [];
+  let mSocials   = [];
+
+  const PLATFORMS = ['instagram','telegram','facebook','linkedin','tiktok','website','other'];
+  const PLATFORM_LABELS = {
+    instagram: 'Instagram', telegram: 'Telegram',  facebook: 'Facebook',
+    linkedin:  'LinkedIn',  tiktok:   'TikTok',    website:  'Сайт', other: 'Другое',
+  };
 
   // ─── Init ────────────────────────────────────────────────────────────────────
   (async () => {
@@ -781,8 +818,7 @@
           : '<span class="badge-inactive">Неактивен</span>'}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline-red btn-sm"
-                  onclick="openMemberModal(${m.id})">✏️ Ред.</button>
-          <a class="btn btn-gray btn-sm" href="/profile?id=${m.id}" target="_blank">📷</a>
+                  onclick="openMemberModal(${m.id})">✏️ Редактировать</button>
           ${m.active
             ? `<button class="btn btn-orange btn-sm"
                        onclick="deactivateMember(${m.id})">🔴 Деактив.</button>`
@@ -811,11 +847,16 @@
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
-  function openMemberModal(id) {
+  async function openMemberModal(id) {
     document.getElementById('memberEditId').value = id || '';
     const isEdit = !!id;
     document.getElementById('memberModalTitle').textContent =
       isEdit ? '✏️ Редактировать члена' : '+ Добавить члена';
+
+    // Reset file input and socials
+    document.getElementById('mPhotoFile').value = '';
+    mSocials = [];
+    renderMSocials();
 
     if (isEdit) {
       const m = allMembers.find(x => x.id === id);
@@ -824,10 +865,19 @@
       document.getElementById('mProfession').value = m.profession || '';
       document.getElementById('mPhone').value      = m.phone      || '';
       document.getElementById('mBirthday').value   = m.birthday   || '';
+      document.getElementById('mActive').value     = String(m.active ?? 1);
+      document.getElementById('mAvatarWrap').innerHTML = memberAvatar(m, 64);
+      try {
+        mSocials = await api(`/api/members/${id}/socials`);
+        renderMSocials();
+      } catch { /* non-critical */ }
     } else {
-      ['mName','mProfession','mPhone','mBirthday'].forEach(id => {
-        document.getElementById(id).value = '';
+      ['mName','mProfession','mPhone','mBirthday'].forEach(fid => {
+        document.getElementById(fid).value = '';
       });
+      document.getElementById('mActive').value = '1';
+      document.getElementById('mAvatarWrap').innerHTML =
+        `<div style="width:64px;height:64px;border-radius:50%;background:#d1d5db;display:flex;align-items:center;justify-content:center;font-size:26px;color:#9ca3af">👤</div>`;
     }
     openModal('member');
   }
@@ -838,23 +888,41 @@
     const profession = document.getElementById('mProfession').value.trim();
     const phone      = document.getElementById('mPhone').value.trim();
     const birthday   = document.getElementById('mBirthday').value.trim();
+    const active     = Number(document.getElementById('mActive').value);
+    const photoFile  = document.getElementById('mPhotoFile').files[0];
 
     if (!name) { toast('Введите имя', 'err'); return; }
 
     try {
+      let memberId = id ? Number(id) : null;
+
       if (id) {
         await api(`/api/members/${id}`, {
           method: 'PUT',
-          body: JSON.stringify({ name, profession, phone, birthday }),
+          body: JSON.stringify({ name, profession, phone, birthday, active }),
         });
-        toast('Сохранено ✓', 'ok');
       } else {
-        await api('/api/members', {
+        const r = await api('/api/members', {
           method: 'POST',
           body: JSON.stringify({ name, profession, phone, birthday }),
         });
-        toast('Добавлен ✓', 'ok');
+        memberId = r.id;
       }
+
+      // Save socials (always PUT to allow clearing)
+      await api(`/api/members/${memberId}/socials`, {
+        method: 'PUT',
+        body: JSON.stringify({ socials: mSocials }),
+      });
+
+      // Upload photo if a new file was selected
+      if (photoFile) {
+        const fd = new FormData();
+        fd.append('photo', photoFile);
+        await fetch(`/api/members/${memberId}/photo`, { method: 'POST', body: fd });
+      }
+
+      toast(id ? 'Сохранено ✓' : 'Добавлен ✓', 'ok');
       closeModal('member');
       await loadMembers();
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
@@ -1108,6 +1176,49 @@
         tbody.appendChild(tr);
       });
     });
+  }
+
+  // ─── Member modal: photo + socials ───────────────────────────────────────────
+  function previewPhoto(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    document.getElementById('mAvatarWrap').innerHTML =
+      `<img src="${url}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border)" />`;
+  }
+
+  function renderMSocials() {
+    const container = document.getElementById('mSocialsList');
+    if (!mSocials.length) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px 0">Нет соцсетей — нажмите "+ Добавить"</div>';
+      return;
+    }
+    container.innerHTML = mSocials.map((s, i) => `
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px" data-idx="${i}">
+        <select data-field="platform" style="flex:0 0 108px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px">
+          ${PLATFORMS.map(p => `<option value="${p}"${s.platform===p?' selected':''}>${PLATFORM_LABELS[p]}</option>`).join('')}
+        </select>
+        <input data-field="url"   type="text" placeholder="URL / @handle" style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px" />
+        <input data-field="label" type="text" placeholder="Подпись"       style="flex:0 0 88px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px" />
+        <button data-del="${i}" type="button" style="flex-shrink:0;padding:4px 9px;border:1.5px solid #d1d5db;border-radius:var(--radius);background:#fff;cursor:pointer;font-size:12px;color:#dc2626">✕</button>
+      </div>
+    `).join('');
+    // Set values and attach listeners safely (avoids HTML-injection issues)
+    container.querySelectorAll('[data-idx]').forEach(row => {
+      const i = parseInt(row.dataset.idx, 10);
+      const s = mSocials[i];
+      row.querySelector('[data-field="url"]').value   = s.url   || '';
+      row.querySelector('[data-field="label"]').value = s.label || '';
+      row.querySelector('[data-field="platform"]').addEventListener('change', e => { mSocials[i].platform = e.target.value; });
+      row.querySelector('[data-field="url"]').addEventListener('input',    e => { mSocials[i].url     = e.target.value; });
+      row.querySelector('[data-field="label"]').addEventListener('input',  e => { mSocials[i].label   = e.target.value; });
+      row.querySelector('[data-del]').addEventListener('click', () => { mSocials.splice(i, 1); renderMSocials(); });
+    });
+  }
+
+  function addSocial() {
+    mSocials.push({ platform: 'instagram', url: '', label: '' });
+    renderMSocials();
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BNI SYNERGY — Презентации</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:    #C41230;
+      --green:  #15803d;
+      --border: #e5e7eb;
+      --bg:     #f3f4f6;
+      --text:   #111827;
+      --muted:  #6b7280;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .topbar {
+      background: var(--red);
+      color: #fff;
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    .topbar .brand {
+      font-family: Arial Black, Arial, sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      flex: 1;
+    }
+
+    .topbar .brand span { font-size: 13px; font-weight: 400; opacity: 0.7; margin-left: 6px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:hover   { opacity: 0.85; }
+    .btn:active  { transform: scale(0.97); }
+    .btn-red          { background: var(--red);  color: #fff; }
+    .btn-white        { background: #fff;        color: var(--red); }
+    .btn-outline-red  { background: #fff; color: var(--red);   border: 1.5px solid var(--red); }
+    .btn-outline-gray { background: #fff; color: #374151;      border: 1.5px solid #d1d5db; }
+    .btn-sm { padding: 5px 11px; font-size: 12px; }
+
+    .main { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
+
+    .toolbar {
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+
+    .toolbar label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .toolbar-sep   { width: 1px; height: 26px; background: var(--border); margin: 0 2px; }
+
+    select, input[type="text"] {
+      padding: 7px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 13px;
+      background: #fff;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus { border-color: var(--red); }
+
+    .table-wrap {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+      overflow-x: auto;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+      padding: 11px 12px;
+      background: #f9fafb;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1.5px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    tbody tr:hover { background: #fff8f8; }
+
+    .empty-msg { text-align: center; padding: 48px; color: var(--muted); font-size: 15px; }
+
+    .badge-pending {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.15s;
+    }
+
+    .badge-done {
+      display: inline-block;
+      background: #dcfce7;
+      color: var(--green);
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.15s;
+    }
+
+    .badge-pending:hover, .badge-done:hover { opacity: 0.7; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      width: 560px;
+      max-width: 95vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .modal h3 { font-size: 17px; margin-bottom: 16px; }
+
+    .modal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .modal-grid .full { grid-column: 1 / -1; }
+
+    .modal label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #374151;
+    }
+
+    .modal input,
+    .modal textarea,
+    .modal select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      resize: vertical;
+      background: #fff;
+    }
+
+    .modal input:focus,
+    .modal textarea:focus,
+    .modal select:focus { border-color: var(--red); }
+
+    .modal-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
+
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1f2937;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      z-index: 300;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      max-width: 360px;
+    }
+
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.ok   { background: #15803d; }
+    #toast.err  { background: #dc2626; }
+  </style>
+</head>
+<body>
+
+<!-- ── Topbar ── -->
+<nav class="topbar">
+  <div class="brand">BNI <span>SYNERGY — Презентации</span></div>
+  <a href="/admin" class="btn btn-white btn-sm">← Админка</a>
+</nav>
+
+<div class="main">
+
+  <div class="toolbar">
+    <label>📅 Встреча:</label>
+    <select id="filterDate" onchange="renderTable()">
+      <option value="">— Все встречи —</option>
+    </select>
+    <div class="toolbar-sep"></div>
+    <button class="btn btn-red btn-sm" onclick="openAddModal()">+ Добавить</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Дата встречи</th>
+          <th>Участник</th>
+          <th style="min-width:220px">Изменение</th>
+          <th style="min-width:140px">Заметки</th>
+          <th>Статус</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody id="presBody"></tbody>
+    </table>
+    <div id="emptyMsg" class="empty-msg" style="display:none">Нет записей — нажмите "+ Добавить"</div>
+  </div>
+
+</div>
+
+<!-- ── Modal: Add / Edit ── -->
+<div class="modal-overlay" id="modalPres">
+  <div class="modal">
+    <h3 id="presModalTitle">+ Добавить запись</h3>
+    <input type="hidden" id="presEditId" />
+    <div class="modal-grid">
+      <div>
+        <label>Дата встречи *</label>
+        <input type="text" id="pDate" placeholder="09/03" />
+      </div>
+      <div>
+        <label>Участник *</label>
+        <select id="pMember"></select>
+      </div>
+      <div class="full">
+        <label>Описание изменения *</label>
+        <textarea id="pDesc" rows="3" placeholder="Что изменилось в презентации…"></textarea>
+      </div>
+      <div class="full">
+        <label>Заметки</label>
+        <textarea id="pNotes" rows="2" placeholder="Дополнительные заметки (необязательно)"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline-gray btn-sm" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-red btn-sm"          onclick="savePresentation()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let allPres    = [];
+  let allMembers = [];
+
+  async function init() {
+    [allPres, allMembers] = await Promise.all([
+      api('/api/presentations'),
+      api('/api/members?active=true'),
+    ]);
+    populateMemberSelect();
+    buildDateFilter();
+    renderTable();
+  }
+
+  async function api(url, opts = {}) {
+    const r    = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  }
+
+  function populateMemberSelect() {
+    const sel = document.getElementById('pMember');
+    sel.innerHTML = allMembers.map(m =>
+      `<option value="${esc(m.name)}">${esc(m.name)}</option>`
+    ).join('');
+  }
+
+  function buildDateFilter() {
+    const dates = [...new Set(allPres.map(p => p.meeting_date))].sort().reverse();
+    const sel   = document.getElementById('filterDate');
+    while (sel.options.length > 1) sel.remove(1);
+    dates.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d; opt.text = d;
+      sel.add(opt);
+    });
+  }
+
+  function renderTable() {
+    const filterDate = document.getElementById('filterDate').value;
+    const list  = filterDate ? allPres.filter(p => p.meeting_date === filterDate) : allPres;
+    const tbody = document.getElementById('presBody');
+    const empty = document.getElementById('emptyMsg');
+    tbody.innerHTML = '';
+
+    if (!list.length) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+
+    list.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="white-space:nowrap">${esc(p.meeting_date)}</td>
+        <td><strong>${esc(p.member_name)}</strong></td>
+        <td style="white-space:pre-wrap;word-break:break-word">${esc(p.change_description)}</td>
+        <td style="white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:12px">${esc(p.notes || '—')}</td>
+        <td>
+          <span class="badge-${p.status === 'done' ? 'done' : 'pending'}"
+                title="Нажмите для смены статуса"
+                onclick="toggleStatus(${p.id})">
+            ${p.status === 'done' ? '✅ Готово' : '⏳ Ожидает'}
+          </span>
+        </td>
+        <td style="display:flex;gap:6px;white-space:nowrap">
+          <button class="btn btn-outline-red btn-sm"  onclick="openEditModal(${p.id})">✏️</button>
+          <button class="btn btn-outline-gray btn-sm" onclick="deletePres(${p.id})">🗑️</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function toggleStatus(id) {
+    try {
+      const r    = await api(`/api/presentations/${id}/toggle`, { method: 'PATCH' });
+      const item = allPres.find(p => p.id === id);
+      if (item) item.status = r.status;
+      renderTable();
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  function openAddModal() {
+    document.getElementById('presEditId').value      = '';
+    document.getElementById('presModalTitle').textContent = '+ Добавить запись';
+    document.getElementById('pDate').value           = '';
+    document.getElementById('pDesc').value           = '';
+    document.getElementById('pNotes').value          = '';
+    if (allMembers.length) document.getElementById('pMember').selectedIndex = 0;
+    document.getElementById('modalPres').classList.add('open');
+  }
+
+  function openEditModal(id) {
+    const p = allPres.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('presEditId').value           = id;
+    document.getElementById('presModalTitle').textContent = '✏️ Редактировать запись';
+    document.getElementById('pDate').value                = p.meeting_date;
+    document.getElementById('pDesc').value                = p.change_description;
+    document.getElementById('pNotes').value               = p.notes || '';
+    // set member select
+    const sel = document.getElementById('pMember');
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === p.member_name) { sel.selectedIndex = i; break; }
+    }
+    document.getElementById('modalPres').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalPres').classList.remove('open');
+  }
+
+  async function savePresentation() {
+    const id    = document.getElementById('presEditId').value;
+    const date  = document.getElementById('pDate').value.trim();
+    const name  = document.getElementById('pMember').value;
+    const desc  = document.getElementById('pDesc').value.trim();
+    const notes = document.getElementById('pNotes').value.trim();
+
+    if (!date || !name || !desc) { toast('Заполните обязательные поля', 'err'); return; }
+
+    try {
+      const body = { meeting_date: date, member_name: name, change_description: desc, notes };
+      if (id) {
+        await api(`/api/presentations/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        await api('/api/presentations', { method: 'POST', body: JSON.stringify(body) });
+      }
+      closeModal();
+      allPres = await api('/api/presentations');
+      buildDateFilter();
+      renderTable();
+      toast('Сохранено ✓', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  async function deletePres(id) {
+    if (!confirm('Удалить запись?')) return;
+    try {
+      await api(`/api/presentations/${id}`, { method: 'DELETE' });
+      allPres = allPres.filter(p => p.id !== id);
+      buildDateFilter();
+      renderTable();
+      toast('Удалено', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  let _tt;
+  function toast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `show ${type}`;
+    clearTimeout(_tt);
+    _tt = setTimeout(() => { el.className = ''; }, 3500);
+  }
+
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.getElementById('modalPres').addEventListener('click', e => {
+    if (e.target === document.getElementById('modalPres')) closeModal();
+  });
+
+  init();
+</script>
+</body>
+</html>

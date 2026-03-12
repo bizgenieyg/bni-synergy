@@ -85,6 +85,7 @@ app.get('/member',          (req, res) => res.sendFile(path.join(__dirname, 'pub
 app.get('/voting',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
 app.get('/profile',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
 app.get('/members-catalog', (req, res) => res.sendFile(path.join(__dirname, 'public', 'members-catalog.html')));
+app.get('/presentations',   (req, res) => res.sendFile(path.join(__dirname, 'public', 'presentations.html')));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -492,6 +493,39 @@ app.post('/api/send-contacts', async (req, res) => {
   whatsapp.broadcast(guests, g =>
     pickVariant(CONTACTS_VARIANTS)(g.firstName, contactsText)
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
+});
+
+// ─── Presentations ────────────────────────────────────────────────────────────
+
+app.get('/api/presentations', (req, res) => {
+  const { date } = req.query;
+  res.json(db.getPresentations(date || null));
+});
+
+app.post('/api/presentations', (req, res) => {
+  const { meeting_date, member_name, change_description, notes } = req.body;
+  if (!meeting_date || !member_name || !change_description) {
+    return res.status(400).json({ error: 'Заполните обязательные поля' });
+  }
+  const id = db.insertPresentation({ meeting_date, member_name, change_description, notes });
+  res.json({ success: true, id });
+});
+
+app.put('/api/presentations/:id', (req, res) => {
+  const item = db.updatePresentation(Number(req.params.id), req.body);
+  if (!item) return res.status(404).json({ error: 'Запись не найдена' });
+  res.json({ success: true, item });
+});
+
+app.patch('/api/presentations/:id/toggle', (req, res) => {
+  const next = db.togglePresentationStatus(Number(req.params.id));
+  if (next === null) return res.status(404).json({ error: 'Запись не найдена' });
+  res.json({ success: true, status: next });
+});
+
+app.delete('/api/presentations/:id', (req, res) => {
+  db.deletePresentation(Number(req.params.id));
+  res.json({ success: true });
 });
 
 // ─── Birthday auto-congratulations ───────────────────────────────────────────

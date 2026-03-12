@@ -414,6 +414,68 @@ function setMemberSocials(memberId, socials) {
   })();
 }
 
+// ─── Schema: presentations ────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS presentations (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_date       TEXT NOT NULL,
+    member_name        TEXT NOT NULL,
+    change_description TEXT NOT NULL,
+    notes              TEXT,
+    status             TEXT NOT NULL DEFAULT 'pending',
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_presentations_date ON presentations(meeting_date);
+`);
+
+// ─── Presentations CRUD ───────────────────────────────────────────────────────
+
+function getPresentations(meetingDate) {
+  return meetingDate
+    ? db.prepare('SELECT * FROM presentations WHERE meeting_date = ? ORDER BY created_at DESC').all(meetingDate)
+    : db.prepare('SELECT * FROM presentations ORDER BY meeting_date DESC, created_at DESC').all();
+}
+
+function insertPresentation({ meeting_date, member_name, change_description, notes }) {
+  const info = db.prepare(`
+    INSERT INTO presentations (meeting_date, member_name, change_description, notes)
+    VALUES (?, ?, ?, ?)
+  `).run(meeting_date.trim(), member_name.trim(), change_description.trim(), (notes || '').trim());
+  return info.lastInsertRowid;
+}
+
+function updatePresentation(id, { meeting_date, member_name, change_description, notes, status }) {
+  const cur = db.prepare('SELECT * FROM presentations WHERE id = ?').get(id);
+  if (!cur) return null;
+  db.prepare(`
+    UPDATE presentations
+    SET meeting_date = ?, member_name = ?, change_description = ?, notes = ?, status = ?
+    WHERE id = ?
+  `).run(
+    (meeting_date       ?? cur.meeting_date).trim(),
+    (member_name        ?? cur.member_name).trim(),
+    (change_description ?? cur.change_description).trim(),
+    (notes              ?? cur.notes ?? '').trim(),
+    status              ?? cur.status,
+    id,
+  );
+  return db.prepare('SELECT * FROM presentations WHERE id = ?').get(id);
+}
+
+function togglePresentationStatus(id) {
+  const cur = db.prepare('SELECT status FROM presentations WHERE id = ?').get(id);
+  if (!cur) return null;
+  const next = cur.status === 'done' ? 'pending' : 'done';
+  db.prepare('UPDATE presentations SET status = ? WHERE id = ?').run(next, id);
+  return next;
+}
+
+function deletePresentation(id) {
+  db.prepare('DELETE FROM presentations WHERE id = ?').run(id);
+}
+
 module.exports = {
   db,
   // guests
@@ -454,4 +516,10 @@ module.exports = {
   getVoteCount,
   deleteVotesByDate,
   insertAnonymousVote,
+  // presentations
+  getPresentations,
+  insertPresentation,
+  updatePresentation,
+  togglePresentationStatus,
+  deletePresentation,
 };
