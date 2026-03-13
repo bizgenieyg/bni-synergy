@@ -558,6 +558,51 @@ app.delete('/api/presentations/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Group Value ──────────────────────────────────────────────────────────────
+
+// Must come before /api/group-value/:id to avoid route conflicts
+app.get('/api/group-value/totals', (req, res) => {
+  const t = db.getGroupValueTotals();
+  res.json(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 });
+});
+
+app.get('/api/group-value/summary', (req, res) => {
+  res.json(db.getGroupValueSummary());
+});
+
+app.get('/api/group-value', (req, res) => {
+  const { date } = req.query;
+  res.json(db.getGroupValue(date || null));
+});
+
+app.post('/api/group-value', (req, res) => {
+  const { meeting_date, member_id, member_name, meetings_1on1, referrals, closed_deals, deal_amount } = req.body;
+  if (!meeting_date || !member_name) {
+    return res.status(400).json({ error: 'meeting_date и member_name обязательны' });
+  }
+  const id = db.upsertGroupValue({
+    meeting_date,
+    member_id:     member_id || null,
+    member_name,
+    meetings_1on1: Number(meetings_1on1) || 0,
+    referrals:     Number(referrals)     || 0,
+    closed_deals:  Number(closed_deals)  || 0,
+    deal_amount:   Number(deal_amount)   || 0,
+  });
+  res.json({ success: true, id });
+});
+
+app.put('/api/group-value/:id', (req, res) => {
+  const item = db.updateGroupValue(Number(req.params.id), req.body);
+  if (!item) return res.status(404).json({ error: 'Запись не найдена' });
+  res.json({ success: true, item });
+});
+
+app.delete('/api/group-value/:id', (req, res) => {
+  db.deleteGroupValue(Number(req.params.id));
+  res.json({ success: true });
+});
+
 // ─── Birthday auto-congratulations ───────────────────────────────────────────
 
 function checkBirthdays() {

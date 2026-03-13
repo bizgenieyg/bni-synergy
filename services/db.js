@@ -476,6 +476,99 @@ function deletePresentation(id) {
   db.prepare('DELETE FROM presentations WHERE id = ?').run(id);
 }
 
+// ─── Schema: group_value ──────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS group_value (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_date  TEXT NOT NULL,
+    member_id     INTEGER REFERENCES members(id),
+    member_name   TEXT NOT NULL,
+    meetings_1on1 INTEGER DEFAULT 0,
+    referrals     INTEGER DEFAULT 0,
+    closed_deals  INTEGER DEFAULT 0,
+    deal_amount   REAL DEFAULT 0,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_group_value_date ON group_value(meeting_date);
+`);
+
+// ─── Group Value CRUD ─────────────────────────────────────────────────────────
+
+function getGroupValue(meetingDate) {
+  return meetingDate
+    ? db.prepare('SELECT * FROM group_value WHERE meeting_date = ? ORDER BY member_name ASC').all(meetingDate)
+    : db.prepare('SELECT * FROM group_value ORDER BY meeting_date DESC, member_name ASC').all();
+}
+
+function getGroupValueSummary() {
+  return db.prepare(`
+    SELECT meeting_date,
+           SUM(meetings_1on1) as total_1on1,
+           SUM(referrals)     as total_referrals,
+           SUM(closed_deals)  as total_deals,
+           SUM(deal_amount)   as total_amount,
+           COUNT(*)           as member_count
+    FROM group_value
+    GROUP BY meeting_date
+    ORDER BY meeting_date DESC
+  `).all();
+}
+
+function getGroupValueTotals() {
+  return db.prepare(`
+    SELECT SUM(meetings_1on1) as total_1on1,
+           SUM(referrals)     as total_referrals,
+           SUM(closed_deals)  as total_deals,
+           SUM(deal_amount)   as total_amount
+    FROM group_value
+  `).get();
+}
+
+function upsertGroupValue({ meeting_date, member_id, member_name, meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 }) {
+  const existing = member_id
+    ? db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_id = ?').get(meeting_date, member_id)
+    : db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_name = ? AND member_id IS NULL').get(meeting_date, member_name);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE group_value
+      SET meetings_1on1 = ?, referrals = ?, closed_deals = ?, deal_amount = ?, member_name = ?
+      WHERE id = ?
+    `).run(meetings_1on1, referrals, closed_deals, deal_amount, member_name, existing.id);
+    return existing.id;
+  } else {
+    const info = db.prepare(`
+      INSERT INTO group_value (meeting_date, member_id, member_name, meetings_1on1, referrals, closed_deals, deal_amount)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(meeting_date, member_id || null, member_name, meetings_1on1, referrals, closed_deals, deal_amount);
+    return info.lastInsertRowid;
+  }
+}
+
+function updateGroupValue(id, { meetings_1on1, referrals, closed_deals, deal_amount, member_name }) {
+  const cur = db.prepare('SELECT * FROM group_value WHERE id = ?').get(id);
+  if (!cur) return null;
+  db.prepare(`
+    UPDATE group_value
+    SET meetings_1on1 = ?, referrals = ?, closed_deals = ?, deal_amount = ?, member_name = ?
+    WHERE id = ?
+  `).run(
+    meetings_1on1 ?? cur.meetings_1on1,
+    referrals     ?? cur.referrals,
+    closed_deals  ?? cur.closed_deals,
+    deal_amount   ?? cur.deal_amount,
+    member_name   ?? cur.member_name,
+    id,
+  );
+  return db.prepare('SELECT * FROM group_value WHERE id = ?').get(id);
+}
+
+function deleteGroupValue(id) {
+  db.prepare('DELETE FROM group_value WHERE id = ?').run(id);
+}
+
 module.exports = {
   db,
   // guests
@@ -522,4 +615,11 @@ module.exports = {
   updatePresentation,
   togglePresentationStatus,
   deletePresentation,
+  // group_value
+  getGroupValue,
+  getGroupValueSummary,
+  getGroupValueTotals,
+  upsertGroupValue,
+  updateGroupValue,
+  deleteGroupValue,
 };
