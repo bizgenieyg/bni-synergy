@@ -4,18 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BNI SYNERGY — Панель управления</title>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --red:     #C41230;
-      --red-d:   #9e0e26;
-      --green:   #15803d;
-      --border:  #e5e7eb;
-      --bg:      #f3f4f6;
-      --text:    #111827;
-      --muted:   #6b7280;
-      --radius:  8px;
+      --red:       #dc2626;
+      --red-d:     #b91c1c;
+      --green:     #15803d;
+      --border:    #e5e7eb;
+      --bg:        #f3f4f6;
+      --text:      #111827;
+      --muted:     #6b7280;
+      --radius:    8px;
+      --sidebar-w: 240px;
+      --sidebar-sm: 60px;
     }
 
     body {
@@ -23,604 +27,777 @@
       background: var(--bg);
       color: var(--text);
       font-size: 14px;
+      display: flex;
+      min-height: 100vh;
     }
 
-    /* ── Topbar ── */
-    .topbar {
-      background: var(--red);
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: #1f2937;
       color: #fff;
-      padding: 0 24px;
-      height: 52px;
+      height: 100vh;
+      position: fixed;
+      left: 0; top: 0;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.25s;
+      z-index: 50;
+      overflow: hidden;
+    }
+
+    .sidebar.collapsed { width: var(--sidebar-sm); }
+
+    .sidebar-header {
+      padding: 20px 18px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo { white-space: nowrap; overflow: hidden; }
+    .logo-bni {
+      font-family: Arial Black, Arial, sans-serif;
+      font-size: 21px; font-weight: 900;
+      color: var(--red); letter-spacing: 1px;
+      display: block;
+    }
+    .logo-synergy {
+      font-size: 10px; font-weight: 600;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      display: block;
+      margin-top: 1px;
+      transition: opacity 0.2s;
+    }
+    .sidebar.collapsed .logo-synergy { opacity: 0; }
+
+    .nav-list { flex: 1; list-style: none; padding: 10px 0; overflow-y: auto; overflow-x: hidden; }
+
+    .nav-item {
       display: flex;
       align-items: center;
-      gap: 16px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    }
-
-    .topbar .brand {
-      font-family: Arial Black, Arial, sans-serif;
-      font-size: 17px;
-      font-weight: 800;
-      letter-spacing: -0.3px;
-      flex: 1;
-    }
-
-    .topbar .brand span { font-size: 13px; font-weight: 400; opacity: 0.7; margin-left: 6px; }
-
-    /* ── Tabs ── */
-    .tabs {
-      background: #fff;
-      border-bottom: 2px solid var(--border);
-      display: flex;
-      padding: 0 24px;
-      gap: 4px;
-    }
-
-    .tab-btn {
-      padding: 12px 18px;
-      font-size: 14px;
-      font-weight: 600;
-      border: none;
-      background: none;
-      color: var(--muted);
+      gap: 12px;
+      padding: 11px 18px;
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      font-size: 14px; font-weight: 500;
       cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      transition: color 0.15s, border-color 0.15s;
+      border: none; background: none;
+      width: 100%;
       white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover  { background: rgba(255,255,255,0.07); color: #fff; }
+    .nav-item.active { background: rgba(220,38,38,0.2); color: #fff; border-left-color: var(--red); }
+
+    .nav-icon { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-icon svg { width: 18px; height: 18px; }
+
+    .nav-label { transition: opacity 0.2s, width 0.2s; overflow: hidden; }
+    .sidebar.collapsed .nav-label { opacity: 0; width: 0; }
+
+    .sidebar-footer { padding: 8px 0 12px; border-top: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+
+    #collapseIcon svg { transition: transform 0.25s; }
+    .sidebar.collapsed #collapseIcon svg { transform: rotate(180deg); }
+
+    /* ── App Shell ── */
+    .app-shell {
+      flex: 1;
+      margin-left: var(--sidebar-w);
+      transition: margin-left 0.25s;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .app-shell.collapsed { margin-left: var(--sidebar-sm); }
+
+    /* ── Header ── */
+    .app-header {
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky; top: 0; z-index: 40;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .header-left { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
+    .next-meeting-wrap { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .next-meeting-wrap strong { color: var(--text); font-weight: 600; }
+
+    .btn-inline-sm {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 4px;
+      padding: 2px 7px; font-size: 11px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-inline-sm:hover { background: var(--bg); }
+
+    .nm-input {
+      padding: 4px 8px; border-radius: 4px;
+      border: 1.5px solid var(--border);
+      font-size: 13px; width: 70px; outline: none;
+    }
+    .nm-input:focus { border-color: var(--red); }
+
+    .search-wrap { position: relative; display: flex; align-items: center; }
+    .search-icon { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+    .search-icon svg { width: 14px; height: 14px; }
+    .search-input {
+      padding: 7px 12px 7px 30px;
+      border: 1.5px solid var(--border); border-radius: 20px;
+      font-size: 13px; outline: none;
+      width: 200px; background: var(--bg);
+      transition: border-color 0.15s, width 0.2s;
+    }
+    .search-input:focus { border-color: var(--red); width: 260px; background: #fff; }
+
+    .bell-wrap { position: relative; }
+
+    .icon-btn {
+      position: relative; width: 36px; height: 36px;
+      border: 1.5px solid var(--border); background: #fff;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--muted);
+      transition: background 0.15s, color 0.15s;
+    }
+    .icon-btn:hover { background: var(--bg); color: var(--text); }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    .bell-badge {
+      position: absolute; top: -3px; right: -3px;
+      background: var(--red); color: #fff;
+      font-size: 10px; font-weight: 700;
+      width: 17px; height: 17px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
     }
 
-    .tab-btn:hover  { color: var(--text); }
-    .tab-btn.active { color: var(--red); border-bottom-color: var(--red); }
+    /* ── Birthday panel dropdown ── */
+    .birthday-panel {
+      position: absolute; right: 0; top: calc(100% + 8px);
+      background: #fff; border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      width: 360px; max-height: 420px; overflow-y: auto;
+      z-index: 100;
+    }
+    .bp-header {
+      padding: 11px 16px; font-weight: 700; font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      background: #f9fafb;
+      border-radius: var(--radius) var(--radius) 0 0;
+      position: sticky; top: 0;
+    }
+    .bp-item {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 9px 14px;
+      border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .bp-item:last-child { border-bottom: none; }
+    .bp-item.today-bday { background: #fff7f7; color: var(--red); font-weight: 600; }
+
+    /* ── Mobile ── */
+    .burger-btn {
+      display: none; position: fixed; top: 10px; left: 10px; z-index: 60;
+      background: #1f2937; color: #fff; border: none; border-radius: var(--radius);
+      width: 40px; height: 40px; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .burger-btn svg { width: 20px; height: 20px; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 49; }
+
+    @media (max-width: 768px) {
+      .sidebar { left: calc(-1 * var(--sidebar-w)); width: var(--sidebar-w) !important; transition: left 0.25s; }
+      .sidebar.mobile-open { left: 0; }
+      .sidebar-overlay.visible { display: block; }
+      .burger-btn { display: flex; }
+      .app-shell { margin-left: 0 !important; }
+      .search-input { width: 130px; }
+      .search-input:focus { width: 170px; }
+      .header-right .invite-label { display: none; }
+    }
 
     /* ── Buttons ── */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 7px 14px;
-      border: none;
-      border-radius: var(--radius);
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 7px 14px; border: none; border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      text-decoration: none; white-space: nowrap;
       transition: opacity 0.15s, transform 0.1s;
     }
-
+    .btn svg { width: 14px; height: 14px; }
     .btn:hover   { opacity: 0.85; }
     .btn:active  { transform: scale(0.97); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    .btn-red    { background: var(--red);   color: #fff; }
-    .btn-green  { background: var(--green); color: #fff; }
-    .btn-gray   { background: #374151;      color: #fff; }
-    .btn-orange { background: #b45309;      color: #fff; }
-    .btn-outline-red { background: #fff; color: var(--red); border: 1.5px solid var(--red); }
-    .btn-outline-gray{ background: #fff; color: #374151;    border: 1.5px solid #d1d5db; }
-    .btn-white  { background: #fff; color: var(--red); }
-    .btn-sm     { padding: 5px 11px; font-size: 12px; }
+    .btn-red          { background: var(--red);   color: #fff; }
+    .btn-green        { background: var(--green); color: #fff; }
+    .btn-gray         { background: #374151;      color: #fff; }
+    .btn-orange       { background: #b45309;      color: #fff; }
+    .btn-outline-red  { background: #fff; color: var(--red);   border: 1.5px solid var(--red); }
+    .btn-outline-gray { background: #fff; color: #374151;      border: 1.5px solid #d1d5db; }
+    .btn-sm           { padding: 5px 11px; font-size: 12px; }
 
-    /* ── Layout ── */
-    .main   { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
+    /* ── Page ── */
+    .page-container { flex: 1; padding: 24px; max-width: 1280px; width: 100%; margin: 0 auto; }
+    .page { display: block; }
+    .page.hidden { display: none !important; }
     .hidden { display: none !important; }
+
+    .page-title { font-size: 22px; font-weight: 800; margin-bottom: 20px; }
+
+    /* ── Stat Cards (dashboard) ── */
+    .stat-cards {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #fff; border-radius: 12px; padding: 18px 20px;
+      display: flex; align-items: center; gap: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .stat-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .stat-icon svg { width: 22px; height: 22px; }
+    .red-icon    { background: #fee2e2; color: var(--red); }
+    .green-icon  { background: #d1fae5; color: #059669; }
+    .blue-icon   { background: #dbeafe; color: #2563eb; }
+    .yellow-icon { background: #fef3c7; color: #d97706; }
+    .stat-num { font-size: 26px; font-weight: 800; line-height: 1.1; }
+    .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    /* ── Quick Actions ── */
+    .quick-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+
+    /* ── Dashboard Grid ── */
+    .dash-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 16px;
+    }
+    .dash-card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .chart-card { grid-row: 1 / 3; }
+    .dash-card-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+    .muted-msg { color: var(--muted); font-size: 13px; }
+
+    /* ── Stats row (guests) ── */
+    .stats-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .stat-sm {
+      background: #fff; border-radius: var(--radius);
+      padding: 12px 20px; text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07); min-width: 110px;
+    }
+    .stat-sm .num { font-size: 26px; font-weight: 800; }
+    .stat-sm .num.red   { color: var(--red); }
+    .stat-sm .num.green { color: var(--green); }
+    .stat-sm .lbl { font-size: 12px; color: var(--muted); }
 
     /* ── Toolbar ── */
     .toolbar {
-      background: #fff;
-      border-radius: var(--radius);
-      padding: 12px 16px;
-      margin-bottom: 16px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
+      background: #fff; border-radius: var(--radius);
+      padding: 12px 16px; margin-bottom: 16px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.07);
     }
-
-    .toolbar label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .toolbar label { font-size: 13px; font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
     .toolbar-sep   { width: 1px; height: 26px; background: var(--border); margin: 0 2px; }
 
     select {
-      padding: 7px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius);
-      font-size: 13px;
-      background: #fff;
-      outline: none;
-      cursor: pointer;
+      padding: 7px 12px; border: 1.5px solid var(--border);
+      border-radius: var(--radius); font-size: 13px;
+      background: #fff; outline: none; cursor: pointer;
     }
-
     select:focus { border-color: var(--red); }
-
-    /* ── Stats ── */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat {
-      background: #fff;
-      border-radius: var(--radius);
-      padding: 14px;
-      text-align: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-    }
-
-    .stat .num { font-size: 28px; font-weight: 800; color: var(--red); }
-    .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
     /* ── Table ── */
     .table-wrap {
-      background: #fff;
-      border-radius: var(--radius);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-      overflow-x: auto;
+      background: #fff; border-radius: var(--radius);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07); overflow-x: auto;
     }
-
     table { width: 100%; border-collapse: collapse; }
-
     thead th {
-      padding: 11px 12px;
-      background: #f9fafb;
-      text-align: left;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border-bottom: 1.5px solid var(--border);
-      white-space: nowrap;
+      padding: 11px 12px; background: #f9fafb; text-align: left;
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1.5px solid var(--border); white-space: nowrap;
     }
-
-    tbody td {
-      padding: 9px 12px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tbody tr:last-child td { border-bottom: none; }
     tbody tr:nth-child(even) { background: #fafafa; }
     tbody tr:hover           { background: #fff8f8; }
-
-    /* Paid row */
-    tbody tr.paid-row           { background: #f0fdf4 !important; }
-    tbody tr.paid-row:hover     { background: #dcfce7 !important; }
-
-    /* WA disabled row */
+    tbody tr.paid-row        { background: #f0fdf4 !important; }
+    tbody tr.paid-row:hover  { background: #dcfce7 !important; }
     tbody tr.wa-off td:not(.wa-cell) { opacity: 0.55; }
+    tbody tr.inactive-row    { opacity: 0.5; background: #f9fafb !important; }
 
-    .badge-paid   { display:inline-block; background:#dcfce7; color:var(--green); padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
-    .badge-unpaid { display:inline-block; background:#fee2e2; color:#dc2626;      padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+    .empty-msg { text-align: center; padding: 48px; color: var(--muted); font-size: 15px; }
+
+    .badge-paid     { display:inline-block; background:#dcfce7; color:var(--green); padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+    .badge-unpaid   { display:inline-block; background:#fee2e2; color:#dc2626;      padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
     .badge-inactive { display:inline-block; background:#f3f4f6; color:var(--muted); padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
     .badge-active   { display:inline-block; background:#dcfce7; color:var(--green); padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+    .badge-pending  { display:inline-block; background:#fef3c7; color:#92400e; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; user-select:none; }
+    .badge-done     { display:inline-block; background:#dcfce7; color:var(--green); padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; user-select:none; }
+    .badge-pending:hover, .badge-done:hover { opacity: 0.7; }
+    .wa-toggle { width: 17px; height: 17px; accent-color: #25D366; cursor: pointer; }
 
-    .empty-msg { text-align:center; padding:48px; color:var(--muted); font-size:15px; }
-
-    /* WA toggle checkbox */
-    .wa-toggle {
-      width: 17px;
-      height: 17px;
-      accent-color: #25D366;
-      cursor: pointer;
+    /* ── Voting ── */
+    .voting-status-bar {
+      margin-bottom: 14px; padding: 10px 16px; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      background: #f3f4f6; color: #374151;
     }
+    .vote-bar-wrap { background: #fee2e2; border-radius: 4px; height: 14px; overflow: hidden; min-width: 120px; }
+    .vote-bar { background: var(--red); height: 100%; transition: width 0.4s; }
 
-    /* ── Members tab ── */
-    .members-toolbar {
-      background: #fff;
-      border-radius: var(--radius);
-      padding: 12px 16px;
-      margin-bottom: 16px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
+    /* ── Birthdays section (members page) ── */
+    .bday-section {
+      background: #fff; border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.07);
     }
+    .bday-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+    .bday-item {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 7px 0;
+      border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .bday-item:last-child { border-bottom: none; }
+    .bday-item.today-bday { color: var(--red); font-weight: 600; }
 
-    .members-toolbar .filter-label { font-size: 13px; font-weight: 600; margin-left: auto; color: var(--muted); }
-
-    .inactive-row { opacity: 0.5; background: #f9fafb !important; }
-    .inactive-row:hover { opacity: 0.7 !important; }
-
-    /* ── Modal ── */
+    /* ── Modals ── */
     .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 200;
+      align-items: center; justify-content: center;
     }
-
     .modal-overlay.open { display: flex; }
-
     .modal {
-      background: #fff;
-      border-radius: 12px;
-      padding: 28px;
-      width: 520px;
-      max-width: 95vw;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      background: #fff; border-radius: 12px; padding: 28px;
+      width: 520px; max-width: 95vw; max-height: 90vh;
+      overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     }
-
     .modal h3 { font-size: 17px; margin-bottom: 16px; }
-
-    .modal-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 4px;
-    }
-
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 4px; }
     .modal-grid .full { grid-column: 1 / -1; }
-
-    .modal label     { display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#374151; }
-    .modal input,
-    .modal textarea  {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius);
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-      resize: vertical;
+    .modal label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #374151; }
+    .modal input, .modal textarea, .modal select {
+      width: 100%; padding: 9px 12px;
+      border: 1.5px solid var(--border); border-radius: var(--radius);
+      font-size: 14px; font-family: inherit; outline: none; resize: vertical; background: #fff;
     }
-
-    .modal input:focus,
-    .modal textarea:focus { border-color: var(--red); }
-
-    .modal-actions { display:flex; gap:10px; margin-top:18px; justify-content:flex-end; }
+    .modal input:focus, .modal textarea:focus, .modal select:focus { border-color: var(--red); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
 
     /* ── Toast ── */
     #toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: #1f2937;
-      color: #fff;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-      z-index: 300;
-      opacity: 0;
-      transform: translateY(8px);
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1f2937; color: #fff; padding: 12px 20px;
+      border-radius: 8px; font-size: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3); z-index: 300;
+      opacity: 0; transform: translateY(8px);
       transition: opacity 0.2s, transform 0.2s;
-      pointer-events: none;
-      max-width: 360px;
+      pointer-events: none; max-width: 360px;
     }
-
-    #toast.show { opacity:1; transform:translateY(0); }
+    #toast.show { opacity: 1; transform: translateY(0); }
     #toast.ok   { background: #15803d; }
     #toast.err  { background: #dc2626; }
 
-    /* ── Next-meeting edit in topbar ── */
-    .next-meeting-wrap {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 13px;
-      white-space: nowrap;
-      opacity: 0.95;
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .stat-cards { grid-template-columns: repeat(2, 1fr); }
+      .dash-grid  { grid-template-columns: 1fr; }
+      .chart-card { grid-row: auto; }
     }
-
-    .btn-inline {
-      background: none;
-      border: 1px solid rgba(255,255,255,0.55);
-      color: #fff;
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.15s;
+    @media (max-width: 640px) {
+      .stat-cards { grid-template-columns: 1fr 1fr; }
+      .page-container { padding: 16px; }
+      .app-header { padding: 0 16px; }
     }
-
-    .btn-inline:hover { background: rgba(255,255,255,0.18); }
-
-    .next-meeting-input {
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: none;
-      font-size: 13px;
-      width: 70px;
-      outline: none;
-    }
-
-    /* ── Birthdays section ── */
-    .birthdays-section {
-      background: #fff;
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-    }
-
-    .birthdays-section .section-title {
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 10px;
-    }
-
-    .birthday-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 7px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-    }
-
-    .birthday-item:last-child { border-bottom: none; }
-    .birthday-item.today-bday { color: var(--red); font-weight: 600; }
-    .birthday-item .bday-text { flex: 1; }
-
-    /* ── Voting tab ── */
-    .vote-bar-wrap {
-      background: #fee2e2;
-      border-radius: 4px;
-      height: 14px;
-      overflow: hidden;
-      min-width: 120px;
-    }
-
-    .vote-bar { background: var(--red); height: 100%; transition: width 0.4s; }
   </style>
 </head>
 <body>
 
-<!-- ── Topbar ─────────────────────────────────────────────────────────── -->
-<nav class="topbar">
-  <div class="brand">BNI <span>SYNERGY — Панель управления</span></div>
+<!-- Mobile burger -->
+<button id="burgerBtn" class="burger-btn" onclick="toggleSidebar()">
+  <i data-lucide="menu"></i>
+</button>
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
-  <div class="next-meeting-wrap" id="nmDisplay">
-    📅 Следующая встреча: <strong id="nextMeetingDisplay">—</strong>
-    <button class="btn-inline" onclick="editNextMeeting()">изменить</button>
-  </div>
-  <div class="next-meeting-wrap hidden" id="nmEdit">
-    📅 <input type="text" id="nextMeetingInput" class="next-meeting-input" placeholder="09/03" maxlength="5" />
-    <button class="btn-inline" onclick="saveNextMeeting()">✓ Сохранить</button>
-    <button class="btn-inline" onclick="cancelNextMeeting()">✕</button>
+<!-- ── Sidebar ───────────────────────────────────────────────────── -->
+<nav id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <span class="logo-bni">BNI</span>
+      <span class="logo-synergy">SYNERGY</span>
+    </div>
   </div>
 
-  <a href="/member" target="_blank" class="btn btn-white btn-sm">🔗 Ссылка</a>
+  <ul class="nav-list">
+    <li><a href="#dashboard" class="nav-item" data-page="dashboard">
+      <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span>
+      <span class="nav-label">Дашборд</span>
+    </a></li>
+    <li><a href="#guests" class="nav-item" data-page="guests">
+      <span class="nav-icon"><i data-lucide="users"></i></span>
+      <span class="nav-label">Гости</span>
+    </a></li>
+    <li><a href="#members" class="nav-item" data-page="members">
+      <span class="nav-icon"><i data-lucide="user-check"></i></span>
+      <span class="nav-label">Члены группы</span>
+    </a></li>
+    <li><a href="#voting" class="nav-item" data-page="voting">
+      <span class="nav-icon"><i data-lucide="bar-chart-2"></i></span>
+      <span class="nav-label">Голосование</span>
+    </a></li>
+    <li><a href="#presentations" class="nav-item" data-page="presentations">
+      <span class="nav-icon"><i data-lucide="presentation"></i></span>
+      <span class="nav-label">Презентации</span>
+    </a></li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <button class="nav-item collapse-btn" onclick="toggleCollapse()">
+      <span class="nav-icon" id="collapseIcon"><i data-lucide="chevrons-left"></i></span>
+      <span class="nav-label">Свернуть</span>
+    </button>
+  </div>
 </nav>
 
-<!-- ── Tabs ───────────────────────────────────────────────────────────── -->
-<div class="tabs">
-  <button class="tab-btn active" onclick="switchTab('guests')">🧾 Гости</button>
-  <button class="tab-btn"        onclick="switchTab('members')">👥 Члены группы</button>
-  <button class="tab-btn"        onclick="switchTab('voting')">🗳️ Голосование</button>
-  <a class="tab-btn" href="/presentations" style="text-decoration:none">📊 Презентации</a>
-</div>
+<!-- ── App Shell ─────────────────────────────────────────────────── -->
+<div id="appShell" class="app-shell">
 
-<div class="main">
-
-  <!-- ════════════════ GUESTS TAB ════════════════ -->
-  <div id="tabGuests">
-
-    <div class="toolbar">
-      <label for="dateSelect">📅 Встреча:</label>
-      <select id="dateSelect" onchange="loadGuests()">
-        <option value="">— Все встречи —</option>
-      </select>
-      <div class="toolbar-sep"></div>
-      <button class="btn btn-gray btn-sm"  onclick="downloadPDF('list')">📄 Список PDF</button>
-      <button class="btn btn-gray btn-sm"  onclick="downloadPDF('badges')">🏷️ Бейджики PDF</button>
-      <div class="toolbar-sep"></div>
-      <button class="btn btn-green btn-sm" onclick="openModal('contacts')">📋 Разослать контакты</button>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="next-meeting-wrap" id="nmDisplay">
+        <i data-lucide="calendar" style="width:14px;height:14px;flex-shrink:0"></i>
+        <strong id="nextMeetingDisplay">—</strong>
+        <button class="btn-inline-sm" onclick="editNextMeeting()">изменить</button>
+      </div>
+      <div class="next-meeting-wrap hidden" id="nmEdit">
+        <input type="text" id="nextMeetingInput" class="nm-input" placeholder="09/03" maxlength="5" />
+        <button class="btn-inline-sm" onclick="saveNextMeeting()">✓</button>
+        <button class="btn-inline-sm" onclick="cancelNextMeeting()">✕</button>
+      </div>
     </div>
-
-    <div class="stats">
-      <div class="stat"><div class="num" id="statTotal">—</div><div class="lbl">Всего гостей</div></div>
-      <div class="stat"><div class="num" id="statPaid">—</div><div class="lbl">Оплатили</div></div>
-      <div class="stat"><div class="num" id="statUnpaid">—</div><div class="lbl">Не оплатили</div></div>
+    <div class="header-right">
+      <div class="search-wrap">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input type="text" id="globalSearch" class="search-input"
+               placeholder="Поиск..." oninput="handleSearch(this.value)" />
+      </div>
+      <div class="bell-wrap">
+        <button class="icon-btn" id="bellBtn" onclick="toggleBirthdayPanel()" title="Дни рождения">
+          <i data-lucide="bell"></i>
+          <span id="bellBadge" class="bell-badge hidden">0</span>
+        </button>
+        <div id="birthdayPanel" class="birthday-panel hidden">
+          <div class="bp-header">🎂 Ближайшие дни рождения</div>
+          <div id="bpList"></div>
+        </div>
+      </div>
+      <button class="btn btn-red btn-sm" onclick="openModal('inviteGuest')">
+        <i data-lucide="user-plus"></i>
+        <span class="invite-label">Пригласить гостя</span>
+      </button>
+      <a href="/member" target="_blank" class="btn btn-outline-gray btn-sm">
+        <i data-lucide="link"></i> Ссылка
+      </a>
     </div>
+  </header>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>№</th>
-            <th>Имя и Фамилия</th>
-            <th>Профессия</th>
-            <th>Телефон</th>
-            <th>Кто пригласил</th>
-            <th>Встреча</th>
-            <th>Оплата</th>
-            <th class="wa-cell">📱 WA</th>
-            <th>Действие</th>
-          </tr>
-        </thead>
-        <tbody id="guestBody"></tbody>
-      </table>
-      <div id="emptyMsg" class="empty-msg" style="display:none">Нет зарегистрированных гостей</div>
-    </div>
-  </div>
+  <!-- Pages -->
+  <main class="page-container">
 
-  <!-- ════════════════ VOTING TAB ════════════════ -->
-  <div id="tabVoting" class="hidden">
+    <!-- ══ DASHBOARD ══ -->
+    <div id="page-dashboard" class="page hidden">
+      <h1 class="page-title">Дашборд</h1>
 
-    <div id="votingStatusBar" style="margin-bottom:8px;padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600;background:#f3f4f6;color:#374151">
-      🔄 Загрузка...
-    </div>
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-icon red-icon"><i data-lucide="users"></i></div>
+          <div><div class="stat-num" id="dashMembers">—</div><div class="stat-lbl">Членов группы</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green-icon"><i data-lucide="user-check"></i></div>
+          <div><div class="stat-num" id="dashGuests">—</div><div class="stat-lbl">Гостей на встречу</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon blue-icon"><i data-lucide="bar-chart-2"></i></div>
+          <div><div class="stat-num" id="dashVotes">—</div><div class="stat-lbl">Голосов</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow-icon"><i data-lucide="calendar"></i></div>
+          <div><div class="stat-num" id="dashDate" style="font-size:18px">—</div><div class="stat-lbl">Следующая встреча</div></div>
+        </div>
+      </div>
 
-    <div class="toolbar">
-      <button class="btn btn-gray btn-sm" onclick="refreshVotingTab()">🔄 Обновить</button>
-      <div class="toolbar-sep"></div>
-      <button class="btn btn-gray btn-sm" id="closeVotingBtn" onclick="closeVoting()" style="display:none">🔴 Закрыть голосование</button>
-      <div class="toolbar-sep"></div>
-      <button class="btn btn-red btn-sm" onclick="openModal('voting')">📨 Разослать голосование</button>
-    </div>
+      <div class="quick-actions">
+        <button class="btn btn-gray btn-sm" onclick="quickPDF('list')"><i data-lucide="file-text"></i> Список PDF</button>
+        <button class="btn btn-gray btn-sm" onclick="quickPDF('badges')"><i data-lucide="tag"></i> Бейджики PDF</button>
+        <a class="btn btn-gray btn-sm" href="/api/pdf/members" target="_blank"><i data-lucide="book-open"></i> Каталог PDF</a>
+        <a class="btn btn-gray btn-sm" href="/members-catalog" target="_blank"><i data-lucide="globe"></i> Каталог онлайн</a>
+      </div>
 
-    <div id="votingTotalWrap" style="display:none;margin-bottom:16px">
-      <div class="stat" style="display:inline-block;min-width:200px">
-        <div class="num" id="votingTotal">0</div>
-        <div class="lbl">Всего голосов</div>
+      <div class="dash-grid">
+        <div class="dash-card chart-card">
+          <div class="dash-card-title">Гости по встречам</div>
+          <canvas id="guestsChart"></canvas>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-title">🎂 Дни рождения (14 дней)</div>
+          <div id="dashBirthdays"><div class="muted-msg">Загрузка...</div></div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-title">🏆 Победители голосования</div>
+          <div id="dashWinners"><div class="muted-msg">Загрузка...</div></div>
+        </div>
       </div>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="text-align:center">Место</th>
-            <th>Имя</th>
-            <th>Профессия</th>
-            <th>Голосов</th>
-            <th style="min-width:160px">Рейтинг</th>
-          </tr>
-        </thead>
-        <tbody id="votingBody"></tbody>
-      </table>
-      <div id="emptyVotingMsg" class="empty-msg" style="display:none">Голосов пока нет</div>
-    </div>
-  </div>
-
-  <!-- ════════════════ MEMBERS TAB ════════════════ -->
-  <div id="tabMembers" class="hidden">
-
-    <div class="birthdays-section" id="birthdaysSection" style="display:none">
-      <div class="section-title">🎂 Дни рождения — ближайшие 14 дней</div>
-      <div id="birthdaysList"></div>
-    </div>
-
-    <div class="members-toolbar">
-      <button class="btn btn-red btn-sm" onclick="openMemberModal()">+ Добавить члена</button>
-      <a class="btn btn-sm" style="background:#374151;color:#fff;text-decoration:none"
-         href="/api/pdf/members" target="_blank">📋 Каталог PDF</a>
-      <a class="btn btn-sm" style="background:#374151;color:#fff;text-decoration:none"
-         href="/members-catalog" target="_blank">🌐 Каталог</a>
-      <label style="display:flex;align-items:center;gap:6px;margin-left:auto;cursor:pointer">
-        <input type="checkbox" id="showInactive" onchange="renderMembers()" />
-        Показать неактивных
-      </label>
+    <!-- ══ GUESTS ══ -->
+    <div id="page-guests" class="page hidden">
+      <h1 class="page-title">Гости</h1>
+      <div class="toolbar">
+        <label for="dateSelect">📅 Встреча:</label>
+        <select id="dateSelect" onchange="loadGuests()">
+          <option value="">— Все встречи —</option>
+        </select>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-gray btn-sm" onclick="downloadPDF('list')"><i data-lucide="file-text"></i> Список PDF</button>
+        <button class="btn btn-gray btn-sm" onclick="downloadPDF('badges')"><i data-lucide="tag"></i> Бейджики</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-green btn-sm" onclick="openModal('contacts')"><i data-lucide="send"></i> Разослать контакты</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat-sm"><div class="num" id="statTotal">—</div><div class="lbl">Всего гостей</div></div>
+        <div class="stat-sm"><div class="num green" id="statPaid">—</div><div class="lbl">Оплатили</div></div>
+        <div class="stat-sm"><div class="num red" id="statUnpaid">—</div><div class="lbl">Не оплатили</div></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>№</th><th>Имя и Фамилия</th><th>Профессия</th><th>Телефон</th>
+            <th>Кто пригласил</th><th>Встреча</th><th>Оплата</th>
+            <th class="wa-cell">📱 WA</th><th>Действие</th>
+          </tr></thead>
+          <tbody id="guestBody"></tbody>
+        </table>
+        <div id="emptyGuests" class="empty-msg" style="display:none">Нет зарегистрированных гостей</div>
+      </div>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>№</th>
-            <th>Имя</th>
-            <th>Профессия</th>
-            <th>Телефон</th>
-            <th>День рождения</th>
-            <th>Статус</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody id="membersBody"></tbody>
-      </table>
-      <div id="emptyMembersMsg" class="empty-msg" style="display:none">Нет членов группы</div>
+    <!-- ══ MEMBERS ══ -->
+    <div id="page-members" class="page hidden">
+      <h1 class="page-title">Члены группы</h1>
+      <div id="birthdaySection" class="bday-section" style="display:none">
+        <div class="bday-title">🎂 Дни рождения — ближайшие 14 дней</div>
+        <div id="birthdayList"></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-red btn-sm" onclick="openMemberModal()"><i data-lucide="plus"></i> Добавить члена</button>
+        <a class="btn btn-gray btn-sm" href="/api/pdf/members" target="_blank"><i data-lucide="file-text"></i> Каталог PDF</a>
+        <a class="btn btn-gray btn-sm" href="/members-catalog" target="_blank"><i data-lucide="globe"></i> Каталог</a>
+        <label style="display:flex;align-items:center;gap:6px;margin-left:auto;cursor:pointer;font-weight:400">
+          <input type="checkbox" id="showInactive" onchange="renderMembers()" /> Показать неактивных
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>№</th><th>Имя</th><th>Профессия</th><th>Телефон</th>
+            <th>День рождения</th><th>Статус</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="membersBody"></tbody>
+        </table>
+        <div id="emptyMembers" class="empty-msg" style="display:none">Нет членов группы</div>
+      </div>
     </div>
-  </div>
 
-</div><!-- /.main -->
+    <!-- ══ VOTING ══ -->
+    <div id="page-voting" class="page hidden">
+      <h1 class="page-title">Голосование</h1>
+      <div id="votingStatusBar" class="voting-status-bar">🔄 Загрузка...</div>
+      <div class="toolbar">
+        <button class="btn btn-gray btn-sm" onclick="refreshVotingTab()"><i data-lucide="refresh-cw"></i> Обновить</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-gray btn-sm" id="closeVotingBtn" onclick="closeVoting()" style="display:none">🔴 Закрыть голосование</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-red btn-sm" onclick="openModal('voting')"><i data-lucide="send"></i> Разослать голосование</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="text-align:center">Место</th><th>Имя</th><th>Профессия</th>
+            <th>Голосов</th><th style="min-width:160px">Рейтинг</th>
+          </tr></thead>
+          <tbody id="votingBody"></tbody>
+        </table>
+        <div id="emptyVoting" class="empty-msg" style="display:none">Голосов пока нет</div>
+      </div>
+    </div>
 
-<!-- ── Modal: Voting broadcast ───────────────────────────────────────── -->
+    <!-- ══ PRESENTATIONS ══ -->
+    <div id="page-presentations" class="page hidden">
+      <h1 class="page-title">Презентации</h1>
+      <div class="toolbar">
+        <label>📅 Встреча:</label>
+        <select id="presFilterDate" onchange="renderPresentations()">
+          <option value="">— Все встречи —</option>
+        </select>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-red btn-sm" onclick="openPresModal()"><i data-lucide="plus"></i> Добавить</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Дата встречи</th><th>Участник</th>
+            <th style="min-width:220px">Изменение</th>
+            <th style="min-width:140px">Заметки</th>
+            <th>Статус</th><th>Действия</th>
+          </tr></thead>
+          <tbody id="presBody"></tbody>
+        </table>
+        <div id="emptyPres" class="empty-msg" style="display:none">Нет записей — нажмите "+ Добавить"</div>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /.app-shell -->
+
+<!-- ── Modals ────────────────────────────────────────────────────── -->
+
+<!-- Voting broadcast -->
 <div class="modal-overlay" id="modalVoting">
   <div class="modal">
     <h3>📨 Разослать ссылку для голосования</h3>
-    <div style="margin-bottom:12px">
-      <label>Дата встречи</label>
-      <input type="text" id="votingDate" placeholder="09/03" />
-    </div>
-    <div>
-      <label>Ссылка для голосования</label>
-      <input type="url" id="votingLink" placeholder="https://..." />
-    </div>
+    <div style="margin-bottom:12px"><label>Дата встречи</label><input type="text" id="votingDate" placeholder="09/03" /></div>
+    <div><label>Ссылка для голосования</label><input type="url" id="votingLink" placeholder="https://..." /></div>
     <div class="modal-actions">
       <button class="btn btn-outline-gray btn-sm" onclick="closeModal('voting')">Отмена</button>
-      <button class="btn btn-red btn-sm"          onclick="sendVoting()">Отправить</button>
+      <button class="btn btn-red btn-sm" onclick="sendVoting()">Отправить</button>
     </div>
   </div>
 </div>
 
-<!-- ── Modal: Contacts broadcast ─────────────────────────────────────── -->
+<!-- Contacts broadcast -->
 <div class="modal-overlay" id="modalContacts">
   <div class="modal">
     <h3>📋 Разослать контакты</h3>
-    <div style="margin-bottom:12px">
-      <label>Дата встречи</label>
-      <input type="text" id="contactsDate" placeholder="09/03" />
-    </div>
-    <div>
-      <label>Текст контактов</label>
-      <textarea id="contactsText" rows="10"></textarea>
-    </div>
+    <div style="margin-bottom:12px"><label>Дата встречи</label><input type="text" id="contactsDate" placeholder="09/03" /></div>
+    <div><label>Текст контактов</label><textarea id="contactsText" rows="10"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-outline-gray btn-sm" onclick="closeModal('contacts')">Отмена</button>
-      <button class="btn btn-green btn-sm"         onclick="sendContacts()">Отправить</button>
+      <button class="btn btn-green btn-sm" onclick="sendContacts()">Отправить</button>
     </div>
   </div>
 </div>
 
-<!-- ── Modal: Add / Edit member ───────────────────────────────────────── -->
+<!-- Invite Guest -->
+<div class="modal-overlay" id="modalInviteGuest">
+  <div class="modal">
+    <h3>👋 Пригласить гостя</h3>
+    <div style="margin-bottom:12px">
+      <label>Кто приглашает?</label>
+      <select id="inviteMember" onchange="buildInviteLink()">
+        <option value="">— Выберите члена группы —</option>
+      </select>
+    </div>
+    <div style="margin-bottom:16px">
+      <label>Тип регистрации</label>
+      <div style="display:flex;gap:20px;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:7px;font-weight:400;cursor:pointer">
+          <input type="radio" name="inviteType" value="guest" checked onchange="buildInviteLink()"> Гость
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-weight:400;cursor:pointer">
+          <input type="radio" name="inviteType" value="sub" onchange="buildInviteLink()"> Замена
+        </label>
+      </div>
+    </div>
+    <div id="inviteLinkWrap" style="display:none">
+      <label>Ссылка для гостя</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <input type="text" id="inviteLinkInput" readonly style="flex:1;background:#f9fafb;cursor:text" />
+        <button class="btn btn-outline-gray btn-sm" onclick="copyInviteLink()">📋 Копировать</button>
+      </div>
+      <div style="margin-top:10px">
+        <a id="inviteWaLink" href="#" target="_blank" class="btn btn-green btn-sm" style="text-decoration:none">
+          💬 Открыть в WhatsApp
+        </a>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline-gray btn-sm" onclick="closeModal('inviteGuest')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Member add/edit -->
 <div class="modal-overlay" id="modalMember">
   <div class="modal" style="width:600px">
     <h3 id="memberModalTitle">Добавить члена группы</h3>
-    <input type="hidden" id="memberEditId" value="" />
-
-    <!-- Photo -->
+    <input type="hidden" id="memberEditId" />
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-      <div id="mAvatarWrap" style="flex-shrink:0"></div>
+      <div id="mAvatarWrap"></div>
       <div style="flex:1">
         <label>Фото (JPG/PNG, до 2 МБ)</label>
         <input type="file" id="mPhotoFile" accept="image/jpeg,image/png,image/webp"
                onchange="previewPhoto(this)" style="font-size:12px" />
       </div>
     </div>
-
-    <!-- Basic fields -->
     <div class="modal-grid">
-      <div class="full">
-        <label>Имя (полное) *</label>
-        <input type="text" id="mName" placeholder="Иван Иванов" />
-      </div>
-      <div class="full">
-        <label>Профессия / вид деятельности</label>
-        <input type="text" id="mProfession" placeholder="Программист" />
-      </div>
-      <div>
-        <label>Телефон</label>
-        <input type="tel" id="mPhone" placeholder="052-000-0000" />
-      </div>
-      <div>
-        <label>Дата рождения</label>
-        <input type="text" id="mBirthday" placeholder="31/01/1990" />
-      </div>
-      <div>
-        <label>Статус</label>
-        <select id="mActive">
-          <option value="1">Активен</option>
-          <option value="0">Неактивен</option>
-        </select>
+      <div class="full"><label>Имя (полное) *</label><input type="text" id="mName" placeholder="Иван Иванов" /></div>
+      <div class="full"><label>Профессия / вид деятельности</label><input type="text" id="mProfession" placeholder="Программист" /></div>
+      <div><label>Телефон</label><input type="tel" id="mPhone" placeholder="052-000-0000" /></div>
+      <div><label>Дата рождения</label><input type="text" id="mBirthday" placeholder="31/01/1990" /></div>
+      <div><label>Статус</label>
+        <select id="mActive"><option value="1">Активен</option><option value="0">Неактивен</option></select>
       </div>
     </div>
-
-    <!-- Socials -->
-    <div style="margin-bottom:4px">
+    <div style="margin-top:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <label style="margin:0;font-size:12px;font-weight:600;color:#374151">Соцсети</label>
         <button class="btn btn-outline-gray btn-sm" type="button" onclick="addSocial()">+ Добавить</button>
       </div>
       <div id="mSocialsList"></div>
     </div>
-
     <div class="modal-actions">
       <button class="btn btn-outline-gray btn-sm" onclick="closeModal('member')">Отмена</button>
-      <button class="btn btn-red btn-sm"           onclick="saveMember()">Сохранить</button>
+      <button class="btn btn-red btn-sm" onclick="saveMember()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Presentation add/edit -->
+<div class="modal-overlay" id="modalPres">
+  <div class="modal">
+    <h3 id="presModalTitle">+ Добавить запись</h3>
+    <input type="hidden" id="presEditId" />
+    <div class="modal-grid">
+      <div><label>Дата встречи *</label><input type="text" id="pDate" placeholder="09/03" /></div>
+      <div><label>Участник *</label><select id="pMember"></select></div>
+      <div class="full"><label>Описание изменения *</label><textarea id="pDesc" rows="3" placeholder="Что изменилось в презентации…"></textarea></div>
+      <div class="full"><label>Заметки</label><textarea id="pNotes" rows="2" placeholder="Дополнительные заметки (необязательно)"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline-gray btn-sm" onclick="closeModal('pres')">Отмена</button>
+      <button class="btn btn-red btn-sm" onclick="savePresentation()">Сохранить</button>
     </div>
   </div>
 </div>
@@ -628,108 +805,335 @@
 <div id="toast"></div>
 
 <script>
-  // ─── State ───────────────────────────────────────────────────────────────────
-  let allMembers = [];
-  let mSocials   = [];
-
+  // ── Constants ──────────────────────────────────────────────────────────────────
   const PLATFORMS = ['instagram','telegram','facebook','linkedin','tiktok','website','other'];
   const PLATFORM_LABELS = {
-    instagram: 'Instagram', telegram: 'Telegram',  facebook: 'Facebook',
-    linkedin:  'LinkedIn',  tiktok:   'TikTok',    website:  'Сайт', other: 'Другое',
+    instagram:'Instagram', telegram:'Telegram', facebook:'Facebook',
+    linkedin:'LinkedIn', tiktok:'TikTok', website:'Сайт', other:'Другое',
   };
+  const RU_MONTHS = ['января','февраля','марта','апреля','мая','июня',
+                     'июля','августа','сентября','октября','ноября','декабря'];
 
-  // ─── Init ────────────────────────────────────────────────────────────────────
-  (async () => {
-    await loadMeetingDates();
-    await Promise.all([loadGuests(), loadMembers(), loadBirthdays()]);
-  })();
+  // ── State ──────────────────────────────────────────────────────────────────────
+  let allMembers      = [];
+  let allPres         = [];
+  let mSocials        = [];
+  let nextMeetingDate = '';
+  let birthdaysCache  = [];
+  let guestsChart     = null;
+  let searchQuery     = '';
+  let currentPage     = '';
 
-  // ─── Tabs ────────────────────────────────────────────────────────────────────
-  const TAB_NAMES = ['guests', 'members', 'voting'];
-  function switchTab(name) {
-    document.querySelectorAll('.tab-btn').forEach((b, i) => {
-      b.classList.toggle('active', TAB_NAMES[i] === name);
-    });
-    document.getElementById('tabGuests').classList.toggle('hidden',  name !== 'guests');
-    document.getElementById('tabMembers').classList.toggle('hidden', name !== 'members');
-    document.getElementById('tabVoting').classList.toggle('hidden',  name !== 'voting');
-    if (name === 'voting') refreshVotingTab();
-  }
-
-  // ─── Toast ───────────────────────────────────────────────────────────────────
-  let _tt;
-  function toast(msg, type = '') {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.className   = `show ${type}`;
-    clearTimeout(_tt);
-    _tt = setTimeout(() => { el.className = ''; }, 3500);
-  }
-
-  // ─── API ─────────────────────────────────────────────────────────────────────
+  // ── API ────────────────────────────────────────────────────────────────────────
   async function api(url, opts = {}) {
-    const r = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' },
-      ...opts,
-    });
+    const r    = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
     return data;
   }
 
-  // ─── Meetings ────────────────────────────────────────────────────────────────
-  async function loadMeetingDates() {
-    const [testData, dates] = await Promise.all([api('/api/test'), api('/api/meetings')]);
-    const nextMeeting = testData.nextMeeting;
+  // ── Init ───────────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', async () => {
+    lucide.createIcons();
+    await loadNextMeeting();
+    await Promise.all([loadMembers(), loadBirthdays()]);
+    window.addEventListener('hashchange', () => {
+      navigate((location.hash || '#dashboard').replace('#', ''));
+    });
+    navigate((location.hash || '#dashboard').replace('#', ''));
+  });
 
-    document.getElementById('nextMeetingDisplay').textContent = nextMeeting || '—';
+  // ── Router ─────────────────────────────────────────────────────────────────────
+  const VALID_PAGES = ['dashboard', 'guests', 'members', 'voting', 'presentations'];
 
-    for (const selectId of ['dateSelect']) {
-      const select = document.getElementById(selectId);
-      while (select.options.length > 1) select.remove(1);
+  function navigate(page) {
+    if (!VALID_PAGES.includes(page)) page = 'dashboard';
+    currentPage = page;
+    searchQuery = '';
+    document.getElementById('globalSearch').value = '';
 
-      if (nextMeeting) {
-        const opt = document.createElement('option');
-        opt.value = nextMeeting; opt.text = nextMeeting;
-        select.add(opt);
-      }
+    document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+    document.getElementById('page-' + page).classList.remove('hidden');
 
-      dates.filter(d => d !== nextMeeting).forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d; opt.text = d;
-        select.add(opt);
-      });
+    document.querySelectorAll('.nav-item[data-page]').forEach(n => {
+      n.classList.toggle('active', n.dataset.page === page);
+    });
 
-      if (nextMeeting) select.value = nextMeeting;
-      else if (dates.length) select.value = dates[0];
+    closeSidebar();
+
+    switch (page) {
+      case 'dashboard':     loadDashboard();     break;
+      case 'guests':        loadMeetingDates().then(() => loadGuests()); break;
+      case 'members':       renderMembers(); renderBirthdaySection(); break;
+      case 'voting':        refreshVotingTab(); break;
+      case 'presentations': loadPresentations(); break;
     }
+
+    lucide.createIcons();
   }
 
-  // ─── Guests ──────────────────────────────────────────────────────────────────
+  // ── Sidebar ────────────────────────────────────────────────────────────────────
+  let sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === '1';
+  (function applySidebarState() {
+    if (sidebarCollapsed) {
+      document.getElementById('sidebar').classList.add('collapsed');
+      document.getElementById('appShell').classList.add('collapsed');
+    }
+  })();
+
+  function toggleCollapse() {
+    sidebarCollapsed = !sidebarCollapsed;
+    localStorage.setItem('sidebarCollapsed', sidebarCollapsed ? '1' : '0');
+    document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+    document.getElementById('appShell').classList.toggle('collapsed', sidebarCollapsed);
+  }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('mobile-open');
+    document.getElementById('sidebarOverlay').classList.toggle('visible');
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('mobile-open');
+    document.getElementById('sidebarOverlay').classList.remove('visible');
+  }
+
+  // ── Next Meeting ───────────────────────────────────────────────────────────────
+  async function loadNextMeeting() {
+    try {
+      const { nextMeeting } = await api('/api/test');
+      nextMeetingDate = nextMeeting || '';
+      document.getElementById('nextMeetingDisplay').textContent = nextMeetingDate || '—';
+    } catch { /* ignore */ }
+  }
+
+  function editNextMeeting() {
+    document.getElementById('nextMeetingInput').value = nextMeetingDate || '';
+    document.getElementById('nmDisplay').classList.add('hidden');
+    document.getElementById('nmEdit').classList.remove('hidden');
+    document.getElementById('nextMeetingInput').focus();
+  }
+
+  function cancelNextMeeting() {
+    document.getElementById('nmDisplay').classList.remove('hidden');
+    document.getElementById('nmEdit').classList.add('hidden');
+  }
+
+  async function saveNextMeeting() {
+    const date = document.getElementById('nextMeetingInput').value.trim();
+    if (!date) { toast('Введите дату', 'err'); return; }
+    try {
+      await api('/api/settings/next-meeting', { method: 'PATCH', body: JSON.stringify({ date }) });
+      nextMeetingDate = date;
+      document.getElementById('nextMeetingDisplay').textContent = date;
+      cancelNextMeeting();
+      if (currentPage === 'guests') {
+        await loadMeetingDates();
+        await loadGuests();
+      }
+      toast('Дата встречи обновлена ✓', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter'  && !document.getElementById('nmEdit').classList.contains('hidden')) saveNextMeeting();
+    if (e.key === 'Escape' && !document.getElementById('nmEdit').classList.contains('hidden')) cancelNextMeeting();
+  });
+
+  // ── Birthday Bell ──────────────────────────────────────────────────────────────
+  async function loadBirthdays() {
+    try {
+      birthdaysCache = await api('/api/birthdays/upcoming?days=14');
+      updateBirthdayBell();
+      renderBirthdayPanel();
+    } catch { /* ignore */ }
+  }
+
+  function updateBirthdayBell() {
+    const badge = document.getElementById('bellBadge');
+    const count = birthdaysCache.length;
+    badge.textContent = count;
+    badge.classList.toggle('hidden', count === 0);
+  }
+
+  function renderBirthdayPanel() {
+    const list = document.getElementById('bpList');
+    if (!birthdaysCache.length) {
+      list.innerHTML = '<div style="padding:14px 16px;color:var(--muted);font-size:13px">Нет ближайших дней рождения</div>';
+      return;
+    }
+    list.innerHTML = birthdaysCache.map(m => {
+      const parts   = m.birthday.split('/');
+      const day     = parseInt(parts[0], 10);
+      const month   = parseInt(parts[1], 10);
+      const dateStr = `${day} ${RU_MONTHS[month - 1]}`;
+      let   when;
+      if      (m.daysUntil === 0) when = 'сегодня 🎂';
+      else if (m.daysUntil === 1) when = 'завтра';
+      else if (m.daysUntil <= 4)  when = `через ${m.daysUntil} дня`;
+      else                         when = `через ${m.daysUntil} дней`;
+      return `<div class="bp-item${m.daysUntil === 0 ? ' today-bday' : ''}">
+        <span>${esc(m.name)} — ${dateStr} (${when})</span>
+        ${m.phone ? `<a class="btn btn-outline-red btn-sm" href="https://wa.me/${waPhone(m.phone)}" target="_blank" style="font-size:11px;padding:3px 9px">🎂 WA</a>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function toggleBirthdayPanel() {
+    document.getElementById('birthdayPanel').classList.toggle('hidden');
+  }
+
+  document.addEventListener('click', e => {
+    const bell  = document.getElementById('bellBtn');
+    const panel = document.getElementById('birthdayPanel');
+    if (!bell.contains(e.target) && !panel.contains(e.target)) {
+      panel.classList.add('hidden');
+    }
+  });
+
+  // ── Search ─────────────────────────────────────────────────────────────────────
+  function handleSearch(q) {
+    searchQuery = q.toLowerCase().trim();
+    if (currentPage === 'guests') loadGuests();
+    if (currentPage === 'members') renderMembers();
+  }
+
+  // ── Dashboard ──────────────────────────────────────────────────────────────────
+  async function loadDashboard() {
+    try {
+      const [mc, gc, vs, ws] = await Promise.all([
+        api('/api/members/count'),
+        api('/api/guests/active-count'),
+        api('/api/voting/status'),
+        api('/api/voting/winners'),
+      ]);
+      document.getElementById('dashMembers').textContent = mc.count;
+      document.getElementById('dashGuests').textContent  = gc.count;
+      document.getElementById('dashVotes').textContent   = vs.voteCount + '/' + vs.expected;
+      document.getElementById('dashDate').textContent    = nextMeetingDate || '—';
+      renderDashWinners(ws);
+    } catch (e) { console.error('[Dashboard]', e); }
+
+    renderDashBirthdays();
+    loadChart();
+  }
+
+  function renderDashBirthdays() {
+    const el = document.getElementById('dashBirthdays');
+    if (!birthdaysCache.length) { el.innerHTML = '<div class="muted-msg">Нет ближайших дней рождения</div>'; return; }
+    el.innerHTML = birthdaysCache.slice(0, 5).map(m => {
+      const parts = m.birthday.split('/');
+      const day   = parseInt(parts[0], 10);
+      const mon   = parseInt(parts[1], 10);
+      let   when  = m.daysUntil === 0 ? 'сегодня 🎂' : m.daysUntil === 1 ? 'завтра' : `через ${m.daysUntil} д.`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>${esc(m.name)}</span>
+        <span style="color:var(--muted);font-size:12px">${day} ${RU_MONTHS[mon - 1]} — ${when}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderDashWinners(ws) {
+    const el = document.getElementById('dashWinners');
+    if (!ws.winners || !ws.winners.length) { el.innerHTML = '<div class="muted-msg">Нет данных о голосовании</div>'; return; }
+    const medals = ['🥇','🥈','🥉'];
+    el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Встреча ${esc(ws.date)}</div>` +
+      ws.winners.map((w, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span style="font-size:18px;flex-shrink:0">${medals[i] || (i+1)}</span>
+          <span style="flex:1"><strong>${esc(w.candidateName)}</strong></span>
+          <span style="color:var(--muted)">${w.votes} гол.</span>
+        </div>`).join('');
+  }
+
+  async function loadChart() {
+    try {
+      const stats = await api('/api/guests/stats');
+      const canvas = document.getElementById('guestsChart');
+      if (!canvas) return;
+      if (guestsChart) { guestsChart.destroy(); guestsChart = null; }
+      guestsChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: stats.map(s => s.date),
+          datasets: [{
+            label: 'Гости',
+            data: stats.map(s => s.total),
+            backgroundColor: '#dc2626',
+            borderRadius: 6,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } },
+          },
+        },
+      });
+    } catch { /* ignore */ }
+  }
+
+  function quickPDF(type) {
+    if (!nextMeetingDate) { toast('Дата следующей встречи не установлена', 'err'); return; }
+    window.open(`/api/pdf/${type}?date=${encodeURIComponent(nextMeetingDate)}`, '_blank');
+  }
+
+  // ── Meetings ───────────────────────────────────────────────────────────────────
+  async function loadMeetingDates() {
+    try {
+      const dates = await api('/api/meetings');
+      const sel   = document.getElementById('dateSelect');
+      while (sel.options.length > 1) sel.remove(1);
+
+      if (nextMeetingDate) {
+        const o = document.createElement('option');
+        o.value = nextMeetingDate; o.text = nextMeetingDate;
+        sel.add(o);
+      }
+      dates.filter(d => d !== nextMeetingDate).forEach(d => {
+        const o = document.createElement('option');
+        o.value = d; o.text = d;
+        sel.add(o);
+      });
+      if (nextMeetingDate) sel.value = nextMeetingDate;
+      else if (dates.length) sel.value = dates[0];
+    } catch { /* ignore */ }
+  }
+
+  // ── Guests ─────────────────────────────────────────────────────────────────────
   async function loadGuests() {
-    const date = document.getElementById('dateSelect').value;
-    const url  = date ? `/api/guests?date=${encodeURIComponent(date)}` : '/api/guests';
-    const guests = await api(url);
-    renderGuests(guests);
+    try {
+      const date   = document.getElementById('dateSelect').value;
+      const url    = date ? `/api/guests?date=${encodeURIComponent(date)}` : '/api/guests';
+      const guests = await api(url);
+      renderGuests(guests);
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
   function renderGuests(guests) {
+    const q     = searchQuery;
+    const list  = q ? guests.filter(g =>
+      [g.firstName, g.lastName, g.specialty, g.phone, g.invitedBy].some(v =>
+        (v || '').toLowerCase().includes(q))
+    ) : guests;
+
     const tbody   = document.getElementById('guestBody');
-    const emptyEl = document.getElementById('emptyMsg');
+    const emptyEl = document.getElementById('emptyGuests');
     tbody.innerHTML = '';
 
     document.getElementById('statTotal').textContent  = guests.length;
     document.getElementById('statPaid').textContent   = guests.filter(g => g.paid).length;
     document.getElementById('statUnpaid').textContent = guests.filter(g => !g.paid).length;
 
-    if (!guests.length) { emptyEl.style.display = 'block'; return; }
+    if (!list.length) { emptyEl.style.display = 'block'; return; }
     emptyEl.style.display = 'none';
 
-    guests.forEach((g, i) => {
+    list.forEach((g, i) => {
       const tr = document.createElement('tr');
       if (g.paid) tr.classList.add('paid-row');
       if (!g.wa_enabled) tr.classList.add('wa-off');
-
       tr.innerHTML = `
         <td>${i + 1}</td>
         <td><strong>${esc(g.firstName)} ${esc(g.lastName)}</strong></td>
@@ -746,12 +1150,10 @@
                  title="Включить/отключить WA рассылку"
                  onchange="toggleWa('${g.id}', this)" />
         </td>
-        <td>
-          ${g.paid
-            ? '<button class="btn btn-outline-gray btn-sm" disabled>Оплачено</button>'
-            : `<button class="btn btn-green btn-sm" onclick="markPaid('${g.id}')">Отметить оплату</button>`}
-        </td>
-      `;
+        <td>${g.paid
+          ? '<button class="btn btn-outline-gray btn-sm" disabled>Оплачено</button>'
+          : `<button class="btn btn-green btn-sm" onclick="markPaid('${g.id}')">Отметить оплату</button>`}
+        </td>`;
       tbody.appendChild(tr);
     });
   }
@@ -767,32 +1169,34 @@
   async function toggleWa(id, checkbox) {
     try {
       const res = await api(`/api/guests/${id}/wa-toggle`, { method: 'PATCH' });
-      const tr  = checkbox.closest('tr');
-      tr.classList.toggle('wa-off', res.wa_enabled === 0);
+      checkbox.closest('tr').classList.toggle('wa-off', res.wa_enabled === 0);
     } catch (e) {
-      checkbox.checked = !checkbox.checked; // revert
+      checkbox.checked = !checkbox.checked;
       toast(`Ошибка: ${e.message}`, 'err');
     }
   }
 
-  // ─── PDF ──────────────────────────────────────────────────────────────────────
   function downloadPDF(type) {
     const date = document.getElementById('dateSelect').value;
     if (!date) { toast('Выберите дату встречи', 'err'); return; }
     window.open(`/api/pdf/${type}?date=${encodeURIComponent(date)}`, '_blank');
   }
 
-  // ─── Members ─────────────────────────────────────────────────────────────────
+  // ── Members ────────────────────────────────────────────────────────────────────
   async function loadMembers() {
     allMembers = await api('/api/members');
-    renderMembers();
   }
 
   function renderMembers() {
-    const showInactive = document.getElementById('showInactive').checked;
-    const list = showInactive ? allMembers : allMembers.filter(m => m.active);
+    const showInactive = document.getElementById('showInactive')?.checked;
+    const q    = searchQuery;
+    let   list = showInactive ? allMembers : allMembers.filter(m => m.active);
+    if (q) list = list.filter(m =>
+      [m.name, m.profession, m.phone].some(v => (v || '').toLowerCase().includes(q))
+    );
+
     const tbody = document.getElementById('membersBody');
-    const empty = document.getElementById('emptyMembersMsg');
+    const empty = document.getElementById('emptyMembers');
     tbody.innerHTML = '';
 
     if (!list.length) { empty.style.display = 'block'; return; }
@@ -801,15 +1205,11 @@
     list.forEach((m, i) => {
       const tr = document.createElement('tr');
       if (!m.active) tr.classList.add('inactive-row');
-
       tr.innerHTML = `
         <td>${i + 1}</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:8px">
-            ${memberAvatar(m, 30)}
-            <strong>${esc(m.name)}</strong>
-          </div>
-        </td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          ${memberAvatar(m, 30)}<strong>${esc(m.name)}</strong>
+        </div></td>
         <td>${esc(m.profession || '—')}</td>
         <td>${esc(m.phone || '—')}</td>
         <td>${esc(m.birthday || '—')}</td>
@@ -817,24 +1217,44 @@
           ? '<span class="badge-active">Активен</span>'
           : '<span class="badge-inactive">Неактивен</span>'}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-outline-red btn-sm"
-                  onclick="openMemberModal(${m.id})">✏️ Редактировать</button>
+          <button class="btn btn-outline-red btn-sm" onclick="openMemberModal(${m.id})">✏️ Редактировать</button>
           ${m.active
-            ? `<button class="btn btn-orange btn-sm"
-                       onclick="deactivateMember(${m.id})">🔴 Деактив.</button>`
-            : `<button class="btn btn-green btn-sm"
-                       onclick="activateMember(${m.id})">✅ Активир.</button>`}
-        </td>
-      `;
+            ? `<button class="btn btn-orange btn-sm" onclick="deactivateMember(${m.id})">🔴 Деактив.</button>`
+            : `<button class="btn btn-green btn-sm" onclick="activateMember(${m.id})">✅ Активир.</button>`}
+        </td>`;
       tbody.appendChild(tr);
     });
+  }
+
+  function renderBirthdaySection() {
+    const section = document.getElementById('birthdaySection');
+    const list    = document.getElementById('birthdayList');
+    if (!birthdaysCache.length) { section.style.display = 'none'; return; }
+
+    list.innerHTML = birthdaysCache.map(m => {
+      const parts   = m.birthday.split('/');
+      const day     = parseInt(parts[0], 10);
+      const month   = parseInt(parts[1], 10);
+      const dateStr = `${day} ${RU_MONTHS[month - 1]}`;
+      let   when;
+      if      (m.daysUntil === 0) when = 'сегодня 🎂';
+      else if (m.daysUntil === 1) when = 'завтра';
+      else if (m.daysUntil <= 4)  when = `через ${m.daysUntil} дня`;
+      else                         when = `через ${m.daysUntil} дней`;
+      return `<div class="bday-item${m.daysUntil === 0 ? ' today-bday' : ''}">
+        <span>${esc(m.name)} — ${dateStr} (${when})</span>
+        ${m.phone ? `<a class="btn btn-outline-red btn-sm" href="https://wa.me/${waPhone(m.phone)}" target="_blank">🎂 Поздравить в WA</a>` : ''}
+      </div>`;
+    }).join('');
+
+    section.style.display = 'block';
   }
 
   async function deactivateMember(id) {
     if (!confirm('Деактивировать члена?')) return;
     try {
       await api(`/api/members/${id}`, { method: 'DELETE' });
-      await loadMembers();
+      await loadMembers(); renderMembers();
       toast('Деактивирован', 'ok');
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
@@ -842,18 +1262,16 @@
   async function activateMember(id) {
     try {
       await api(`/api/members/${id}/activate`, { method: 'PATCH' });
-      await loadMembers();
+      await loadMembers(); renderMembers();
       toast('Активирован ✓', 'ok');
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
+  // ── Member Modal ───────────────────────────────────────────────────────────────
   async function openMemberModal(id) {
     document.getElementById('memberEditId').value = id || '';
     const isEdit = !!id;
-    document.getElementById('memberModalTitle').textContent =
-      isEdit ? '✏️ Редактировать члена' : '+ Добавить члена';
-
-    // Reset file input and socials
+    document.getElementById('memberModalTitle').textContent = isEdit ? '✏️ Редактировать члена' : '+ Добавить члена';
     document.getElementById('mPhotoFile').value = '';
     mSocials = [];
     renderMSocials();
@@ -867,14 +1285,9 @@
       document.getElementById('mBirthday').value   = m.birthday   || '';
       document.getElementById('mActive').value     = String(m.active ?? 1);
       document.getElementById('mAvatarWrap').innerHTML = memberAvatar(m, 64);
-      try {
-        mSocials = await api(`/api/members/${id}/socials`);
-        renderMSocials();
-      } catch { /* non-critical */ }
+      try { mSocials = await api(`/api/members/${id}/socials`); renderMSocials(); } catch { /* ignore */ }
     } else {
-      ['mName','mProfession','mPhone','mBirthday'].forEach(fid => {
-        document.getElementById(fid).value = '';
-      });
+      ['mName','mProfession','mPhone','mBirthday'].forEach(fid => { document.getElementById(fid).value = ''; });
       document.getElementById('mActive').value = '1';
       document.getElementById('mAvatarWrap').innerHTML =
         `<div style="width:64px;height:64px;border-radius:50%;background:#d1d5db;display:flex;align-items:center;justify-content:center;font-size:26px;color:#9ca3af">👤</div>`;
@@ -890,295 +1303,27 @@
     const birthday   = document.getElementById('mBirthday').value.trim();
     const active     = Number(document.getElementById('mActive').value);
     const photoFile  = document.getElementById('mPhotoFile').files[0];
-
     if (!name) { toast('Введите имя', 'err'); return; }
-
     try {
       let memberId = id ? Number(id) : null;
-
       if (id) {
-        await api(`/api/members/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ name, profession, phone, birthday, active }),
-        });
+        await api(`/api/members/${id}`, { method: 'PUT', body: JSON.stringify({ name, profession, phone, birthday, active }) });
       } else {
-        const r = await api('/api/members', {
-          method: 'POST',
-          body: JSON.stringify({ name, profession, phone, birthday }),
-        });
+        const r = await api('/api/members', { method: 'POST', body: JSON.stringify({ name, profession, phone, birthday }) });
         memberId = r.id;
       }
-
-      // Save socials (always PUT to allow clearing)
-      await api(`/api/members/${memberId}/socials`, {
-        method: 'PUT',
-        body: JSON.stringify({ socials: mSocials }),
-      });
-
-      // Upload photo if a new file was selected
+      await api(`/api/members/${memberId}/socials`, { method: 'PUT', body: JSON.stringify({ socials: mSocials }) });
       if (photoFile) {
-        const fd = new FormData();
-        fd.append('photo', photoFile);
+        const fd = new FormData(); fd.append('photo', photoFile);
         await fetch(`/api/members/${memberId}/photo`, { method: 'POST', body: fd });
       }
-
       toast(id ? 'Сохранено ✓' : 'Добавлен ✓', 'ok');
       closeModal('member');
       await loadMembers();
+      renderMembers();
     } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
   }
 
-  // ─── Modals ───────────────────────────────────────────────────────────────────
-  function openModal(name) {
-    const date = document.getElementById('dateSelect').value;
-
-    if (name === 'voting') {
-      document.getElementById('votingDate').value    = date;
-      document.getElementById('votingLink').value    = 'https://bnisynergy.biz/voting';
-    }
-
-    if (name === 'contacts') {
-      document.getElementById('contactsDate').value = date;
-      // Pre-fill contacts from members table
-      api('/api/members').then(members => {
-        const active = members.filter(m => m.active && m.phone);
-        const text   =
-          'Контакты членов группы BNI SYNERGY 🤝\n\n' +
-          active.map(m =>
-            `${m.name}\n${m.profession}\n📱 ${m.phone}`
-          ).join('\n\n');
-        document.getElementById('contactsText').value = text;
-      }).catch(() => {});
-    }
-
-    document.getElementById(`modal${cap(name)}`).classList.add('open');
-  }
-
-  function closeModal(name) {
-    document.getElementById(`modal${cap(name)}`).classList.remove('open');
-  }
-
-  document.querySelectorAll('.modal-overlay').forEach(el => {
-    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
-  });
-
-  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-
-  // ─── Broadcasts ───────────────────────────────────────────────────────────────
-  async function sendVoting() {
-    const date       = document.getElementById('votingDate').value.trim();
-    const votingLink = document.getElementById('votingLink').value.trim();
-    if (!date || !votingLink) { toast('Заполните все поля', 'err'); return; }
-    try {
-      await api('/api/voting/open', { method: 'POST' });
-      const r = await api('/api/send-voting', {
-        method: 'POST',
-        body: JSON.stringify({ date, votingLink }),
-      });
-      closeModal('voting');
-      const groupInfo = r.groupSent ? ' + группа' : '';
-      toast(`Рассылка запущена — ${r.total} гостей${groupInfo} 🗳️`, 'ok');
-      await refreshVotingStatus();
-    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
-  }
-
-  async function sendContacts() {
-    const date         = document.getElementById('contactsDate').value.trim();
-    const contactsText = document.getElementById('contactsText').value.trim();
-    if (!date || !contactsText) { toast('Заполните все поля', 'err'); return; }
-    try {
-      const r = await api('/api/send-contacts', {
-        method: 'POST',
-        body: JSON.stringify({ date, contactsText }),
-      });
-      closeModal('contacts');
-      toast(`Рассылка запущена — ${r.total} гостей 📋`, 'ok');
-    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
-  }
-
-  // ─── Next-meeting date edit ───────────────────────────────────────────────────
-  function editNextMeeting() {
-    const current = document.getElementById('nextMeetingDisplay').textContent;
-    document.getElementById('nextMeetingInput').value = current === '—' ? '' : current;
-    document.getElementById('nmDisplay').classList.add('hidden');
-    document.getElementById('nmEdit').classList.remove('hidden');
-    document.getElementById('nextMeetingInput').focus();
-  }
-
-  function cancelNextMeeting() {
-    document.getElementById('nmDisplay').classList.remove('hidden');
-    document.getElementById('nmEdit').classList.add('hidden');
-  }
-
-  async function saveNextMeeting() {
-    const date = document.getElementById('nextMeetingInput').value.trim();
-    if (!date) { toast('Введите дату', 'err'); return; }
-    try {
-      await api('/api/settings/next-meeting', {
-        method: 'PATCH',
-        body: JSON.stringify({ date }),
-      });
-      document.getElementById('nextMeetingDisplay').textContent = date;
-      cancelNextMeeting();
-      await loadMeetingDates();
-      await loadGuests();
-      toast('Дата встречи обновлена ✓', 'ok');
-    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
-  }
-
-  document.getElementById('nextMeetingInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter')  saveNextMeeting();
-    if (e.key === 'Escape') cancelNextMeeting();
-  });
-
-  // ─── Birthdays ────────────────────────────────────────────────────────────────
-  const RU_MONTHS = ['января','февраля','марта','апреля','мая','июня',
-                     'июля','августа','сентября','октября','ноября','декабря'];
-
-  async function loadBirthdays() {
-    try {
-      const members = await api('/api/birthdays/upcoming?days=14');
-      const section = document.getElementById('birthdaysSection');
-      const list    = document.getElementById('birthdaysList');
-
-      if (!members.length) { section.style.display = 'none'; return; }
-
-      list.innerHTML = members.map(m => {
-        const parts = m.birthday.split('/');
-        const day   = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10);
-        const dateStr = `${day} ${RU_MONTHS[month - 1]}`;
-
-        let daysStr;
-        if      (m.daysUntil === 0) daysStr = 'сегодня 🎂';
-        else if (m.daysUntil === 1) daysStr = 'завтра';
-        else if (m.daysUntil <= 4)  daysStr = `через ${m.daysUntil} дня`;
-        else                         daysStr = `через ${m.daysUntil} дней`;
-
-        return `
-          <div class="birthday-item${m.daysUntil === 0 ? ' today-bday' : ''}">
-            <span class="bday-text">${esc(m.name)} — ${dateStr} (${daysStr})</span>
-            ${m.phone
-              ? `<a class="btn btn-outline-red btn-sm"
-                    href="https://wa.me/${waPhone(m.phone)}"
-                    target="_blank">🎂 Поздравить в WA</a>`
-              : ''}
-          </div>`;
-      }).join('');
-
-      section.style.display = 'block';
-    } catch { /* silent — non-critical */ }
-  }
-
-  async function wishBirthday(id) {
-    try {
-      await api(`/api/members/${id}/wish-birthday`, { method: 'POST' });
-      toast('Поздравление отправлено! 🎉', 'ok');
-    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
-  }
-
-  // ─── Voting status / open / close ────────────────────────────────────────────
-  async function refreshVotingStatus() {
-    try {
-      const s   = await api('/api/voting/status');
-      const bar = document.getElementById('votingStatusBar');
-      const btn = document.getElementById('closeVotingBtn');
-      if (s.open) {
-        bar.style.cssText = 'margin-bottom:8px;padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600;background:#d1fae5;color:#065f46';
-        bar.textContent   = `🟢 Голосование открыто (${s.voteCount}/${s.expected} голосов)`;
-        btn.style.display = '';
-      } else {
-        bar.style.cssText = 'margin-bottom:8px;padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600;background:#fee2e2;color:#991b1b';
-        bar.textContent   = '🔴 Голосование закрыто';
-        btn.style.display = 'none';
-      }
-    } catch { /* silent */ }
-  }
-
-  async function closeVoting() {
-    try {
-      await api('/api/voting/close', { method: 'POST' });
-      await refreshVotingStatus();
-      toast('Голосование закрыто 🔴', 'ok');
-    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
-  }
-
-  async function refreshVotingTab() {
-    await Promise.all([refreshVotingStatus(), loadVotingResults()]);
-  }
-
-  // ─── Voting results ───────────────────────────────────────────────────────────
-  async function loadVotingResults() {
-    try {
-      const [testData, dates] = await Promise.all([api('/api/test'), api('/api/meetings')]);
-      const nextMeeting = testData.nextMeeting;
-      const allDates    = nextMeeting
-        ? [nextMeeting, ...dates.filter(d => d !== nextMeeting)]
-        : dates;
-      const last3 = allDates.slice(0, 3);
-
-      if (!last3.length) {
-        document.getElementById('votingBody').innerHTML = '';
-        document.getElementById('emptyVotingMsg').style.display = 'block';
-        document.getElementById('votingTotalWrap').style.display = 'none';
-        return;
-      }
-
-      const perDate = await Promise.all(
-        last3.map(d => api(`/api/voting/results?date=${encodeURIComponent(d)}`).then(r => ({ date: d, results: r })))
-      );
-      renderVotingResults(perDate);
-    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
-  }
-
-  function renderVotingResults(perDate) {
-    const tbody     = document.getElementById('votingBody');
-    const emptyEl   = document.getElementById('emptyVotingMsg');
-    const totalWrap = document.getElementById('votingTotalWrap');
-    tbody.innerHTML = '';
-    totalWrap.style.display = 'none';
-
-    const hasAny = perDate.some(({ results }) => results.length > 0);
-    if (!hasAny) { emptyEl.style.display = 'block'; return; }
-    emptyEl.style.display = 'none';
-
-    const medals = ['🥇', '🥈', '🥉'];
-
-    perDate.forEach(({ date, results }) => {
-      if (!results.length) return;
-
-      const dateTotal = results.reduce((s, r) => s + r.votes, 0);
-      const suffix    = dateTotal === 1 ? '' : (dateTotal < 5 ? 'а' : 'ов');
-      const headerRow = document.createElement('tr');
-      headerRow.innerHTML = `
-        <td colspan="5" style="background:#f3f4f6;font-weight:700;font-size:13px;padding:6px 12px;color:#374151">
-          📅 ${esc(date)} — ${dateTotal} голос${suffix}
-        </td>
-      `;
-      tbody.appendChild(headerRow);
-
-      const max = results[0].votes;
-      results.forEach((r, i) => {
-        const pct    = max > 0 ? Math.round(r.votes / max * 100) : 0;
-        const member = allMembers.find(m => m.id === r.candidateId);
-        const tr     = document.createElement('tr');
-        tr.innerHTML = `
-          <td style="text-align:center;font-size:18px">${medals[i] || (i + 1)}</td>
-          <td><strong>${esc(r.candidateName)}</strong></td>
-          <td>${esc(member?.profession || '—')}</td>
-          <td><strong>${r.votes}</strong></td>
-          <td>
-            <div class="vote-bar-wrap">
-              <div class="vote-bar" style="width:${pct}%"></div>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    });
-  }
-
-  // ─── Member modal: photo + socials ───────────────────────────────────────────
   function previewPhoto(input) {
     const file = input.files[0];
     if (!file) return;
@@ -1198,12 +1343,13 @@
         <select data-field="platform" style="flex:0 0 108px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px">
           ${PLATFORMS.map(p => `<option value="${p}"${s.platform===p?' selected':''}>${PLATFORM_LABELS[p]}</option>`).join('')}
         </select>
-        <input data-field="url"   type="text" placeholder="URL / @handle" style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px" />
-        <input data-field="label" type="text" placeholder="Подпись"       style="flex:0 0 88px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px" />
-        <button data-del="${i}" type="button" style="flex-shrink:0;padding:4px 9px;border:1.5px solid #d1d5db;border-radius:var(--radius);background:#fff;cursor:pointer;font-size:12px;color:#dc2626">✕</button>
-      </div>
-    `).join('');
-    // Set values and attach listeners safely (avoids HTML-injection issues)
+        <input data-field="url"   type="text" placeholder="URL / @handle"
+               style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px" />
+        <input data-field="label" type="text" placeholder="Подпись"
+               style="flex:0 0 88px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px" />
+        <button data-del="${i}" type="button"
+                style="flex-shrink:0;padding:4px 9px;border:1.5px solid #d1d5db;border-radius:var(--radius);background:#fff;cursor:pointer;font-size:12px;color:#dc2626">✕</button>
+      </div>`).join('');
     container.querySelectorAll('[data-idx]').forEach(row => {
       const i = parseInt(row.dataset.idx, 10);
       const s = mSocials[i];
@@ -1216,12 +1362,316 @@
     });
   }
 
-  function addSocial() {
-    mSocials.push({ platform: 'instagram', url: '', label: '' });
-    renderMSocials();
+  function addSocial() { mSocials.push({ platform: 'instagram', url: '', label: '' }); renderMSocials(); }
+
+  // ── Voting ─────────────────────────────────────────────────────────────────────
+  async function refreshVotingStatus() {
+    try {
+      const s   = await api('/api/voting/status');
+      const bar = document.getElementById('votingStatusBar');
+      const btn = document.getElementById('closeVotingBtn');
+      if (s.open) {
+        bar.style.cssText = 'margin-bottom:14px;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;background:#d1fae5;color:#065f46';
+        bar.textContent   = `🟢 Голосование открыто (${s.voteCount}/${s.expected} голосов)`;
+        btn.style.display = '';
+      } else {
+        bar.style.cssText = 'margin-bottom:14px;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;background:#fee2e2;color:#991b1b';
+        bar.textContent   = '🔴 Голосование закрыто';
+        btn.style.display = 'none';
+      }
+    } catch { /* ignore */ }
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
+  async function closeVoting() {
+    try {
+      await api('/api/voting/close', { method: 'POST' });
+      await refreshVotingStatus();
+      toast('Голосование закрыто 🔴', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  async function refreshVotingTab() {
+    await Promise.all([refreshVotingStatus(), loadVotingResults()]);
+  }
+
+  async function loadVotingResults() {
+    try {
+      const [testData, dates] = await Promise.all([api('/api/test'), api('/api/meetings')]);
+      const next = testData.nextMeeting;
+      const all  = next ? [next, ...dates.filter(d => d !== next)] : dates;
+      const last3 = all.slice(0, 3);
+
+      if (!last3.length) {
+        document.getElementById('votingBody').innerHTML = '';
+        document.getElementById('emptyVoting').style.display = 'block';
+        return;
+      }
+      const perDate = await Promise.all(
+        last3.map(d => api(`/api/voting/results?date=${encodeURIComponent(d)}`).then(r => ({ date: d, results: r })))
+      );
+      renderVotingResults(perDate);
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  function renderVotingResults(perDate) {
+    const tbody   = document.getElementById('votingBody');
+    const emptyEl = document.getElementById('emptyVoting');
+    tbody.innerHTML = '';
+    const hasAny = perDate.some(({ results }) => results.length > 0);
+    if (!hasAny) { emptyEl.style.display = 'block'; return; }
+    emptyEl.style.display = 'none';
+    const medals = ['🥇','🥈','🥉'];
+    perDate.forEach(({ date, results }) => {
+      if (!results.length) return;
+      const total = results.reduce((s, r) => s + r.votes, 0);
+      const sfx   = total === 1 ? '' : total < 5 ? 'а' : 'ов';
+      const hdr   = document.createElement('tr');
+      hdr.innerHTML = `<td colspan="5" style="background:#f3f4f6;font-weight:700;font-size:13px;padding:6px 12px;color:#374151">📅 ${esc(date)} — ${total} голос${sfx}</td>`;
+      tbody.appendChild(hdr);
+      const max = results[0].votes;
+      results.forEach((r, i) => {
+        const pct    = max > 0 ? Math.round(r.votes / max * 100) : 0;
+        const member = allMembers.find(m => m.id === r.candidateId);
+        const tr     = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="text-align:center;font-size:18px">${medals[i] || (i + 1)}</td>
+          <td><strong>${esc(r.candidateName)}</strong></td>
+          <td>${esc(member?.profession || '—')}</td>
+          <td><strong>${r.votes}</strong></td>
+          <td><div class="vote-bar-wrap"><div class="vote-bar" style="width:${pct}%"></div></div></td>`;
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  // ── Presentations ──────────────────────────────────────────────────────────────
+  async function loadPresentations() {
+    try {
+      allPres = await api('/api/presentations');
+      buildPresDateFilter();
+      renderPresentations();
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  function buildPresDateFilter() {
+    const dates = [...new Set(allPres.map(p => p.meeting_date))].sort().reverse();
+    const sel   = document.getElementById('presFilterDate');
+    while (sel.options.length > 1) sel.remove(1);
+    dates.forEach(d => {
+      const o = document.createElement('option'); o.value = d; o.text = d; sel.add(o);
+    });
+  }
+
+  function renderPresentations() {
+    const filter = document.getElementById('presFilterDate').value;
+    const list   = filter ? allPres.filter(p => p.meeting_date === filter) : allPres;
+    const tbody  = document.getElementById('presBody');
+    const empty  = document.getElementById('emptyPres');
+    tbody.innerHTML = '';
+    if (!list.length) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    list.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="white-space:nowrap">${esc(p.meeting_date)}</td>
+        <td><strong>${esc(p.member_name)}</strong></td>
+        <td style="white-space:pre-wrap;word-break:break-word">${esc(p.change_description)}</td>
+        <td style="white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:12px">${esc(p.notes || '—')}</td>
+        <td>
+          <span class="badge-${p.status === 'done' ? 'done' : 'pending'}"
+                onclick="togglePresStatus(${p.id})">
+            ${p.status === 'done' ? '✅ Готово' : '⏳ Ожидает'}
+          </span>
+        </td>
+        <td style="display:flex;gap:6px;white-space:nowrap">
+          <button class="btn btn-outline-red btn-sm" onclick="openPresModal(${p.id})">✏️</button>
+          <button class="btn btn-outline-gray btn-sm" onclick="deletePres(${p.id})">🗑️</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function openPresModal(id) {
+    // Populate member select from allMembers
+    const sel = document.getElementById('pMember');
+    sel.innerHTML = allMembers.filter(m => m.active).map(m =>
+      `<option value="${esc(m.name)}">${esc(m.name)}</option>`
+    ).join('');
+
+    if (id) {
+      const p = allPres.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('presEditId').value           = id;
+      document.getElementById('presModalTitle').textContent = '✏️ Редактировать запись';
+      document.getElementById('pDate').value                = p.meeting_date;
+      document.getElementById('pDesc').value                = p.change_description;
+      document.getElementById('pNotes').value               = p.notes || '';
+      for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === p.member_name) { sel.selectedIndex = i; break; }
+      }
+    } else {
+      document.getElementById('presEditId').value           = '';
+      document.getElementById('presModalTitle').textContent = '+ Добавить запись';
+      document.getElementById('pDate').value                = nextMeetingDate || '';
+      document.getElementById('pDesc').value                = '';
+      document.getElementById('pNotes').value               = '';
+      if (sel.options.length) sel.selectedIndex = 0;
+    }
+    openModal('pres');
+  }
+
+  async function savePresentation() {
+    const id    = document.getElementById('presEditId').value;
+    const date  = document.getElementById('pDate').value.trim();
+    const name  = document.getElementById('pMember').value;
+    const desc  = document.getElementById('pDesc').value.trim();
+    const notes = document.getElementById('pNotes').value.trim();
+    if (!date || !name || !desc) { toast('Заполните обязательные поля', 'err'); return; }
+    try {
+      const body = { meeting_date: date, member_name: name, change_description: desc, notes };
+      if (id) await api(`/api/presentations/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      else    await api('/api/presentations', { method: 'POST', body: JSON.stringify(body) });
+      closeModal('pres');
+      await loadPresentations();
+      toast('Сохранено ✓', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  async function togglePresStatus(id) {
+    try {
+      const r    = await api(`/api/presentations/${id}/toggle`, { method: 'PATCH' });
+      const item = allPres.find(p => p.id === id);
+      if (item) item.status = r.status;
+      renderPresentations();
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  async function deletePres(id) {
+    if (!confirm('Удалить запись?')) return;
+    try {
+      await api(`/api/presentations/${id}`, { method: 'DELETE' });
+      allPres = allPres.filter(p => p.id !== id);
+      buildPresDateFilter();
+      renderPresentations();
+      toast('Удалено', 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  // ── Broadcasts ─────────────────────────────────────────────────────────────────
+  async function sendVoting() {
+    const date       = document.getElementById('votingDate').value.trim();
+    const votingLink = document.getElementById('votingLink').value.trim();
+    if (!date || !votingLink) { toast('Заполните все поля', 'err'); return; }
+    try {
+      await api('/api/voting/open', { method: 'POST' });
+      const r = await api('/api/send-voting', { method: 'POST', body: JSON.stringify({ date, votingLink }) });
+      closeModal('voting');
+      toast(`Рассылка запущена — ${r.total} гостей 🗳️`, 'ok');
+      await refreshVotingStatus();
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  async function sendContacts() {
+    const date         = document.getElementById('contactsDate').value.trim();
+    const contactsText = document.getElementById('contactsText').value.trim();
+    if (!date || !contactsText) { toast('Заполните все поля', 'err'); return; }
+    try {
+      const r = await api('/api/send-contacts', { method: 'POST', body: JSON.stringify({ date, contactsText }) });
+      closeModal('contacts');
+      toast(`Рассылка запущена — ${r.total} гостей 📋`, 'ok');
+    } catch (e) { toast(`Ошибка: ${e.message}`, 'err'); }
+  }
+
+  // ── Invite Guest Modal ─────────────────────────────────────────────────────────
+  function populateInviteModal() {
+    const sel = document.getElementById('inviteMember');
+    sel.innerHTML = '<option value="">— Выберите члена группы —</option>' +
+      allMembers.filter(m => m.active).map(m => `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join('');
+    document.getElementById('inviteLinkWrap').style.display = 'none';
+  }
+
+  function buildInviteLink() {
+    const member = document.getElementById('inviteMember').value;
+    const type   = document.querySelector('input[name="inviteType"]:checked')?.value || 'guest';
+    if (!member) { document.getElementById('inviteLinkWrap').style.display = 'none'; return; }
+
+    const base   = window.location.origin;
+    const params = new URLSearchParams({ invitedBy: member });
+    if (type === 'sub') params.set('type', 'sub');
+    const regUrl = `${base}/guest?${params.toString()}`;
+    const text   = type === 'sub'
+      ? `Приглашаю вас на встречу BNI SYNERGY как замену! 🤝\nРегистрация:\n${regUrl}`
+      : `Приглашаю вас на встречу BNI SYNERGY! 🤝\nРегистрация:\n${regUrl}`;
+    const waUrl  = `https://wa.me/?text=${encodeURIComponent(text)}`;
+
+    document.getElementById('inviteLinkInput').value = regUrl;
+    document.getElementById('inviteWaLink').href = waUrl;
+    document.getElementById('inviteLinkWrap').style.display = '';
+  }
+
+  function copyInviteLink() {
+    const input = document.getElementById('inviteLinkInput');
+    navigator.clipboard.writeText(input.value)
+      .then(() => toast('Ссылка скопирована ✓', 'ok'))
+      .catch(() => { input.select(); document.execCommand('copy'); toast('Скопировано', 'ok'); });
+  }
+
+  // ── Modals ─────────────────────────────────────────────────────────────────────
+  function openModal(name) {
+    const date = document.getElementById('dateSelect')?.value || nextMeetingDate;
+
+    if (name === 'voting') {
+      document.getElementById('votingDate').value = date;
+      document.getElementById('votingLink').value = 'https://bnisynergy.biz/voting';
+    }
+
+    if (name === 'contacts') {
+      document.getElementById('contactsDate').value = date;
+      api('/api/members').then(members => {
+        const active = members.filter(m => m.active && m.phone);
+        document.getElementById('contactsText').value =
+          'Контакты членов группы BNI SYNERGY 🤝\n\n' +
+          active.map(m => `${m.name}\n${m.profession}\n📱 ${m.phone}`).join('\n\n');
+      }).catch(() => {});
+    }
+
+    if (name === 'inviteGuest') populateInviteModal();
+
+    document.getElementById(`modal${cap(name)}`).classList.add('open');
+  }
+
+  function closeModal(name) {
+    document.getElementById(`modal${cap(name)}`).classList.remove('open');
+  }
+
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  });
+
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────────
+  let _tt;
+  function toast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `show ${type}`;
+    clearTimeout(_tt);
+    _tt = setTimeout(() => { el.className = ''; }, 3500);
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function waPhone(phone) {
+    let d = String(phone).replace(/\D/g, '');
+    if (d.startsWith('0')) d = '972' + d.slice(1);
+    else if (!d.startsWith('972')) d = '972' + d;
+    return d;
+  }
+
   function initials(name) {
     const parts = (name || '').trim().split(/\s+/);
     return parts.length >= 2
@@ -1231,23 +1681,9 @@
 
   function memberAvatar(m, size) {
     const s = `width:${size}px;height:${size}px;border-radius:50%;flex-shrink:0;vertical-align:middle`;
-    if (m.photo) {
-      return `<img src="/uploads/${esc(m.photo)}" style="${s};object-fit:cover" />`;
-    }
+    if (m.photo) return `<img src="/uploads/${esc(m.photo)}" style="${s};object-fit:cover" />`;
     const fs = Math.round(size * 0.38);
     return `<div style="${s};background:#d1d5db;display:inline-flex;align-items:center;justify-content:center;font-size:${fs}px;font-weight:700;color:#6b7280">${initials(m.name)}</div>`;
-  }
-
-  function esc(str) {
-    return String(str ?? '')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  function waPhone(phone) {
-    let d = String(phone).replace(/\D/g, '');
-    if (d.startsWith('0')) d = '972' + d.slice(1);
-    else if (!d.startsWith('972')) d = '972' + d;
-    return d;
   }
 </script>
 </body>

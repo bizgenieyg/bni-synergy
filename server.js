@@ -258,6 +258,10 @@ app.delete('/api/members/:id', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/members/count', (req, res) => {
+  res.json({ count: db.getActiveMembers().length });
+});
+
 app.get('/api/members/:id', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
   if (!member) return res.status(404).json({ error: 'Член не найден' });
@@ -309,6 +313,20 @@ app.put('/api/members/:id/socials', (req, res) => {
   if (!Array.isArray(socials)) return res.status(400).json({ error: 'socials должен быть массивом' });
   db.setMemberSocials(member.id, socials.filter(s => s.platform && s.url));
   res.json({ success: true });
+});
+
+app.get('/api/guests/active-count', (req, res) => {
+  const count = NEXT_MEETING_DATE ? db.getGuestsByDate(NEXT_MEETING_DATE).length : 0;
+  res.json({ count, date: NEXT_MEETING_DATE });
+});
+
+app.get('/api/guests/stats', (req, res) => {
+  const dates = db.getMeetingDates().slice(0, 8).reverse();
+  const stats  = dates.map(d => {
+    const guests = db.getGuestsByDate(d);
+    return { date: d, total: guests.length, paid: guests.filter(g => g.paid).length };
+  });
+  res.json(stats);
 });
 
 // ─── Public catalog ───────────────────────────────────────────────────────────
@@ -455,6 +473,18 @@ app.post('/api/voting/open', (req, res) => {
       `🗳 *Голосование открыто!*\nПроголосуйте за лучшего члена встречи:\nhttps://bnisynergy.biz/voting`
     ).catch(err => console.error('[Voting/open] group notify failed:', err.message));
   }
+});
+
+app.get('/api/voting/winners', (req, res) => {
+  const dates = db.getMeetingDates();
+  const all   = NEXT_MEETING_DATE
+    ? [NEXT_MEETING_DATE, ...dates.filter(d => d !== NEXT_MEETING_DATE)]
+    : dates;
+  for (const d of all) {
+    const results = db.getVoteResults(d);
+    if (results.length > 0) return res.json({ date: d, winners: results.slice(0, 3) });
+  }
+  res.json({ date: null, winners: [] });
 });
 
 app.post('/api/voting/close', (req, res) => {
