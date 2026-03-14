@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit2, Check, X, Search, Download, Send, Phone,
   RefreshCw, MessageCircle, UserCheck, Loader2, TrendingUp,
   DollarSign, Handshake, Trophy, CheckCircle2, Presentation,
-  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare
+  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare, Calendar
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import confetti from 'canvas-confetti'
@@ -47,13 +47,35 @@ interface MemberSocial {
   label?: string
 }
 
-interface GvRowState {
+interface MeetingStatEntry {
+  id: number
+  meeting_date: string
   meetings_1on1: number
   referrals: number
   closed_deals: number
   deal_amount: number
-  entryId: number | null
-  saving: boolean
+  created_at: string
+}
+
+interface StatTotals {
+  total_1on1: number
+  total_referrals: number
+  total_deals: number
+  total_amount: number
+}
+
+interface PendingRow {
+  localId: number
+  meetings_1on1: number
+  referrals: number
+  closed_deals: number
+  deal_amount: number
+}
+
+interface VoteWinner {
+  date: string
+  winner_name: string
+  votes: number
 }
 
 interface VotingStatus {
@@ -73,33 +95,6 @@ interface GuestStat {
   date: string
   total: number
   paid: number
-}
-
-interface GroupValueEntry {
-  id: number
-  meeting_date: string
-  member_id: number | null
-  member_name: string
-  meetings_1on1: number
-  referrals: number
-  closed_deals: number
-  deal_amount: number
-}
-
-interface GroupValueTotals {
-  total_1on1: number
-  total_referrals: number
-  total_deals: number
-  total_amount: number
-}
-
-interface GroupValueSummaryRow {
-  meeting_date: string
-  total_1on1: number
-  total_referrals: number
-  total_deals: number
-  total_amount: number
-  member_count: number
 }
 
 interface Presentation {
@@ -275,6 +270,93 @@ function SocialIcons({ socials }: { socials: MemberSocial[] }) {
           </a>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Date Picker ─────────────────────────────────────────────────────────────
+
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December']
+
+function DatePickerInput({ value, onChange, placeholder = 'DD/MM' }:
+  { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false)
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Parse "DD/MM" → { day, month0 } (month is 0-based)
+  const parsed = value.match(/^(\d{1,2})\/(\d{1,2})$/)
+  const selDay   = parsed ? +parsed[1] : null
+  const selMonth = parsed ? +parsed[2] - 1 : null
+
+  const handleOpen = () => {
+    if (selMonth !== null) setViewMonth(selMonth)
+    setOpen(o => !o)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const offset = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7 // Monday=0
+
+  const selectDay = (day: number) => {
+    onChange(`${String(day).padStart(2,'0')}/${String(viewMonth+1).padStart(2,'0')}`)
+    setOpen(false)
+  }
+
+  const today = new Date()
+
+  return (
+    <div ref={ref} className="relative">
+      <div onClick={handleOpen}
+        className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 text-sm cursor-pointer bg-white hover:border-gray-300 select-none min-w-[100px]">
+        <Calendar size={13} className="text-gray-400 flex-shrink-0" />
+        <span className={value ? 'text-gray-900' : 'text-gray-400'}>{value || placeholder}</span>
+      </div>
+      {open && (
+        <div className="absolute top-full mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-68">
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><ChevronLeft size={15} /></button>
+            <span className="text-sm font-semibold text-gray-800">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><ChevronRight size={15} /></button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => (
+              <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: offset }, (_, i) => <div key={`e${i}`} />)}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1
+              const isSel   = selDay === day && selMonth === viewMonth
+              const isToday = today.getDate() === day && today.getMonth() === viewMonth && today.getFullYear() === viewYear
+              return (
+                <button key={day} onClick={() => selectDay(day)}
+                  className={cn('text-xs rounded-lg py-1.5 w-full transition-colors leading-none',
+                    isSel   ? 'text-white font-semibold'
+                    : isToday ? 'font-semibold text-gray-900 bg-gray-100'
+                    :           'text-gray-600 hover:bg-gray-100')}
+                  style={isSel ? { background: RED } : {}}>
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1086,14 +1168,16 @@ function MembersSection() {
 function VotingSection() {
   const [status, setStatus] = useState<VotingStatus | null>(null)
   const [results, setResults] = useState<VoteResult[]>([])
+  const [winners, setWinners] = useState<VoteWinner[]>([])
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(async () => {
-    const [s, r] = await Promise.all([
+    const [s, r, w] = await Promise.all([
       api('/api/voting/status').then(x => x.json()),
       api('/api/voting/results').then(x => x.json()),
+      api('/api/voting/winners').then(x => x.json()),
     ])
-    setStatus(s); setResults(r)
+    setStatus(s); setResults(r); setWinners(w)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -1140,7 +1224,7 @@ function VotingSection() {
       </div>
       {results.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-4">Results</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">Current Results</h2>
           <div className="space-y-3">
             {results.map((r, i) => (
               <div key={r.candidateId} className="flex items-center gap-3">
@@ -1162,6 +1246,26 @@ function VotingSection() {
           </div>
         </div>
       )}
+
+      {winners.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-4">🏆 Recent Winners</h2>
+          <div className="space-y-3">
+            {winners.map((w, i) => (
+              <div key={w.date} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+                  style={{ background: i === 0 ? '#FEF3C7' : '#F3F4F6' }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900 text-sm">{w.winner_name}</p>
+                  <p className="text-xs text-gray-400">{w.date} · {w.votes} votes</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1169,108 +1273,98 @@ function VotingSection() {
 // ─── Group Value Section ─────────────────────────────────────────────────────
 
 function GroupValueSection() {
-  const [totals, setTotals] = useState<GroupValueTotals | null>(null)
-  const [summary, setSummary] = useState<GroupValueSummaryRow[]>([])
-  const [members, setMembers] = useState<Member[]>([])
-  const [selectedDate, setSelectedDate] = useState('')
-  const [newDateInput, setNewDateInput] = useState('')
   const [period, setPeriod] = useState<Period>('all')
-  const [loading, setLoading] = useState(true)
-  const [rowMap, setRowMap] = useState<Record<number, GvRowState>>({})
+  const [totals, setTotals] = useState<StatTotals | null>(null)
+  const [history, setHistory] = useState<MeetingStatEntry[]>([])
+
+  // Calculator state
+  const today = new Date()
+  const [meetingDate, setMeetingDate] = useState(
+    `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}`
+  )
+  const [pending, setPending] = useState<PendingRow[]>([])
+  const [nextLocalId, setNextLocalId] = useState(1)
+
+  // Current input row
+  const [inp1on1, setInp1on1] = useState(0)
+  const [inpRef, setInpRef] = useState(0)
+  const [inpAmounts, setInpAmounts] = useState('')
+
+  // Save modal
+  const [showModal, setShowModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Derived from amount text
+  const parsedAmts = inpAmounts.split(',').map(s => Number(s.trim())).filter(n => n > 0 && !isNaN(n))
+  const inpDeals  = parsedAmts.length
+  const inpAmount = parsedAmts.reduce((a, b) => a + b, 0)
+
+  // Pending totals
+  const pt = pending.reduce((acc, r) => ({
+    meetings_1on1: acc.meetings_1on1 + r.meetings_1on1,
+    referrals:     acc.referrals     + r.referrals,
+    closed_deals:  acc.closed_deals  + r.closed_deals,
+    deal_amount:   acc.deal_amount   + r.deal_amount,
+  }), { meetings_1on1: 0, referrals: 0, closed_deals: 0, deal_amount: 0 })
 
   const loadTotals = useCallback(async (p: Period) => {
-    const t = await api(`/api/group-value/totals?period=${p}`).then(r => r.json())
+    const t = await api(`/api/meeting-stats/totals?period=${p}`).then(r => r.json())
     setTotals(t)
   }, [])
 
-  useEffect(() => {
-    Promise.all([
-      api('/api/group-value/summary').then(r => r.json()),
-      api('/api/members?active=true').then(r => r.json()),
-    ]).then(([s, m]) => {
-      setSummary(s); setMembers(m); setLoading(false)
-      if (s.length) setSelectedDate(s[0].meeting_date)
-    })
-    loadTotals(period)
-  }, []) // eslint-disable-line
+  const loadHistory = useCallback(async () => {
+    setHistory(await api('/api/meeting-stats').then(r => r.json()))
+  }, [])
 
+  useEffect(() => { loadHistory(); loadTotals(period) }, []) // eslint-disable-line
   useEffect(() => { loadTotals(period) }, [period, loadTotals])
 
-  // Rebuild rowMap when date or members change
-  useEffect(() => {
-    if (!selectedDate || members.length === 0) { setRowMap({}); return }
-    api(`/api/group-value?date=${selectedDate}`)
-      .then(r => r.json())
-      .then((entries: GroupValueEntry[]) => {
-        const map: Record<number, GvRowState> = {}
-        for (const m of members) {
-          const entry = entries.find(e => e.member_id === m.id)
-          map[m.id] = {
-            meetings_1on1: entry?.meetings_1on1 ?? 0,
-            referrals: entry?.referrals ?? 0,
-            closed_deals: entry?.closed_deals ?? 0,
-            deal_amount: entry?.deal_amount ?? 0,
-            entryId: entry?.id ?? null,
-            saving: false,
-          }
-        }
-        setRowMap(map)
-      })
-  }, [selectedDate, members])
-
-  const setRowField = (memberId: number, field: keyof Omit<GvRowState, 'entryId' | 'saving'>, value: number) => {
-    setRowMap(r => ({ ...r, [memberId]: { ...r[memberId], [field]: value } }))
+  const addRow = () => {
+    if (!inp1on1 && !inpRef && !inpDeals && !inpAmount) return
+    setPending(p => [...p, { localId: nextLocalId, meetings_1on1: inp1on1, referrals: inpRef, closed_deals: inpDeals, deal_amount: inpAmount }])
+    setNextLocalId(n => n + 1)
+    setInp1on1(0); setInpRef(0); setInpAmounts('')
   }
 
-  const saveRow = async (memberId: number) => {
-    const row = rowMap[memberId]
-    if (!row || !selectedDate) return
-    const member = members.find(m => m.id === memberId)!
-    setRowMap(r => ({ ...r, [memberId]: { ...r[memberId], saving: true } }))
+  const removeRow = (id: number) => setPending(p => p.filter(r => r.localId !== id))
 
-    const body = {
-      meeting_date: selectedDate,
-      member_id: memberId,
-      member_name: member.name,
-      meetings_1on1: row.meetings_1on1,
-      referrals: row.referrals,
-      closed_deals: row.closed_deals,
-      deal_amount: row.deal_amount,
-    }
-
-    let newEntryId = row.entryId
-    if (row.entryId !== null) {
-      await api(`/api/group-value/${row.entryId}`, { method: 'PUT', body: JSON.stringify(body) })
-    } else {
-      const res = await api('/api/group-value', { method: 'POST', body: JSON.stringify(body) })
-      const data = await res.json()
-      newEntryId = data.id
-    }
-
-    const [t, s] = await Promise.all([
-      api(`/api/group-value/totals?period=${period}`).then(r => r.json()),
-      api('/api/group-value/summary').then(r => r.json()),
-    ])
-    setTotals(t)
-    setSummary(s)
-    setRowMap(r => ({ ...r, [memberId]: { ...r[memberId], saving: false, entryId: newEntryId } }))
+  const openModal = () => {
+    if (!meetingDate || !pending.length) return
+    confetti({ particleCount: 80, spread: 60, origin: { y: 0.5 } })
+    setShowModal(true)
   }
 
-  const applyNewDate = () => {
-    const d = newDateInput.trim()
-    if (d) { setSelectedDate(d); setNewDateInput('') }
+  const confirmSave = async () => {
+    setSaving(true)
+    try {
+      await api('/api/meeting-stats', { method: 'POST', body: JSON.stringify({ meeting_date: meetingDate, ...pt }) })
+      const report = `📊 BNI Report ${meetingDate}:\n🤝 1-on-1: ${pt.meetings_1on1}\n📄 Referrals: ${pt.referrals}\n🔐 Deals: ${pt.closed_deals}\n💰 Total: ₪${pt.deal_amount.toLocaleString()}`
+      try { await navigator.clipboard.writeText(report) } catch {}
+      setPending([]); setShowModal(false)
+      loadHistory(); loadTotals(period)
+    } finally { setSaving(false) }
   }
 
-  const lastMeeting = summary[0]
+  const deleteHistoryEntry = async (id: number) => {
+    await api(`/api/meeting-stats/${id}`, { method: 'DELETE' })
+    setHistory(h => h.filter(e => e.id !== id))
+    loadTotals(period)
+  }
 
   const PERIODS: { id: Period; label: string }[] = [
-    { id: 'week', label: 'Week' },
-    { id: 'month', label: 'Month' },
-    { id: 'quarter', label: 'Quarter' },
-    { id: 'all', label: 'All time' },
+    { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' },
+    { id: 'quarter', label: 'Quarter' }, { id: 'all', label: 'All time' },
   ]
 
-  const inCls = 'border border-gray-200 rounded-lg px-2 text-sm focus:outline-none focus:border-red-400 text-center h-9'
+  const Counter = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
+    <div className="flex items-center justify-center gap-1.5">
+      <button onClick={() => onChange(Math.max(0, value - 1))}
+        className="w-7 h-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-base leading-none flex items-center justify-center">−</button>
+      <span className="w-7 text-center text-sm font-bold text-gray-900">{value}</span>
+      <button onClick={() => onChange(value + 1)}
+        className="w-7 h-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-base leading-none flex items-center justify-center">+</button>
+    </div>
+  )
 
   return (
     <div className="space-y-5">
@@ -1288,15 +1382,15 @@ function GroupValueSection() {
         ))}
       </div>
 
-      {/* Totals */}
+      {/* KPI Totals */}
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: '1-on-1',       value: totals.total_1on1,                                   icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
-            { label: 'Referrals',    value: totals.total_referrals,                              icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
-            { label: 'Closed Deals', value: totals.total_deals,                                  icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
-            { label: 'Total Amount', value: `₪${(totals.total_amount || 0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
-          ].map(c => (
+          {([
+            { label: '1-on-1',       value: totals.total_1on1,                                 icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
+            { label: 'Referrals',    value: totals.total_referrals,                            icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
+            { label: 'Closed Deals', value: totals.total_deals,                                icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
+            { label: 'Total Amount', value: `₪${(totals.total_amount||0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          ] as { label: string; value: string|number; icon: React.ReactNode; color: string }[]).map(c => (
             <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
               <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
               <p className="text-xl font-bold text-gray-900">{c.value}</p>
@@ -1306,109 +1400,170 @@ function GroupValueSection() {
         </div>
       )}
 
-      {/* Last meeting summary */}
-      {lastMeeting && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-3">Last Meeting: <span className="text-gray-500 font-normal">{lastMeeting.meeting_date}</span></h2>
-          <div className="grid grid-cols-4 gap-3">
-            {[
-              { label: '1-on-1',   value: lastMeeting.total_1on1 },
-              { label: 'Referrals', value: lastMeeting.total_referrals },
-              { label: 'Deals',    value: lastMeeting.total_deals },
-              { label: 'Amount',   value: `₪${(lastMeeting.total_amount || 0).toLocaleString()}` },
-            ].map(c => (
-              <div key={c.label} className="text-center p-3 bg-gray-50 rounded-xl">
-                <p className="text-lg font-bold text-gray-900">{c.value}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{c.label}</p>
-              </div>
-            ))}
+      {/* ── Calculator ── */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <h2 className="font-semibold text-gray-800">Meeting Entry</h2>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-gray-500">Date:</span>
+            <DatePickerInput value={meetingDate} onChange={setMeetingDate} />
           </div>
         </div>
-      )}
 
-      {/* Meeting date selector */}
-      <div className="flex gap-2 flex-wrap items-center">
-        <span className="text-sm text-gray-500">Meeting:</span>
-        {summary.map(s => (
-          <button key={s.meeting_date} onClick={() => setSelectedDate(s.meeting_date)}
-            className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
-              selectedDate === s.meeting_date ? 'text-white' : 'bg-white text-gray-600 border border-gray-200')}
-            style={selectedDate === s.meeting_date ? { background: RED } : {}}>
-            {s.meeting_date}
-          </button>
-        ))}
-        <div className="flex items-center gap-1">
-          <input value={newDateInput} onChange={e => setNewDateInput(e.target.value)}
-            placeholder="DD/MM" onKeyDown={e => e.key === 'Enter' && applyNewDate()}
-            className="w-20 border border-gray-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-red-400" />
-          <button onClick={applyNewDate}
-            className="px-2.5 py-1.5 rounded-xl text-white text-xs font-medium" style={{ background: RED }}>
-            Go
-          </button>
+        {/* Input row — 4 equal columns */}
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          {[
+            { label: '1-on-1',   node: <Counter value={inp1on1} onChange={setInp1on1} /> },
+            { label: 'Referrals', node: <Counter value={inpRef}   onChange={setInpRef} /> },
+            { label: 'Deals',    node: <p className="text-center text-lg font-bold text-gray-900 h-7 flex items-center justify-center">{inpDeals}</p> },
+            { label: 'Amount ₪', node:
+              <input value={inpAmounts} onChange={e => setInpAmounts(e.target.value)}
+                placeholder="5000, 3000" onKeyDown={e => e.key === 'Enter' && addRow()}
+                className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" />
+            },
+          ].map(col => (
+            <div key={col.label} className="bg-gray-50 rounded-xl p-3">
+              <p className="text-[11px] text-gray-400 text-center mb-2 font-medium uppercase tracking-wide">{col.label}</p>
+              {col.node}
+            </div>
+          ))}
         </div>
+
+        <button onClick={addRow}
+          className="w-full py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 text-sm hover:border-red-300 hover:text-red-500 transition-colors flex items-center justify-center gap-2">
+          <Plus size={15} /> Add Row
+        </button>
       </div>
 
-      {/* Inline editable table */}
-      {selectedDate && !loading && (
+      {/* Pending table */}
+      {pending.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-700">{selectedDate}</span>
-            <span className="text-xs text-gray-400">· edit rows and save individually</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
-                  <th className="px-4 py-3 font-medium">Member</th>
-                  <th className="px-2 py-3 font-medium text-center">1-on-1</th>
-                  <th className="px-2 py-3 font-medium text-center">Referrals</th>
-                  <th className="px-2 py-3 font-medium text-center">Deals</th>
-                  <th className="px-2 py-3 font-medium text-center">Amount ₪</th>
-                  <th className="px-2 py-3 w-16" />
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 font-medium text-left">#</th>
+                <th className="px-4 py-3 font-medium text-center">1-on-1</th>
+                <th className="px-4 py-3 font-medium text-center">Referrals</th>
+                <th className="px-4 py-3 font-medium text-center">Deals</th>
+                <th className="px-4 py-3 font-medium text-right">Amount ₪</th>
+                <th className="px-3 py-3 w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((row, idx) => (
+                <tr key={row.localId} className="border-b border-gray-50">
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{idx + 1}</td>
+                  <td className="px-4 py-2.5 text-center text-gray-700">{row.meetings_1on1}</td>
+                  <td className="px-4 py-2.5 text-center text-gray-700">{row.referrals}</td>
+                  <td className="px-4 py-2.5 text-center text-gray-700">{row.closed_deals}</td>
+                  <td className="px-4 py-2.5 text-right text-gray-700">₪{row.deal_amount.toLocaleString()}</td>
+                  <td className="px-3 py-2.5">
+                    <button onClick={() => removeRow(row.localId)} className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-400">
+                      <X size={13} />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {members.map(m => {
-                  const row = rowMap[m.id]
-                  if (!row) return null
-                  return (
-                    <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{m.name}</td>
-                      <td className="px-2 py-2">
-                        <input type="number" min={0} value={row.meetings_1on1}
-                          onChange={e => setRowField(m.id, 'meetings_1on1', +e.target.value)}
-                          className={cn(inCls, 'w-14')} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input type="number" min={0} value={row.referrals}
-                          onChange={e => setRowField(m.id, 'referrals', +e.target.value)}
-                          className={cn(inCls, 'w-14')} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input type="number" min={0} value={row.closed_deals}
-                          onChange={e => setRowField(m.id, 'closed_deals', +e.target.value)}
-                          className={cn(inCls, 'w-14')} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input type="number" min={0} value={row.deal_amount}
-                          onChange={e => setRowField(m.id, 'deal_amount', +e.target.value)}
-                          className={cn(inCls, 'w-32')} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <button onClick={() => saveRow(m.id)} disabled={row.saving}
-                          className="px-3 h-9 rounded-lg text-white text-xs font-medium disabled:opacity-50 flex items-center"
-                          style={{ background: RED }}>
-                          {row.saving ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+              ))}
+              {/* ИТОГО row */}
+              <tr className="bg-gray-50 text-sm font-semibold text-gray-900 border-t border-gray-100">
+                <td className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wide">Total</td>
+                <td className="px-4 py-3 text-center">{pt.meetings_1on1}</td>
+                <td className="px-4 py-3 text-center">{pt.referrals}</td>
+                <td className="px-4 py-3 text-center">{pt.closed_deals}</td>
+                <td className="px-4 py-3 text-right">₪{pt.deal_amount.toLocaleString()}</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+          <div className="p-4 border-t border-gray-100">
+            <button onClick={openModal} disabled={!meetingDate || !pending.length}
+              className="w-full py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+              style={{ background: RED }}>
+              🎉 Calculate & Save
+            </button>
           </div>
         </div>
       )}
+
+      {/* History table */}
+      {history.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-gray-800">History</h2>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 font-medium text-left">Date</th>
+                <th className="px-4 py-3 font-medium text-center">1-on-1</th>
+                <th className="px-4 py-3 font-medium text-center">Referrals</th>
+                <th className="px-4 py-3 font-medium text-center">Deals</th>
+                <th className="px-4 py-3 font-medium text-right">Amount ₪</th>
+                <th className="px-3 py-3 w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {history.map(e => (
+                <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{e.meeting_date}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{e.meetings_1on1}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{e.referrals}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{e.closed_deals}</td>
+                  <td className="px-4 py-3 text-right font-medium text-gray-700">₪{e.deal_amount.toLocaleString()}</td>
+                  <td className="px-3 py-3">
+                    <button onClick={() => deleteHistoryEntry(e.id)} className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-400">
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Save modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowModal(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="text-center mb-5">
+                <div className="text-4xl mb-2">🎉</div>
+                <h3 className="text-lg font-bold text-gray-900">Meeting Summary</h3>
+                <p className="text-sm text-gray-500 mt-1">{meetingDate}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {[
+                  { label: '1-on-1',   value: pt.meetings_1on1 },
+                  { label: 'Referrals', value: pt.referrals },
+                  { label: 'Deals',    value: pt.closed_deals },
+                  { label: 'Amount',   value: `₪${pt.deal_amount.toLocaleString()}` },
+                ].map(c => (
+                  <div key={c.label} className="text-center p-3 bg-gray-50 rounded-xl">
+                    <p className="text-xl font-bold text-gray-900">{c.value}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{c.label}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 text-center mb-4">📋 Report will be copied to clipboard</p>
+              <div className="flex gap-2">
+                <button onClick={confirmSave} disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+                  style={{ background: RED }}>
+                  {saving ? 'Saving…' : '✓ Save & Copy'}
+                </button>
+                <button onClick={() => setShowModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -1483,8 +1638,7 @@ function PresentationsSection() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Meeting date</label>
-                <input value={form.meeting_date} onChange={e => setForm(f => ({ ...f, meeting_date: e.target.value }))}
-                  placeholder="09/03" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+                <DatePickerInput value={form.meeting_date} onChange={v => setForm(f => ({ ...f, meeting_date: v }))} />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Member</label>

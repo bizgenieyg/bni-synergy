@@ -580,6 +580,75 @@ function deleteGroupValue(id) {
   db.prepare('DELETE FROM group_value WHERE id = ?').run(id);
 }
 
+// ─── Schema: meeting_stats ────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meeting_stats (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_date  TEXT NOT NULL UNIQUE,
+    meetings_1on1 INTEGER DEFAULT 0,
+    referrals     INTEGER DEFAULT 0,
+    closed_deals  INTEGER DEFAULT 0,
+    deal_amount   REAL DEFAULT 0,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_meeting_stats_date ON meeting_stats(meeting_date);
+`);
+
+// ─── Meeting Stats CRUD ───────────────────────────────────────────────────────
+
+function getAllMeetingStats() {
+  return db.prepare('SELECT * FROM meeting_stats ORDER BY meeting_date DESC').all();
+}
+
+function upsertMeetingStats(meeting_date, { meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 } = {}) {
+  db.prepare(`
+    INSERT INTO meeting_stats (meeting_date, meetings_1on1, referrals, closed_deals, deal_amount)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(meeting_date) DO UPDATE SET
+      meetings_1on1 = excluded.meetings_1on1,
+      referrals     = excluded.referrals,
+      closed_deals  = excluded.closed_deals,
+      deal_amount   = excluded.deal_amount
+  `).run(meeting_date, meetings_1on1, referrals, closed_deals, deal_amount);
+}
+
+function getMeetingStatsTotals(days) {
+  const where = days ? `WHERE created_at >= datetime('now', '-${Number(days)} days')` : '';
+  return db.prepare(`
+    SELECT SUM(meetings_1on1) as total_1on1,
+           SUM(referrals)     as total_referrals,
+           SUM(closed_deals)  as total_deals,
+           SUM(deal_amount)   as total_amount
+    FROM meeting_stats ${where}
+  `).get();
+}
+
+function deleteMeetingStats(id) {
+  db.prepare('DELETE FROM meeting_stats WHERE id = ?').run(id);
+}
+
+/** Last N meeting winners (1 per meeting date) from votes table. */
+function getLastWinners(limit = 3) {
+  const rows = db.prepare(`
+    SELECT meetingDate AS date, candidateName AS winner_name, COUNT(*) AS votes
+    FROM votes
+    GROUP BY meetingDate, candidateId
+    ORDER BY meetingDate DESC, votes DESC
+  `).all();
+  const seen = new Set();
+  const result = [];
+  for (const row of rows) {
+    if (!seen.has(row.date)) {
+      seen.add(row.date);
+      result.push(row);
+      if (result.length >= limit) break;
+    }
+  }
+  return result;
+}
+
 module.exports = {
   db,
   // guests
@@ -634,4 +703,10 @@ module.exports = {
   upsertGroupValue,
   updateGroupValue,
   deleteGroupValue,
+  // meeting_stats
+  getAllMeetingStats,
+  upsertMeetingStats,
+  getMeetingStatsTotals,
+  deleteMeetingStats,
+  getLastWinners,
 };

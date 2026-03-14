@@ -508,15 +508,7 @@ app.post('/api/voting/open', (req, res) => {
 });
 
 app.get('/api/voting/winners', (req, res) => {
-  const dates = db.getMeetingDates();
-  const all   = NEXT_MEETING_DATE
-    ? [NEXT_MEETING_DATE, ...dates.filter(d => d !== NEXT_MEETING_DATE)]
-    : dates;
-  for (const d of all) {
-    const results = db.getVoteResults(d);
-    if (results.length > 0) return res.json({ date: d, winners: results.slice(0, 3) });
-  }
-  res.json({ date: null, winners: [] });
+  res.json(db.getLastWinners(3));
 });
 
 app.post('/api/voting/close', (req, res) => {
@@ -641,6 +633,38 @@ app.put('/api/group-value/:id', (req, res) => {
 app.delete('/api/group-value/:id', (req, res) => {
   db.deleteGroupValue(Number(req.params.id));
   res.json({ success: true });
+});
+
+// ─── Meeting Stats ────────────────────────────────────────────────────────────
+
+// IMPORTANT: /api/meeting-stats/totals must come before /api/meeting-stats/:id
+app.get('/api/meeting-stats/totals', adminAuth, (req, res) => {
+  const period = req.query.period || 'all';
+  const periodDays = { week: 7, month: 30, quarter: 90 };
+  const days = periodDays[period];
+  const t = db.getMeetingStatsTotals(days);
+  res.json(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 });
+});
+
+app.get('/api/meeting-stats', adminAuth, (req, res) => {
+  res.json(db.getAllMeetingStats());
+});
+
+app.post('/api/meeting-stats', adminAuth, (req, res) => {
+  const { meeting_date, meetings_1on1, referrals, closed_deals, deal_amount } = req.body;
+  if (!meeting_date) return res.status(400).json({ error: 'meeting_date required' });
+  db.upsertMeetingStats(meeting_date, {
+    meetings_1on1: Number(meetings_1on1) || 0,
+    referrals:     Number(referrals)     || 0,
+    closed_deals:  Number(closed_deals)  || 0,
+    deal_amount:   Number(deal_amount)   || 0,
+  });
+  res.json({ ok: true });
+});
+
+app.delete('/api/meeting-stats/:id', adminAuth, (req, res) => {
+  db.deleteMeetingStats(Number(req.params.id));
+  res.json({ ok: true });
 });
 
 // ─── Birthday auto-congratulations ───────────────────────────────────────────
