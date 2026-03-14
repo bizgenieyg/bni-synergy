@@ -326,7 +326,7 @@ function DatePickerInput({ value, onChange, placeholder = 'DD/MM' }:
         <span className={value ? 'text-gray-900' : 'text-gray-400'}>{value || placeholder}</span>
       </div>
       {open && (
-        <div className="absolute top-full mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-68">
+        <div className="absolute top-full right-0 mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-68">
           <div className="flex items-center justify-between mb-3">
             <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><ChevronLeft size={15} /></button>
             <span className="text-sm font-semibold text-gray-800">{MONTH_NAMES[viewMonth]} {viewYear}</span>
@@ -1288,6 +1288,7 @@ function GroupValueSection() {
   // Current input row
   const [inp1on1, setInp1on1] = useState(0)
   const [inpRef, setInpRef] = useState(0)
+  const [inpDeals, setInpDeals] = useState(0)
   const [inpAmounts, setInpAmounts] = useState('')
 
   // Save modal
@@ -1296,7 +1297,6 @@ function GroupValueSection() {
 
   // Derived from amount text
   const parsedAmts = inpAmounts.split(',').map(s => Number(s.trim())).filter(n => n > 0 && !isNaN(n))
-  const inpDeals  = parsedAmts.length
   const inpAmount = parsedAmts.reduce((a, b) => a + b, 0)
 
   // Pending totals
@@ -1323,7 +1323,7 @@ function GroupValueSection() {
     if (!inp1on1 && !inpRef && !inpDeals && !inpAmount) return
     setPending(p => [...p, { localId: nextLocalId, meetings_1on1: inp1on1, referrals: inpRef, closed_deals: inpDeals, deal_amount: inpAmount }])
     setNextLocalId(n => n + 1)
-    setInp1on1(0); setInpRef(0); setInpAmounts('')
+    setInp1on1(0); setInpRef(0); setInpDeals(0); setInpAmounts('')
   }
 
   const removeRow = (id: number) => setPending(p => p.filter(r => r.localId !== id))
@@ -1357,12 +1357,16 @@ function GroupValueSection() {
   ]
 
   const Counter = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
-    <div className="flex items-center justify-center gap-1.5">
+    <div className="flex items-center justify-center gap-1">
       <button onClick={() => onChange(Math.max(0, value - 1))}
-        className="w-7 h-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-base leading-none flex items-center justify-center">−</button>
-      <span className="w-7 text-center text-sm font-bold text-gray-900">{value}</span>
+        className="w-7 h-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-base leading-none flex items-center justify-center flex-shrink-0">−</button>
+      <input
+        type="number" min={0} value={value}
+        onChange={e => onChange(Math.max(0, parseInt(e.target.value) || 0))}
+        className="w-10 text-center text-sm font-bold text-gray-900 bg-transparent border-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
       <button onClick={() => onChange(value + 1)}
-        className="w-7 h-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-base leading-none flex items-center justify-center">+</button>
+        className="w-7 h-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-base leading-none flex items-center justify-center flex-shrink-0">+</button>
     </div>
   )
 
@@ -1415,9 +1419,9 @@ function GroupValueSection() {
           {[
             { label: '1-on-1',   node: <Counter value={inp1on1} onChange={setInp1on1} /> },
             { label: 'Referrals', node: <Counter value={inpRef}   onChange={setInpRef} /> },
-            { label: 'Deals',    node: <p className="text-center text-lg font-bold text-gray-900 h-7 flex items-center justify-center">{inpDeals}</p> },
+            { label: 'Deals',    node: <Counter value={inpDeals} onChange={setInpDeals} /> },
             { label: 'Amount ₪', node:
-              <input value={inpAmounts} onChange={e => setInpAmounts(e.target.value)}
+              <input value={inpAmounts} onChange={e => { const v = e.target.value; setInpAmounts(v); const parsed = v.split(',').map(s => Number(s.trim())).filter(n => n > 0 && !isNaN(n)); setInpDeals(parsed.length) }}
                 placeholder="5000, 3000" onKeyDown={e => e.key === 'Enter' && addRow()}
                 className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" />
             },
