@@ -77,10 +77,42 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Admin auth ───────────────────────────────────────────────────────────────
+
+const crypto = require('crypto');
+const ADMIN_TOKENS = new Set(); // in-memory token store
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bni2024';
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Неверный пароль' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  ADMIN_TOKENS.add(token);
+  res.json({ token });
+});
+
+function adminAuth(req, res, next) {
+  // Allow unauthenticated access in dev / if no password set
+  if (!process.env.ADMIN_PASSWORD) return next();
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!ADMIN_TOKENS.has(token)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
 // ─── HTML pages ───────────────────────────────────────────────────────────────
 
 app.get('/guest',           (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
-app.get('/admin',           (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/admin',           (req, res) => {
+  // Serve React SPA if built, otherwise fall back to admin.html
+  const spa = path.join(__dirname, 'public', 'dist', 'index.html');
+  if (fs.existsSync(spa)) return res.sendFile(spa);
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 app.get('/member',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
 app.get('/voting',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
 app.get('/profile',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
@@ -489,6 +521,11 @@ app.get('/api/voting/winners', (req, res) => {
 
 app.post('/api/voting/close', (req, res) => {
   db.setSetting('voting_open', '0');
+  res.json({ success: true });
+});
+
+app.post('/api/voting/reset', (req, res) => {
+  db.deleteVotesByDate(NEXT_MEETING_DATE);
   res.json({ success: true });
 });
 

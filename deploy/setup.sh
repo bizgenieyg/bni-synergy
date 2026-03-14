@@ -29,6 +29,7 @@ cd /var/www
 git clone https://github.com/bizgenieyg/bni-synergy.git
 cd bni-synergy
 npm install
+npm run build
 
 echo "=== 7. Setup .env (YOU MUST EDIT THIS) ==="
 cp .env.example .env
@@ -49,6 +50,14 @@ server {
     listen 80;
     server_name _;
 
+    # React SPA static assets (served directly by nginx for speed)
+    location /dist/ {
+        alias /var/www/bni-synergy/public/dist/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Everything else goes to Node.js
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -56,6 +65,7 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_cache_bypass $http_upgrade;
     }
 }

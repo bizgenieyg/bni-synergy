@@ -5,3 +5,5 @@ data/
 credentials.json
 fonts/
 .DS_Store
+public/dist/
+uploads/
