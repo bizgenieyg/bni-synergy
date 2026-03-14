@@ -599,7 +599,10 @@ app.delete('/api/presentations/:id', (req, res) => {
 
 // Must come before /api/group-value/:id to avoid route conflicts
 app.get('/api/group-value/totals', (req, res) => {
-  const t = db.getGroupValueTotals();
+  const period = req.query.period || 'all';
+  const periodDays = { week: 7, month: 30, quarter: 90 };
+  const days = periodDays[period];
+  const t = days ? db.getGroupValueTotalsByPeriod(days) : db.getGroupValueTotals();
   res.json(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 });
 });
 

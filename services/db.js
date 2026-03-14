@@ -526,6 +526,17 @@ function getGroupValueTotals() {
   `).get();
 }
 
+function getGroupValueTotalsByPeriod(days) {
+  return db.prepare(`
+    SELECT SUM(meetings_1on1) as total_1on1,
+           SUM(referrals)     as total_referrals,
+           SUM(closed_deals)  as total_deals,
+           SUM(deal_amount)   as total_amount
+    FROM group_value
+    WHERE created_at >= datetime('now', ? || ' days')
+  `).get(`-${days}`);
+}
+
 function upsertGroupValue({ meeting_date, member_id, member_name, meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 }) {
   const existing = member_id
     ? db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_id = ?').get(meeting_date, member_id)
@@ -619,6 +630,7 @@ module.exports = {
   getGroupValue,
   getGroupValueSummary,
   getGroupValueTotals,
+  getGroupValueTotalsByPeriod,
   upsertGroupValue,
   updateGroupValue,
   deleteGroupValue,
