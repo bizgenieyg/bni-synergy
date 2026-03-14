@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Edit2, Check, X, Search, Download, Send, Phone,
   RefreshCw, MessageCircle, UserCheck, Loader2, TrendingUp,
   DollarSign, Handshake, Trophy, CheckCircle2, Presentation,
-  Instagram, Linkedin, Facebook, Globe, Upload, Camera
+  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import confetti from 'canvas-confetti'
@@ -47,12 +47,13 @@ interface MemberSocial {
   label?: string
 }
 
-interface SocialsForm {
-  whatsapp: string
-  instagram: string
-  linkedin: string
-  facebook: string
-  website: string
+interface GvRowState {
+  meetings_1on1: number
+  referrals: number
+  closed_deals: number
+  deal_amount: number
+  entryId: number | null
+  saving: boolean
 }
 
 interface VotingStatus {
@@ -134,20 +135,6 @@ async function api(path: string, opts?: RequestInit) {
 
 function waPhone(phone: string) {
   return phone.replace(/\D/g, '').replace(/^0/, '972')
-}
-
-function socialsToForm(socials: MemberSocial[]): SocialsForm {
-  const f: SocialsForm = { whatsapp: '', instagram: '', linkedin: '', facebook: '', website: '' }
-  for (const s of socials) {
-    if (s.platform in f) f[s.platform as keyof SocialsForm] = s.url
-  }
-  return f
-}
-
-function formToSocials(f: SocialsForm): MemberSocial[] {
-  return (Object.entries(f) as [keyof SocialsForm, string][])
-    .filter(([, url]) => url.trim())
-    .map(([platform, url]) => ({ platform, url: url.trim() }))
 }
 
 // ─── Login ──────────────────────────────────────────────────────────────────
@@ -272,7 +259,8 @@ function SocialIcons({ socials }: { socials: MemberSocial[] }) {
     instagram: { icon: <Instagram size={13} />,    color: '#E1306C' },
     linkedin:  { icon: <Linkedin size={13} />,     color: '#0A66C2' },
     facebook:  { icon: <Facebook size={13} />,     color: '#1877F2' },
-    website:   { icon: <Globe size={13} />,        color: '#6B7280' },
+    website:   { icon: <Globe size={13} />,          color: '#6B7280' },
+    telegram:  { icon: <MessageSquare size={13} />, color: '#0088cc' },
   }
   return (
     <div className="flex gap-1">
@@ -304,17 +292,27 @@ function MemberModal({ member, onClose, onSaved }:
     birthday: member?.birthday ?? '',
     active: member?.active ?? 1,
   })
-  const [socials, setSocials] = useState<SocialsForm>({ whatsapp: '', instagram: '', linkedin: '', facebook: '', website: '' })
+  const [socials, setSocials] = useState<MemberSocial[]>([])
+  const [addingPlatform, setAddingPlatform] = useState('whatsapp')
+  const [addingUrl, setAddingUrl] = useState('')
+  const [showAddSocial, setShowAddSocial] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(member?.photo ? `/uploads/${member.photo}` : null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const SOCIAL_PLATFORMS = [
+    { id: 'whatsapp', label: 'WhatsApp' },
+    { id: 'instagram', label: 'Instagram' },
+    { id: 'linkedin', label: 'LinkedIn' },
+    { id: 'facebook', label: 'Facebook' },
+    { id: 'website', label: 'Website' },
+    { id: 'telegram', label: 'Telegram' },
+  ]
+
   useEffect(() => {
     if (!isNew && member) {
-      api(`/api/members/${member.id}/socials`).then(r => r.json()).then((data: MemberSocial[]) => {
-        setSocials(socialsToForm(data))
-      })
+      api(`/api/members/${member.id}/socials`).then(r => r.json()).then(setSocials)
     }
   }, [member, isNew])
 
@@ -354,7 +352,7 @@ function MemberModal({ member, onClose, onSaved }:
       // Save socials
       await api(`/api/members/${savedMember.id}/socials`, {
         method: 'PUT',
-        body: JSON.stringify({ socials: formToSocials(socials) }),
+        body: JSON.stringify({ socials }),
       })
 
       onSaved(savedMember)
@@ -380,16 +378,6 @@ function MemberModal({ member, onClose, onSaved }:
           placeholder={placeholder}
           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
       )}
-    </div>
-  )
-
-  const socialField = (key: keyof SocialsForm, label: string, placeholder: string) => (
-    <div>
-      <label className="text-xs font-medium text-gray-500 block mb-1">{label}</label>
-      <input value={socials[key]}
-        onChange={e => setSocials(s => ({ ...s, [key]: e.target.value }))}
-        placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
     </div>
   )
 
@@ -438,14 +426,56 @@ function MemberModal({ member, onClose, onSaved }:
           </div>
 
           <div className="border-t border-gray-100 pt-4 mb-5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Social Links</p>
-            <div className="grid grid-cols-1 gap-2.5">
-              {socialField('whatsapp', '💬 WhatsApp', 'https://wa.me/972501234567')}
-              {socialField('instagram', '📸 Instagram', 'https://instagram.com/username')}
-              {socialField('linkedin', '💼 LinkedIn', 'https://linkedin.com/in/username')}
-              {socialField('facebook', '👤 Facebook', 'https://facebook.com/username')}
-              {socialField('website', '🌐 Website', 'https://example.com')}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Social Links</p>
+              {!showAddSocial && (
+                <button onClick={() => setShowAddSocial(true)}
+                  className="text-xs text-red-500 hover:underline flex items-center gap-1">
+                  <Plus size={12} /> Add Social
+                </button>
+              )}
             </div>
+            {socials.length === 0 && !showAddSocial && (
+              <p className="text-xs text-gray-400">No social links yet</p>
+            )}
+            <div className="space-y-2">
+              {socials.map((s, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 capitalize w-20 flex-shrink-0">{s.platform}</span>
+                  <input value={s.url}
+                    onChange={e => setSocials(ss => ss.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+                  <button onClick={() => setSocials(ss => ss.filter((_, j) => j !== i))}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 flex-shrink-0">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {showAddSocial && (
+              <div className="flex items-center gap-2 mt-2">
+                <select value={addingPlatform} onChange={e => setAddingPlatform(e.target.value)}
+                  className="w-28 border border-gray-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-red-400 flex-shrink-0">
+                  {SOCIAL_PLATFORMS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                <input value={addingUrl} onChange={e => setAddingUrl(e.target.value)}
+                  placeholder="https://…"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+                <button onClick={() => {
+                  if (addingUrl.trim()) {
+                    setSocials(ss => [...ss, { platform: addingPlatform, url: addingUrl.trim() }])
+                    setAddingUrl('')
+                  }
+                  setShowAddSocial(false)
+                }} className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex-shrink-0">
+                  <Check size={14} />
+                </button>
+                <button onClick={() => { setShowAddSocial(false); setAddingUrl('') }}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -466,20 +496,45 @@ function MemberModal({ member, onClose, onSaved }:
 
 // ─── Invite Guest Modal ──────────────────────────────────────────────────────
 
-function InviteModal({ member, nextMeeting, onClose }: { member: Member; nextMeeting: string; onClose: () => void }) {
+function InviteModal({ members, defaultMember, nextMeeting, onClose }:
+  { members: Member[]; defaultMember?: Member; nextMeeting: string; onClose: () => void }) {
+  const [selectedId, setSelectedId] = useState<number>(defaultMember?.id ?? members[0]?.id ?? 0)
+  const [date, setDate] = useState(nextMeeting)
   const [type, setType] = useState<'guest' | 'substitute'>('guest')
-  const encoded = encodeURIComponent(member.name.split(' ')[0])
-  const link = `https://bnisynergy.biz/guest?ref=${encoded}&date=${nextMeeting}&type=${type === 'substitute' ? 'sub' : 'guest'}`
-  const copy = () => navigator.clipboard.writeText(link)
-  const wa = () => window.open(`https://wa.me/?text=${encodeURIComponent(link)}`, '_blank')
+
+  const member = members.find(m => m.id === selectedId)
+  const encoded = member ? encodeURIComponent(member.name.split(' ')[0]) : ''
+  const link = member
+    ? `https://bnisynergy.biz/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}`
+    : ''
+  const copy = () => link && navigator.clipboard.writeText(link)
+  const wa = () => link && window.open(`https://wa.me/?text=${encodeURIComponent(link)}`, '_blank')
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
         className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
-        <h3 className="font-semibold text-gray-900 mb-2">Invite Link</h3>
-        <p className="text-sm text-gray-500 mb-4">{member.name} · {nextMeeting}</p>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">Invite Link</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Member</label>
+            <select value={selectedId} onChange={e => setSelectedId(+e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
+              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Meeting date</label>
+            <input value={date} onChange={e => setDate(e.target.value)} placeholder="DD/MM/YY"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+          </div>
+        </div>
+
         <div className="flex gap-2 mb-4">
           {(['guest', 'substitute'] as const).map(t => (
             <button key={t} onClick={() => setType(t)}
@@ -489,11 +544,10 @@ function InviteModal({ member, nextMeeting, onClose }: { member: Member; nextMee
             </button>
           ))}
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-4">{link}</div>
+        <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-4">{link || '—'}</div>
         <div className="flex gap-2">
-          <button onClick={copy} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">Copy</button>
-          <button onClick={wa} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium" style={{ background: '#25D366' }}>WhatsApp</button>
-          <button onClick={onClose} className="p-2.5 rounded-xl bg-gray-100 text-gray-500"><X size={16} /></button>
+          <button onClick={copy} disabled={!link} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium disabled:opacity-40">Copy</button>
+          <button onClick={wa} disabled={!link} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40" style={{ background: '#25D366' }}>WhatsApp</button>
         </div>
       </motion.div>
     </motion.div>
@@ -544,6 +598,8 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
   const [guestCount, setGuestCount] = useState({ count: 0, date: '' })
   const [recentGuests, setRecentGuests] = useState<Guest[]>([])
   const [birthdays, setBirthdays] = useState<(Member & { daysUntil: number })[]>([])
+  const [memberCount, setMemberCount] = useState(0)
+  const [gvTotal, setGvTotal] = useState(0)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -553,12 +609,16 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
       api('/api/voting/results').then(r => r.json()),
       api('/api/guests/active-count').then(r => r.json()),
       api('/api/birthdays/upcoming?days=14').then(r => r.json()),
-    ]).then(([s, vs, vr, gc, b]) => {
+      api('/api/members?active=true').then(r => r.json()),
+      api('/api/group-value/totals?period=all').then(r => r.json()),
+    ]).then(([s, vs, vr, gc, b, m, gv]) => {
       setStats(s)
       setVotingStatus(vs)
       setResults(vr)
       setGuestCount(gc)
       setBirthdays(b)
+      setMemberCount(m.length)
+      setGvTotal(gv?.total_amount || 0)
       if (gc.date) api(`/api/guests?date=${gc.date}`).then(r => r.json()).then(g => setRecentGuests(g.slice(0, 5)))
     })
   }, [])
@@ -601,6 +661,22 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
           style={{ background: RED }}>
           <Plus size={15} /> Invite Guest
         </button>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {([
+          { label: 'Members',     value: memberCount,                         icon: <UserCheck size={18} />,    color: 'bg-blue-50 text-blue-600' },
+          { label: 'Guests',      value: guestCount.count,                    icon: <Users size={18} />,        color: 'bg-purple-50 text-purple-600' },
+          { label: 'Group Value', value: `₪${gvTotal.toLocaleString()}`,      icon: <DollarSign size={18} />,   color: 'bg-green-50 text-green-600' },
+          { label: 'Attendance',  value: '94%',                               icon: <CheckCircle2 size={18} />, color: 'bg-amber-50 text-amber-600' },
+        ] as { label: string; value: string | number; icon: React.ReactNode; color: string }[]).map(c => (
+          <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
+            <p className="text-2xl font-bold text-gray-900">{c.value}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
+          </div>
+        ))}
       </div>
 
       {/* Row 2: Guests + Birthdays */}
@@ -998,7 +1074,7 @@ function MembersSection() {
           />
         )}
         {inviteModal && (
-          <InviteModal member={inviteModal} nextMeeting={nextMeeting} onClose={() => setInviteModal(null)} />
+          <InviteModal members={members.filter(m => m.active)} defaultMember={inviteModal} nextMeeting={nextMeeting} onClose={() => setInviteModal(null)} />
         )}
       </AnimatePresence>
     </div>
@@ -1093,19 +1169,14 @@ function VotingSection() {
 // ─── Group Value Section ─────────────────────────────────────────────────────
 
 function GroupValueSection() {
-  const [entries, setEntries] = useState<GroupValueEntry[]>([])
   const [totals, setTotals] = useState<GroupValueTotals | null>(null)
   const [summary, setSummary] = useState<GroupValueSummaryRow[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [selectedDate, setSelectedDate] = useState('')
+  const [newDateInput, setNewDateInput] = useState('')
   const [period, setPeriod] = useState<Period>('all')
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [addingNew, setAddingNew] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [savingId, setSavingId] = useState<number | null>(null)
-
-  const emptyForm = { member_id: 0, member_name: '', meetings_1on1: 0, referrals: 0, closed_deals: 0, deal_amount: 0 }
-  const [form, setForm] = useState(emptyForm)
+  const [rowMap, setRowMap] = useState<Record<number, GvRowState>>({})
 
   const loadTotals = useCallback(async (p: Period) => {
     const t = await api(`/api/group-value/totals?period=${p}`).then(r => r.json())
@@ -1125,41 +1196,71 @@ function GroupValueSection() {
 
   useEffect(() => { loadTotals(period) }, [period, loadTotals])
 
+  // Rebuild rowMap when date or members change
   useEffect(() => {
-    if (!selectedDate) { setEntries([]); return }
-    api(`/api/group-value?date=${selectedDate}`).then(r => r.json()).then(setEntries)
-  }, [selectedDate])
+    if (!selectedDate || members.length === 0) { setRowMap({}); return }
+    api(`/api/group-value?date=${selectedDate}`)
+      .then(r => r.json())
+      .then((entries: GroupValueEntry[]) => {
+        const map: Record<number, GvRowState> = {}
+        for (const m of members) {
+          const entry = entries.find(e => e.member_id === m.id)
+          map[m.id] = {
+            meetings_1on1: entry?.meetings_1on1 ?? 0,
+            referrals: entry?.referrals ?? 0,
+            closed_deals: entry?.closed_deals ?? 0,
+            deal_amount: entry?.deal_amount ?? 0,
+            entryId: entry?.id ?? null,
+            saving: false,
+          }
+        }
+        setRowMap(map)
+      })
+  }, [selectedDate, members])
 
-  const save = async () => {
-    setSavingId(editingId ?? -1)
-    const meetingDate = selectedDate || (await api('/api/settings/next-meeting').then(r => r.json())).date
-    const body = { ...form, meeting_date: meetingDate, member_id: form.member_id || null }
-    if (editingId !== null) {
-      await api(`/api/group-value/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
-    } else {
-      await api('/api/group-value', { method: 'POST', body: JSON.stringify(body) })
+  const setRowField = (memberId: number, field: keyof Omit<GvRowState, 'entryId' | 'saving'>, value: number) => {
+    setRowMap(r => ({ ...r, [memberId]: { ...r[memberId], [field]: value } }))
+  }
+
+  const saveRow = async (memberId: number) => {
+    const row = rowMap[memberId]
+    if (!row || !selectedDate) return
+    const member = members.find(m => m.id === memberId)!
+    setRowMap(r => ({ ...r, [memberId]: { ...r[memberId], saving: true } }))
+
+    const body = {
+      meeting_date: selectedDate,
+      member_id: memberId,
+      member_name: member.name,
+      meetings_1on1: row.meetings_1on1,
+      referrals: row.referrals,
+      closed_deals: row.closed_deals,
+      deal_amount: row.deal_amount,
     }
-    const [updated, t] = await Promise.all([
-      api(`/api/group-value?date=${body.meeting_date}`).then(r => r.json()),
+
+    let newEntryId = row.entryId
+    if (row.entryId !== null) {
+      await api(`/api/group-value/${row.entryId}`, { method: 'PUT', body: JSON.stringify(body) })
+    } else {
+      const res = await api('/api/group-value', { method: 'POST', body: JSON.stringify(body) })
+      const data = await res.json()
+      newEntryId = data.id
+    }
+
+    const [t, s] = await Promise.all([
       api(`/api/group-value/totals?period=${period}`).then(r => r.json()),
+      api('/api/group-value/summary').then(r => r.json()),
     ])
-    setEntries(updated); setTotals(t)
-    setEditingId(null); setAddingNew(false); setForm(emptyForm)
-    setSavingId(null)
+    setTotals(t)
+    setSummary(s)
+    setRowMap(r => ({ ...r, [memberId]: { ...r[memberId], saving: false, entryId: newEntryId } }))
   }
 
-  const del = async (id: number) => {
-    await api(`/api/group-value/${id}`, { method: 'DELETE' })
-    setEntries(es => es.filter(e => e.id !== id))
-    loadTotals(period)
+  const applyNewDate = () => {
+    const d = newDateInput.trim()
+    if (d) { setSelectedDate(d); setNewDateInput('') }
   }
 
-  const startEdit = (e: GroupValueEntry) => {
-    setEditingId(e.id); setAddingNew(false)
-    setForm({ member_id: e.member_id || 0, member_name: e.member_name, meetings_1on1: e.meetings_1on1, referrals: e.referrals, closed_deals: e.closed_deals, deal_amount: e.deal_amount })
-  }
-
-  // Last meeting data
   const lastMeeting = summary[0]
 
   const PERIODS: { id: Period; label: string }[] = [
@@ -1168,6 +1269,8 @@ function GroupValueSection() {
     { id: 'quarter', label: 'Quarter' },
     { id: 'all', label: 'All time' },
   ]
+
+  const inCls = 'border border-gray-200 rounded-lg px-2 text-sm focus:outline-none focus:border-red-400 text-center h-9'
 
   return (
     <div className="space-y-5">
@@ -1189,10 +1292,10 @@ function GroupValueSection() {
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: '1-on-1', value: totals.total_1on1, icon: <Handshake size={18} />, color: 'bg-blue-50 text-blue-600' },
-            { label: 'Referrals', value: totals.total_referrals, icon: <Users size={18} />, color: 'bg-purple-50 text-purple-600' },
-            { label: 'Closed Deals', value: totals.total_deals, icon: <Trophy size={18} />, color: 'bg-amber-50 text-amber-600' },
-            { label: 'Total Amount', value: `₪${(totals.total_amount || 0).toLocaleString()}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+            { label: '1-on-1',       value: totals.total_1on1,                                   icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
+            { label: 'Referrals',    value: totals.total_referrals,                              icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
+            { label: 'Closed Deals', value: totals.total_deals,                                  icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
+            { label: 'Total Amount', value: `₪${(totals.total_amount || 0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           ].map(c => (
             <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
               <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
@@ -1209,10 +1312,10 @@ function GroupValueSection() {
           <h2 className="font-semibold text-gray-800 mb-3">Last Meeting: <span className="text-gray-500 font-normal">{lastMeeting.meeting_date}</span></h2>
           <div className="grid grid-cols-4 gap-3">
             {[
-              { label: '1-on-1', value: lastMeeting.total_1on1 },
+              { label: '1-on-1',   value: lastMeeting.total_1on1 },
               { label: 'Referrals', value: lastMeeting.total_referrals },
-              { label: 'Deals', value: lastMeeting.total_deals },
-              { label: 'Amount', value: `₪${(lastMeeting.total_amount || 0).toLocaleString()}` },
+              { label: 'Deals',    value: lastMeeting.total_deals },
+              { label: 'Amount',   value: `₪${(lastMeeting.total_amount || 0).toLocaleString()}` },
             ].map(c => (
               <div key={c.label} className="text-center p-3 bg-gray-50 rounded-xl">
                 <p className="text-lg font-bold text-gray-900">{c.value}</p>
@@ -1223,7 +1326,7 @@ function GroupValueSection() {
         </div>
       )}
 
-      {/* Meeting selector + add */}
+      {/* Meeting date selector */}
       <div className="flex gap-2 flex-wrap items-center">
         <span className="text-sm text-gray-500">Meeting:</span>
         {summary.map(s => (
@@ -1234,89 +1337,76 @@ function GroupValueSection() {
             {s.meeting_date}
           </button>
         ))}
-        <button onClick={() => { setAddingNew(true); setEditingId(null) }}
-          className="px-3 py-1.5 rounded-full text-sm font-medium text-white flex items-center gap-1"
-          style={{ background: RED }}>
-          <Plus size={14} /> Add
-        </button>
+        <div className="flex items-center gap-1">
+          <input value={newDateInput} onChange={e => setNewDateInput(e.target.value)}
+            placeholder="DD/MM" onKeyDown={e => e.key === 'Enter' && applyNewDate()}
+            className="w-20 border border-gray-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+          <button onClick={applyNewDate}
+            className="px-2.5 py-1.5 rounded-xl text-white text-xs font-medium" style={{ background: RED }}>
+            Go
+          </button>
+        </div>
       </div>
 
-      {/* Add/Edit form */}
-      <AnimatePresence>
-        {(addingNew || editingId !== null) && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
-            <h3 className="font-semibold text-gray-800 mb-4">{editingId !== null ? 'Edit' : 'New Entry'}</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="col-span-2 sm:col-span-3">
-                <label className="text-xs font-medium text-gray-500 block mb-1">Member</label>
-                <select value={form.member_id} onChange={e => {
-                  const m = members.find(x => x.id === +e.target.value)
-                  setForm(f => ({ ...f, member_id: +e.target.value, member_name: m?.name || f.member_name }))
-                }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
-                  <option value={0}>Select member</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </div>
-              {[
-                { key: 'meetings_1on1', label: '1-on-1' },
-                { key: 'referrals', label: 'Referrals' },
-                { key: 'closed_deals', label: 'Deals' },
-                { key: 'deal_amount', label: 'Amount (₪)' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">{f.label}</label>
-                  <input type="number" min={0}
-                    value={form[f.key as keyof typeof form]}
-                    onChange={e => setForm(prev => ({ ...prev, [f.key]: +e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={save} disabled={savingId !== null || !form.member_name}
-                className="px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50" style={{ background: RED }}>
-                {savingId !== null ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => { setEditingId(null); setAddingNew(false); setForm(emptyForm) }}
-                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">Cancel</button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Table */}
-      {selectedDate && entries.length > 0 && (
+      {/* Inline editable table */}
+      {selectedDate && !loading && (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
-                <th className="px-4 py-3 font-medium">Member</th>
-                <th className="px-4 py-3 font-medium text-center">1-on-1</th>
-                <th className="px-4 py-3 font-medium text-center">Referrals</th>
-                <th className="px-4 py-3 font-medium text-center">Deals</th>
-                <th className="px-4 py-3 font-medium text-right">Amount</th>
-                <th className="px-4 py-3 font-medium w-16" />
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map(e => (
-                <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{e.member_name}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{e.meetings_1on1}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{e.referrals}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{e.closed_deals}</td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-700">₪{e.deal_amount.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 justify-end">
-                      <button onClick={() => startEdit(e)} className="p-1 rounded hover:bg-gray-100 text-gray-400"><Edit2 size={13} /></button>
-                      <button onClick={() => del(e.id)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
-                    </div>
-                  </td>
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-700">{selectedDate}</span>
+            <span className="text-xs text-gray-400">· edit rows and save individually</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 font-medium">Member</th>
+                  <th className="px-2 py-3 font-medium text-center">1-on-1</th>
+                  <th className="px-2 py-3 font-medium text-center">Referrals</th>
+                  <th className="px-2 py-3 font-medium text-center">Deals</th>
+                  <th className="px-2 py-3 font-medium text-center">Amount ₪</th>
+                  <th className="px-2 py-3 w-16" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {members.map(m => {
+                  const row = rowMap[m.id]
+                  if (!row) return null
+                  return (
+                    <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{m.name}</td>
+                      <td className="px-2 py-2">
+                        <input type="number" min={0} value={row.meetings_1on1}
+                          onChange={e => setRowField(m.id, 'meetings_1on1', +e.target.value)}
+                          className={cn(inCls, 'w-14')} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min={0} value={row.referrals}
+                          onChange={e => setRowField(m.id, 'referrals', +e.target.value)}
+                          className={cn(inCls, 'w-14')} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min={0} value={row.closed_deals}
+                          onChange={e => setRowField(m.id, 'closed_deals', +e.target.value)}
+                          className={cn(inCls, 'w-14')} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input type="number" min={0} value={row.deal_amount}
+                          onChange={e => setRowField(m.id, 'deal_amount', +e.target.value)}
+                          className={cn(inCls, 'w-32')} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <button onClick={() => saveRow(m.id)} disabled={row.saving}
+                          className="px-3 h-9 rounded-lg text-white text-xs font-medium disabled:opacity-50 flex items-center"
+                          style={{ background: RED }}>
+                          {row.saving ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -1390,7 +1480,7 @@ function PresentationsSection() {
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
             className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
             <h3 className="font-semibold text-gray-800 mb-4">{editing ? 'Edit' : 'New Presentation'}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Meeting date</label>
                 <input value={form.meeting_date} onChange={e => setForm(f => ({ ...f, meeting_date: e.target.value }))}
@@ -1404,12 +1494,12 @@ function PresentationsSection() {
                   {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
               </div>
-              <div className="sm:col-span-2">
+              <div className="col-span-2">
                 <label className="text-xs font-medium text-gray-500 block mb-1">What they're presenting</label>
                 <input value={form.change_description} onChange={e => setForm(f => ({ ...f, change_description: e.target.value }))}
                   placeholder="New product / service…" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
               </div>
-              <div className="sm:col-span-2">
+              <div className="col-span-2">
                 <label className="text-xs font-medium text-gray-500 block mb-1">Notes</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none" />
@@ -1468,7 +1558,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [inviteForDashboard, setInviteForDashboard] = useState(false)
   const [nextMeeting, setNextMeeting] = useState('')
-  const [firstMember, setFirstMember] = useState<Member | null>(null)
+  const [allMembers, setAllMembers] = useState<Member[]>([])
 
   useEffect(() => {
     if (!authed) return
@@ -1477,7 +1567,7 @@ export default function App() {
       api('/api/members?active=true').then(r => r.json()),
     ]).then(([s, m]) => {
       setNextMeeting(s.date || '')
-      if (m.length) setFirstMember(m[0])
+      setAllMembers(m)
     })
   }, [authed])
 
@@ -1512,8 +1602,8 @@ export default function App() {
       </main>
       {/* Global invite modal triggered from dashboard */}
       <AnimatePresence>
-        {inviteForDashboard && firstMember && (
-          <InviteModal member={firstMember} nextMeeting={nextMeeting} onClose={() => setInviteForDashboard(false)} />
+        {inviteForDashboard && allMembers.length > 0 && (
+          <InviteModal members={allMembers} nextMeeting={nextMeeting} onClose={() => setInviteForDashboard(false)} />
         )}
       </AnimatePresence>
     </div>
