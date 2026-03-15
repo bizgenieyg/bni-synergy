@@ -262,21 +262,38 @@
       gap: 16px; margin-bottom: 20px;
     }
     .stat-card {
-      background: #fff; border-radius: 12px; padding: 18px 20px;
-      display: flex; align-items: center; gap: 16px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      position: relative; overflow: hidden;
+      background: #fff; border: 1px solid #f3f4f6;
+      border-radius: 24px; padding: 24px;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      transition: transform 0.2s;
     }
-    .stat-icon {
-      width: 48px; height: 48px; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    .stat-card:hover .stat-bg-icon {
+      transform: scale(1.1);
     }
-    .stat-icon svg { width: 22px; height: 22px; }
-    .red-icon    { background: #fee2e2; color: var(--red); }
-    .green-icon  { background: #d1fae5; color: #059669; }
-    .blue-icon   { background: #dbeafe; color: #2563eb; }
-    .yellow-icon { background: #fef3c7; color: #d97706; }
-    .stat-num { font-size: 26px; font-weight: 800; line-height: 1.1; }
-    .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .stat-bg-icon {
+      position: absolute; top: 0; right: 0; padding: 32px;
+      opacity: 0.05; transition: transform 0.2s; pointer-events: none;
+    }
+    .stat-bg-icon svg { width: 80px; height: 80px; display: block; }
+    .color-red { color: #dc2626; }
+    .color-blue { color: #2563eb; }
+    .color-green { color: #16a34a; }
+    .color-amber { color: #d97706; }
+    .color-purple { color: #9333ea; }
+    .stat-lbl {
+      position: relative; z-index: 10;
+      font-size: 14px; font-weight: 500; color: #6b7280; margin-bottom: 4px;
+    }
+    .stat-num {
+      position: relative; z-index: 10;
+      font-size: 30px; font-weight: 900; color: #111827; line-height: 1;
+    }
+    .stat-card.highlight {
+      background: #f0fdf4; border-color: #dcfce7;
+    }
+    .stat-card.highlight .stat-lbl { color: #16a34a; }
+    .stat-card.highlight .stat-num { color: #15803d; }
 
     /* ── Quick Actions ── */
     .quick-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
@@ -546,20 +563,24 @@
 
       <div class="stat-cards">
         <div class="stat-card">
-          <div class="stat-icon red-icon"><i data-lucide="users"></i></div>
-          <div><div class="stat-num" id="dashMembers">—</div><div class="stat-lbl">Членов группы</div></div>
+          <div class="stat-bg-icon color-red"><i data-lucide="users"></i></div>
+          <div class="stat-lbl">Членов группы</div>
+          <div class="stat-num" id="dashMembers">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon green-icon"><i data-lucide="user-check"></i></div>
-          <div><div class="stat-num" id="dashGuests">—</div><div class="stat-lbl">Гостей на встречу</div></div>
+          <div class="stat-bg-icon color-blue"><i data-lucide="user-plus"></i></div>
+          <div class="stat-lbl">Гостей на встречу</div>
+          <div class="stat-num" id="dashGuests">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon blue-icon"><i data-lucide="bar-chart-2"></i></div>
-          <div><div class="stat-num" id="dashVotes">—</div><div class="stat-lbl">Голосов</div></div>
+          <div class="stat-bg-icon color-purple"><i data-lucide="bar-chart-2"></i></div>
+          <div class="stat-lbl">Голосов</div>
+          <div class="stat-num" id="dashVotes">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon yellow-icon"><i data-lucide="calendar"></i></div>
-          <div><div class="stat-num" id="dashDate" style="font-size:18px">—</div><div class="stat-lbl">Следующая встреча</div></div>
+          <div class="stat-bg-icon color-amber"><i data-lucide="calendar"></i></div>
+          <div class="stat-lbl">Следующая встреча</div>
+          <div class="stat-num" id="dashDate" style="font-size:24px; white-space:nowrap;">—</div>
         </div>
       </div>
 
@@ -700,20 +721,24 @@
       <!-- Block A: Totals across all meetings -->
       <div class="stat-cards" style="margin-bottom:20px">
         <div class="stat-card">
-          <div class="stat-icon blue-icon"><i data-lucide="users"></i></div>
-          <div><div class="stat-num" id="gvTotal1on1">—</div><div class="stat-lbl">🤝 Встречи 1:1</div></div>
+          <div class="stat-bg-icon color-blue"><i data-lucide="users"></i></div>
+          <div class="stat-lbl">1-on-1s</div>
+          <div class="stat-num" id="gvTotal1on1">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon yellow-icon"><i data-lucide="file-text"></i></div>
-          <div><div class="stat-num" id="gvTotalRefs">—</div><div class="stat-lbl">📄 Направленные клиенты</div></div>
+          <div class="stat-bg-icon color-purple"><i data-lucide="arrow-right-left"></i></div>
+          <div class="stat-lbl">Направленные клиенты</div>
+          <div class="stat-num" id="gvTotalRefs">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon red-icon"><i data-lucide="lock"></i></div>
-          <div><div class="stat-num" id="gvTotalDeals">—</div><div class="stat-lbl">🔐 Закрытые сделки</div></div>
+          <div class="stat-bg-icon color-amber"><i data-lucide="briefcase"></i></div>
+          <div class="stat-lbl">Закрытые сделки</div>
+          <div class="stat-num" id="gvTotalDeals">—</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon green-icon"><i data-lucide="trending-up"></i></div>
-          <div><div class="stat-num" id="gvTotalAmount" style="color:#16a34a;font-size:20px">—</div><div class="stat-lbl">💰 Общая сумма сделок</div></div>
+        <div class="stat-card highlight">
+          <div class="stat-bg-icon color-green"><i data-lucide="landmark"></i></div>
+          <div class="stat-lbl">Общая сумма сделок</div>
+          <div class="stat-num" id="gvTotalAmount">—</div>
         </div>
       </div>
 
