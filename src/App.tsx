@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import './i18n'
+import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard, Users, Vote, ChevronRight, ChevronLeft, LogOut,
   Plus, Trash2, Edit2, Check, X, Search, Download, Send, Phone,
@@ -135,6 +137,7 @@ function waPhone(phone: string) {
 // ─── Login ──────────────────────────────────────────────────────────────────
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -150,8 +153,8 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       })
       const data = await res.json()
       if (res.ok && data.token) { localStorage.setItem('admin_token', data.token); onLogin() }
-      else setError(data.error || 'Wrong password')
-    } catch { setError('Connection error') }
+      else setError(data.error || t('login.wrongPassword'))
+    } catch { setError(t('login.connectionError')) }
     setLoading(false)
   }
 
@@ -164,13 +167,13 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         </div>
         <form onSubmit={submit} className="space-y-4">
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="Password" autoFocus
+            placeholder={t('login.password')} autoFocus
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100" />
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <button type="submit" disabled={loading || !password}
             className="w-full py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
             style={{ background: RED }}>
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? t('login.signingIn') : t('login.signIn')}
           </button>
         </form>
       </div>
@@ -180,19 +183,55 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
-const NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
-  { id: 'dashboard',     label: 'Dashboard',     icon: <LayoutDashboard size={18} /> },
-  { id: 'guests',        label: 'Guests',         icon: <Users size={18} /> },
-  { id: 'members',       label: 'Members',        icon: <UserCheck size={18} /> },
-  { id: 'voting',        label: 'Voting',         icon: <Vote size={18} /> },
-  { id: 'group-value',   label: 'Group Value',    icon: <TrendingUp size={18} /> },
-  { id: 'presentations', label: 'Presentations',  icon: <Presentation size={18} /> },
-]
+// ─── Language Switcher ───────────────────────────────────────────────────────
+
+function LangSwitcher() {
+  const { i18n } = useTranslation()
+  const LANGS = [
+    { code: 'en', label: 'EN' },
+    { code: 'ru', label: 'RU' },
+    { code: 'he', label: 'HE' },
+  ]
+  const changeLang = (lang: string) => {
+    i18n.changeLanguage(lang)
+    localStorage.setItem('lang', lang)
+    document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr'
+    document.documentElement.lang = lang
+  }
+  return (
+    <div className="flex gap-1">
+      {LANGS.map(l => (
+        <button key={l.code} onClick={() => changeLang(l.code)}
+          className={cn('text-xs px-2.5 py-1 rounded-lg font-medium transition-colors',
+            i18n.language === l.code ? 'text-white' : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white')}
+          style={i18n.language === l.code ? { background: RED } : {}}>
+          {l.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 function Sidebar({ section, collapsed, onNav, onCollapse, onLogout }:
   { section: Section; collapsed: boolean; onNav: (s: Section) => void; onCollapse: () => void; onLogout: () => void }) {
+  const { t, i18n } = useTranslation()
+  const isRtl = i18n.language === 'he'
+
+  const NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
+    { id: 'dashboard',     label: 'Dashboard',              icon: <LayoutDashboard size={18} /> },
+    { id: 'guests',        label: t('nav.guests'),           icon: <Users size={18} /> },
+    { id: 'members',       label: t('nav.members'),          icon: <UserCheck size={18} /> },
+    { id: 'voting',        label: t('nav.voting'),           icon: <Vote size={18} /> },
+    { id: 'group-value',   label: 'Group Value',             icon: <TrendingUp size={18} /> },
+    { id: 'presentations', label: t('nav.presentations'),    icon: <Presentation size={18} /> },
+  ]
+
   return (
-    <div className={cn('h-screen bg-gray-900 text-white flex flex-col fixed left-0 top-0 z-50 transition-all duration-300', collapsed ? 'w-16' : 'w-60')}>
+    <div className={cn('h-screen bg-gray-900 text-white flex flex-col fixed top-0 z-50 transition-all duration-300',
+      isRtl ? 'right-0' : 'left-0',
+      collapsed ? 'w-16' : 'w-60')}>
       <div className="px-4 py-5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
         {!collapsed && (
           <div>
@@ -201,7 +240,10 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout }:
           </div>
         )}
         <button onClick={onCollapse} className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 ml-auto">
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {collapsed
+            ? (isRtl ? <ChevronLeft size={16} /> : <ChevronRight size={16} />)
+            : (isRtl ? <ChevronRight size={16} /> : <ChevronLeft size={16} />)
+          }
         </button>
       </div>
       <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
@@ -217,11 +259,14 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout }:
           </button>
         ))}
       </nav>
-      <div className="flex-shrink-0 p-3 border-t border-white/10">
-        <button onClick={onLogout} title={collapsed ? 'Logout' : undefined}
+      <div className="flex-shrink-0 p-3 border-t border-white/10 space-y-1">
+        <div className={cn('flex items-center px-3 py-2', collapsed ? 'justify-center' : 'gap-3')}>
+          <LangSwitcher />
+        </div>
+        <button onClick={onLogout} title={collapsed ? t('nav.logout') : undefined}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 text-sm">
           <LogOut size={16} className="flex-shrink-0" />
-          {!collapsed && <span>Logout</span>}
+          {!collapsed && <span>{t('nav.logout')}</span>}
         </button>
       </div>
     </div>
@@ -365,7 +410,7 @@ function DatePickerInput({ value, onChange, placeholder = 'DD/MM' }:
 
 function MemberModal({ member, onClose, onSaved }:
   { member: Member | null; onClose: () => void; onSaved: (m: Member) => void }) {
-
+  const { t } = useTranslation()
   const isNew = member === null
   const [form, setForm] = useState({
     name: member?.name ?? '',
@@ -452,7 +497,7 @@ function MemberModal({ member, onClose, onSaved }:
             onClick={() => setForm(f => ({ ...f, active: f.active ? 0 : 1 }))}>
             <div className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all', form.active ? 'left-4' : 'left-0.5')} />
           </div>
-          <span className="text-sm text-gray-600">{form.active ? 'Active' : 'Inactive'}</span>
+          <span className="text-sm text-gray-600">{form.active ? t('common.active') : t('common.inactive')}</span>
         </label>
       ) : (
         <input value={form[key] as string}
@@ -472,7 +517,7 @@ function MemberModal({ member, onClose, onSaved }:
         onClick={e => e.stopPropagation()}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-5">
-            <h3 className="font-semibold text-gray-900 text-lg">{isNew ? 'New Member' : 'Edit Member'}</h3>
+            <h3 className="font-semibold text-gray-900 text-lg">{isNew ? t('memberModal.newTitle') : t('memberModal.editTitle')}</h3>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
           </div>
 
@@ -491,34 +536,34 @@ function MemberModal({ member, onClose, onSaved }:
               </button>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-700">Profile Photo</p>
+              <p className="text-sm font-medium text-gray-700">{t('memberModal.profilePhoto')}</p>
               <button onClick={() => fileRef.current?.click()} className="text-xs text-red-500 hover:underline mt-0.5">
-                {photoPreview ? 'Change photo' : 'Upload photo'}
+                {photoPreview ? t('memberModal.changePhoto') : t('memberModal.uploadPhoto')}
               </button>
             </div>
             <input ref={fileRef} type="file" accept="image/*" onChange={onPhotoChange} className="hidden" />
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-5">
-            {field('name', 'Name *', 'Ivan Ivanov')}
-            {field('profession', 'Profession', 'Accountant')}
-            {field('phone', 'Phone', '0501234567')}
-            {field('birthday', 'Birthday (DD/MM)', '15/06')}
-            <div className="col-span-2">{field('active', 'Status')}</div>
+            {field('name', t('memberModal.nameLabel'), t('memberModal.namePlaceholder'))}
+            {field('profession', t('memberModal.professionLabel'), t('memberModal.professionPlaceholder'))}
+            {field('phone', t('memberModal.phoneLabel'), t('memberModal.phonePlaceholder'))}
+            {field('birthday', t('memberModal.birthdayLabel'), t('memberModal.birthdayPlaceholder'))}
+            <div className="col-span-2">{field('active', t('memberModal.statusLabel'))}</div>
           </div>
 
           <div className="border-t border-gray-100 pt-4 mb-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Social Links</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('memberModal.socialLinks')}</p>
               {!showAddSocial && (
                 <button onClick={() => setShowAddSocial(true)}
                   className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                  <Plus size={12} /> Add Social
+                  <Plus size={12} /> {t('memberModal.addSocial')}
                 </button>
               )}
             </div>
             {socials.length === 0 && !showAddSocial && (
-              <p className="text-xs text-gray-400">No social links yet</p>
+              <p className="text-xs text-gray-400">{t('memberModal.noSocials')}</p>
             )}
             <div className="space-y-2">
               {socials.map((s, i) => (
@@ -541,7 +586,7 @@ function MemberModal({ member, onClose, onSaved }:
                   {SOCIAL_PLATFORMS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
                 <input value={addingUrl} onChange={e => setAddingUrl(e.target.value)}
-                  placeholder="https://…"
+                  placeholder={t('memberModal.urlPlaceholder')}
                   className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
                 <button onClick={() => {
                   if (addingUrl.trim()) {
@@ -564,10 +609,10 @@ function MemberModal({ member, onClose, onSaved }:
             <button onClick={save} disabled={saving || !form.name}
               className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-50"
               style={{ background: RED }}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('common.saving') : t('common.save')}
             </button>
             <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -580,6 +625,7 @@ function MemberModal({ member, onClose, onSaved }:
 
 function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   { members: Member[]; defaultMember?: Member; nextMeeting: string; onClose: () => void }) {
+  const { t } = useTranslation()
   const [selectedId, setSelectedId] = useState<number>(defaultMember?.id ?? members[0]?.id ?? 0)
   const [date, setDate] = useState(nextMeeting)
   const [type, setType] = useState<'guest' | 'substitute'>('guest')
@@ -598,38 +644,38 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
         className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900">Invite Link</h3>
+          <h3 className="font-semibold text-gray-900">{t('invite.title')}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
         </div>
 
         <div className="space-y-3 mb-4">
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Member</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">{t('invite.memberLabel')}</label>
             <select value={selectedId} onChange={e => setSelectedId(+e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
               {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Meeting date</label>
-            <input value={date} onChange={e => setDate(e.target.value)} placeholder="DD/MM/YY"
+            <label className="text-xs font-medium text-gray-500 block mb-1">{t('invite.meetingDateLabel')}</label>
+            <input value={date} onChange={e => setDate(e.target.value)} placeholder={t('invite.meetingDatePlaceholder')}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
           </div>
         </div>
 
         <div className="flex gap-2 mb-4">
-          {(['guest', 'substitute'] as const).map(t => (
-            <button key={t} onClick={() => setType(t)}
-              className={cn('flex-1 py-2 rounded-xl text-sm font-medium', type === t ? 'text-white' : 'bg-gray-100 text-gray-600')}
-              style={type === t ? { background: RED } : {}}>
-              {t === 'guest' ? 'Guest' : 'Substitute'}
+          {(['guest', 'substitute'] as const).map(gtype => (
+            <button key={gtype} onClick={() => setType(gtype)}
+              className={cn('flex-1 py-2 rounded-xl text-sm font-medium', type === gtype ? 'text-white' : 'bg-gray-100 text-gray-600')}
+              style={type === gtype ? { background: RED } : {}}>
+              {gtype === 'guest' ? t('invite.guest') : t('invite.substitute')}
             </button>
           ))}
         </div>
         <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-4">{link || '—'}</div>
         <div className="flex gap-2">
-          <button onClick={copy} disabled={!link} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium disabled:opacity-40">Copy</button>
-          <button onClick={wa} disabled={!link} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40" style={{ background: '#25D366' }}>WhatsApp</button>
+          <button onClick={copy} disabled={!link} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium disabled:opacity-40">{t('invite.copy')}</button>
+          <button onClick={wa} disabled={!link} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40" style={{ background: '#25D366' }}>{t('invite.whatsapp')}</button>
         </div>
       </motion.div>
     </motion.div>
@@ -639,6 +685,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
 // ─── Birthday mini-card (used in dashboard + members) ───────────────────────
 
 function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
+  const { t } = useTranslation()
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const wish = async () => {
@@ -653,7 +700,7 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{member.name}</p>
         <p className="text-xs text-gray-400">{member.birthday} · <span className={cn(member.daysUntil === 0 ? 'text-amber-500 font-medium' : 'text-gray-400')}>
-          {member.daysUntil === 0 ? '🎉 Today!' : `in ${member.daysUntil}d`}
+          {member.daysUntil === 0 ? t('dashboard.today') : t('dashboard.inDays', { n: member.daysUntil })}
         </span></p>
       </div>
       {phone && (
@@ -674,6 +721,7 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
 // ─── Dashboard ──────────────────────────────────────────────────────────────
 
 function Dashboard({ onInvite }: { onInvite: () => void }) {
+  const { t } = useTranslation()
   const [stats, setStats] = useState<GuestStat[]>([])
   const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null)
   const [results, setResults] = useState<VoteResult[]>([])
@@ -741,17 +789,17 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
         <button onClick={onInvite}
           className="px-4 py-2 rounded-xl text-white text-sm font-semibold flex items-center gap-2"
           style={{ background: RED }}>
-          <Plus size={15} /> Invite Guest
+          <Plus size={15} /> {t('dashboard.inviteGuest')}
         </button>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {([
-          { label: 'Members',     value: memberCount,                         icon: <UserCheck size={18} />,    color: 'bg-blue-50 text-blue-600' },
-          { label: 'Guests',      value: guestCount.count,                    icon: <Users size={18} />,        color: 'bg-purple-50 text-purple-600' },
-          { label: 'Group Value', value: `₪${gvTotal.toLocaleString()}`,      icon: <DollarSign size={18} />,   color: 'bg-green-50 text-green-600' },
-          { label: 'Attendance',  value: '94%',                               icon: <CheckCircle2 size={18} />, color: 'bg-amber-50 text-amber-600' },
+          { label: t('dashboard.members'),    value: memberCount,                         icon: <UserCheck size={18} />,    color: 'bg-blue-50 text-blue-600' },
+          { label: t('dashboard.guests'),     value: guestCount.count,                    icon: <Users size={18} />,        color: 'bg-purple-50 text-purple-600' },
+          { label: 'Group Value',             value: `₪${gvTotal.toLocaleString()}`,      icon: <DollarSign size={18} />,   color: 'bg-green-50 text-green-600' },
+          { label: t('dashboard.attendance'), value: '94%',                               icon: <CheckCircle2 size={18} />, color: 'bg-amber-50 text-amber-600' },
         ] as { label: string; value: string | number; icon: React.ReactNode; color: string }[]).map(c => (
           <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
             <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
@@ -767,12 +815,12 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-800">
-              Guests · <span className="text-gray-400 font-normal text-sm">{guestCount.date}</span>
+              {t('dashboard.latestGuests')} · <span className="text-gray-400 font-normal text-sm">{guestCount.date}</span>
             </h2>
-            <span className="text-sm font-medium text-gray-900">{guestCount.count} total</span>
+            <span className="text-sm font-medium text-gray-900">{guestCount.count} {t('dashboard.total')}</span>
           </div>
           {recentGuests.length === 0 ? (
-            <p className="text-sm text-gray-400 py-4 text-center">No guests yet</p>
+            <p className="text-sm text-gray-400 py-4 text-center">{t('dashboard.noGuests')}</p>
           ) : (
             <table className="w-full text-sm">
               <tbody>
@@ -782,8 +830,8 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
                     <td className="py-2 text-gray-400 text-xs">{g.specialty}</td>
                     <td className="py-2 text-right">
                       {g.paid
-                        ? <span className="text-green-500 text-xs font-medium">✓ Paid</span>
-                        : <span className="text-gray-300 text-xs">Unpaid</span>}
+                        ? <span className="text-green-500 text-xs font-medium">{t('dashboard.paid')}</span>
+                        : <span className="text-gray-300 text-xs">{t('dashboard.unpaid')}</span>}
                     </td>
                   </tr>
                 ))}
@@ -793,7 +841,7 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
           {/* chart */}
           {chartData.length > 0 && (
             <div className="mt-4">
-              <p className="text-xs text-gray-400 mb-2">Last meetings</p>
+              <p className="text-xs text-gray-400 mb-2">{t('dashboard.lastMeetings')}</p>
               <ResponsiveContainer width="100%" height={90}>
                 <BarChart data={chartData} barSize={10}>
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} />
@@ -808,9 +856,9 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
 
         {/* Birthdays */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-3">🎂 Birthdays · next 14 days</h2>
+          <h2 className="font-semibold text-gray-800 mb-3">{t('dashboard.upcomingBirthdays')}</h2>
           {birthdays.length === 0
-            ? <p className="text-sm text-gray-400 py-4 text-center">No upcoming birthdays</p>
+            ? <p className="text-sm text-gray-400 py-4 text-center">{t('dashboard.noUpcomingBirthdays')}</p>
             : <div>{birthdays.map(m => <BirthdayRow key={m.id} member={m} />)}</div>
           }
         </div>
@@ -819,12 +867,12 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
       {/* Row 3: Voting */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex items-center gap-4 flex-wrap">
-          <h2 className="font-semibold text-gray-800">Voting</h2>
+          <h2 className="font-semibold text-gray-800">{t('dashboard.voting')}</h2>
           {votingStatus && (
             <div className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold',
               votingStatus.open ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500')}>
               <div className={cn('w-2 h-2 rounded-full', votingStatus.open ? 'bg-green-500 animate-pulse' : 'bg-gray-400')} />
-              {votingStatus.open ? 'Open' : 'Closed'} · {votingStatus.voteCount}/{votingStatus.expected}
+              {votingStatus.open ? t('dashboard.open') : t('dashboard.closed')} · {votingStatus.voteCount}/{votingStatus.expected}
             </div>
           )}
           <div className="ml-auto flex gap-2">
@@ -832,11 +880,11 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
               ? <button onClick={openVoting} disabled={loading}
                   className="px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50"
                   style={{ background: RED }}>
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : 'Open Voting'}
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : t('dashboard.openVoting')}
                 </button>
               : <button onClick={closeVoting} disabled={loading}
                   className="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium disabled:opacity-50">
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : 'Close Voting'}
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : t('dashboard.closeVoting')}
                 </button>
             }
           </div>
@@ -848,7 +896,7 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
                 i === 0 ? 'bg-amber-50' : 'bg-gray-50')}>
                 <p className="text-xs text-gray-400 mb-0.5">{i === 0 ? '🏆' : `#${i+1}`}</p>
                 <p className="text-sm font-semibold text-gray-800 truncate">{r.candidateName}</p>
-                <p className="text-xs font-bold mt-0.5" style={i === 0 ? { color: '#D97706' } : { color: '#6B7280' }}>{r.votes} votes</p>
+                <p className="text-xs font-bold mt-0.5" style={i === 0 ? { color: '#D97706' } : { color: '#6B7280' }}>{r.votes} {t('dashboard.votes')}</p>
               </div>
             ))}
           </div>
@@ -861,6 +909,7 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
 // ─── Guests Section ──────────────────────────────────────────────────────────
 
 function GuestsSection() {
+  const { t } = useTranslation()
   const [meetings, setMeetings] = useState<string[]>([])
   const [selectedDate, setSelectedDate] = useState('')
   const [guests, setGuests] = useState<Guest[]>([])
@@ -908,7 +957,7 @@ function GuestsSection() {
     try {
       const r = await api('/api/whatsapp/send-catalog', { method: 'POST', body: JSON.stringify({ meeting_date: selectedDate }) })
       const { sent } = await r.json()
-      setToastMsg(`Каталог отправлен ${sent} гостям`)
+      setToastMsg(t('guests.catalogSent', { n: sent }))
       setTimeout(() => setToastMsg(''), 4000)
     } finally {
       setSendingCatalog(false)
@@ -923,18 +972,18 @@ function GuestsSection() {
         </div>
       )}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Guests</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('guests.title')}</h1>
         <div className="flex gap-2">
           <button onClick={sendCatalog} disabled={sendingCatalog || !selectedDate}
             className="text-xs px-3 py-2 rounded-xl border border-green-200 bg-white text-green-600 hover:border-green-300 flex items-center gap-1.5 disabled:opacity-50">
             {sendingCatalog ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            Отправить каталог
+            {t('guests.sendCatalog')}
           </button>
           <a href="/api/pdf/list" target="_blank" className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-            <Download size={13} /> PDF list
+            <Download size={13} /> {t('guests.exportPdfList')}
           </a>
           <a href="/api/pdf/badges" target="_blank" className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-            <Download size={13} /> Badges
+            <Download size={13} /> {t('guests.exportPdfBadges')}
           </a>
         </div>
       </div>
@@ -945,22 +994,22 @@ function GuestsSection() {
             className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
               selectedDate === d ? 'text-white' : 'bg-white text-gray-600 border border-gray-200')}
             style={selectedDate === d ? { background: RED } : {}}>
-            {d}{d === nextMeeting && <span className="ml-1 text-xs opacity-70">(next)</span>}
+            {d}{d === nextMeeting && <span className="ml-1 text-xs opacity-70">{t('guests.next')}</span>}
           </button>
         ))}
       </div>
 
       {selectedDate && (
         <div className="flex gap-3 text-sm text-gray-600">
-          <span className="font-semibold text-gray-900">{guests.length}</span> guests ·
-          <span className="text-green-600 font-semibold">{paid}</span> paid ·
-          <span className="text-gray-400">{guests.length - paid}</span> unpaid
+          <span className="font-semibold text-gray-900">{guests.length}</span> {t('guests.guests')} ·
+          <span className="text-green-600 font-semibold">{paid}</span> {t('guests.paid')} ·
+          <span className="text-gray-400">{guests.length - paid}</span> {t('guests.unpaid')}
         </div>
       )}
 
       <div className="relative">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search guests…"
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('guests.searchPlaceholder')}
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 bg-white" />
       </div>
 
@@ -968,17 +1017,17 @@ function GuestsSection() {
         {loading ? (
           <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">{search ? 'Nothing found' : 'No guests'}</div>
+          <div className="text-center py-10 text-gray-400 text-sm">{search ? t('guests.nothingFound') : t('guests.noGuests')}</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 font-medium hidden md:table-cell">Specialty</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Invited by</th>
-                <th className="px-4 py-3 font-medium">WA</th>
-                <th className="px-4 py-3 font-medium">Payment</th>
+                <th className="px-4 py-3 font-medium">{t('guests.colName')}</th>
+                <th className="px-4 py-3 font-medium">{t('guests.colPhone')}</th>
+                <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
+                <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('guests.colInvitedBy')}</th>
+                <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
+                <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
               </tr>
             </thead>
             <tbody>
@@ -994,13 +1043,13 @@ function GuestsSection() {
                   <td className="px-4 py-3">
                     <button onClick={() => toggleWa(g.id)}
                       className={cn('px-2 py-1 rounded-full text-xs font-medium', g.wa_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
-                      {g.wa_enabled ? 'On' : 'Off'}
+                      {g.wa_enabled ? t('guests.waOn') : t('guests.waOff')}
                     </button>
                   </td>
                   <td className="px-4 py-3">
                     {g.paid
-                      ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> Paid</span>
-                      : <button onClick={() => markPaid(g.id)} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium">Mark paid</button>}
+                      ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> {t('guests.paidLabel')}</span>
+                      : <button onClick={() => markPaid(g.id)} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium">{t('guests.markPaid')}</button>}
                   </td>
                 </tr>
               ))}
@@ -1015,6 +1064,7 @@ function GuestsSection() {
 // ─── Members Section ─────────────────────────────────────────────────────────
 
 function MembersSection() {
+  const { t } = useTranslation()
   const [members, setMembers] = useState<Member[]>([])
   const [memberSocials, setMemberSocials] = useState<Record<number, MemberSocial[]>>({})
   const [search, setSearch] = useState('')
@@ -1072,21 +1122,21 @@ function MembersSection() {
       {/* Birthdays block */}
       {birthdays.length > 0 && (
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-3">🎂 Upcoming Birthdays (14 days)</h2>
+          <h2 className="font-semibold text-gray-800 mb-3">{t('members.upcomingBirthdays')}</h2>
           {birthdays.map(m => <BirthdayRow key={m.id} member={m} />)}
         </div>
       )}
 
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Members</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('members.title')}</h1>
         <div className="flex gap-2">
           <a href="/api/pdf/members" target="_blank"
             className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-            <Download size={13} /> PDF catalog
+            <Download size={13} /> {t('members.pdfCatalog')}
           </a>
           <button onClick={() => setEditingMember(null)}
             className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5" style={{ background: RED }}>
-            <Plus size={14} /> Add Member
+            <Plus size={14} /> {t('members.addMember')}
           </button>
         </div>
       </div>
@@ -1094,12 +1144,12 @@ function MembersSection() {
       <div className="flex gap-3 items-center">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search members…"
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('members.searchPlaceholder')}
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 bg-white" />
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded" />
-          Show inactive
+          {t('members.showInactive')}
         </label>
       </div>
 
@@ -1111,12 +1161,12 @@ function MembersSection() {
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
                 <th className="px-4 py-3 font-medium w-10" />
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium hidden md:table-cell">Profession</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Phone</th>
-                <th className="px-4 py-3 font-medium hidden xl:table-cell">Birthday</th>
-                <th className="px-4 py-3 font-medium">Socials</th>
-                <th className="px-4 py-3 font-medium w-20">Actions</th>
+                <th className="px-4 py-3 font-medium">{t('members.colName')}</th>
+                <th className="px-4 py-3 font-medium hidden md:table-cell">{t('members.colProfession')}</th>
+                <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('members.colPhone')}</th>
+                <th className="px-4 py-3 font-medium hidden xl:table-cell">{t('members.colBirthday')}</th>
+                <th className="px-4 py-3 font-medium">{t('members.colSocials')}</th>
+                <th className="px-4 py-3 font-medium w-20">{t('members.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1147,17 +1197,17 @@ function MembersSection() {
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1">
                       <button onClick={() => setEditingMember(m)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Edit">
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title={t('members.editTitle')}>
                         <Edit2 size={14} />
                       </button>
                       <button onClick={() => setInviteModal(m)}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Invite guest">
+                        className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600" title={t('members.inviteTitle')}>
                         <UserCheck size={14} />
                       </button>
                       <button onClick={() => toggleActive(m)}
                         className={cn('p-1.5 rounded-lg text-gray-400 transition-colors',
                           m.active ? 'hover:bg-red-50 hover:text-red-500' : 'hover:bg-green-50 hover:text-green-500')}
-                        title={m.active ? 'Deactivate' : 'Activate'}>
+                        title={m.active ? t('members.deactivate') : t('members.activate')}>
                         {m.active ? <Trash2 size={14} /> : <RefreshCw size={14} />}
                       </button>
                     </div>
@@ -1167,7 +1217,7 @@ function MembersSection() {
             </tbody>
           </table>
           {displayed.length === 0 && (
-            <div className="text-center py-10 text-gray-400 text-sm">No members found</div>
+            <div className="text-center py-10 text-gray-400 text-sm">{t('members.noMembers')}</div>
           )}
         </div>
       )}
@@ -1191,6 +1241,7 @@ function MembersSection() {
 // ─── Voting Section ──────────────────────────────────────────────────────────
 
 function VotingSection() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<VotingStatus | null>(null)
   const [results, setResults] = useState<VoteResult[]>([])
   const [winners, setWinners] = useState<VoteWinner[]>([])
@@ -1226,22 +1277,22 @@ function VotingSection() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold text-gray-900">Voting</h1>
+      <h1 className="text-2xl font-bold text-gray-900">{t('voting.title')}</h1>
       <div className="bg-white rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-4 flex-wrap">
           <div className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold',
             status?.open ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600')}>
             <div className={cn('w-2.5 h-2.5 rounded-full', status?.open ? 'bg-green-500 animate-pulse' : 'bg-gray-400')} />
-            {status?.open ? 'Voting is open' : 'Voting is closed'}
+            {status?.open ? t('voting.isOpen') : t('voting.isClosed')}
           </div>
           {status && <div className="text-sm text-gray-500"><span className="font-semibold text-gray-900">{status.voteCount}</span> / {status.expected} votes</div>}
           <div className="flex gap-2 ml-auto">
             {!status?.open
               ? <button onClick={openVoting} disabled={loading} className="px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50" style={{ background: RED }}>
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : 'Open Voting'}
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : t('voting.openVoting')}
                 </button>
               : <button onClick={closeVoting} disabled={loading} className="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-medium disabled:opacity-50">
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : 'Close Voting'}
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : t('voting.closeVoting')}
                 </button>
             }
           </div>
@@ -1249,9 +1300,12 @@ function VotingSection() {
       </div>
       {results.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-0.5">Current Results</h2>
+          <h2 className="font-semibold text-gray-800 mb-0.5">{t('voting.currentResults')}</h2>
           <p className="text-xs text-gray-400 mb-4">
-            {status?.open ? 'Обновляется каждые 10 сек · ' : ''}Последнее обновление: {lastUpdated?.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—'}
+            {status?.open
+              ? t('voting.updatesEveryWithLast', { time: lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—' })
+              : t('voting.lastUpdated', { time: lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—' })
+            }
           </p>
           <div className="space-y-3">
             {results.map((r, i) => (
@@ -1277,7 +1331,7 @@ function VotingSection() {
 
       {winners.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-4">🏆 Recent Winners</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t('voting.recentWinners')}</h2>
           <div className="space-y-3">
             {winners.map((w, i) => (
               <div key={w.date} className="flex items-center gap-3">
@@ -1301,6 +1355,7 @@ function VotingSection() {
 // ─── Group Value Section ─────────────────────────────────────────────────────
 
 function GroupValueSection() {
+  const { t } = useTranslation()
   const [period, setPeriod] = useState<Period>('all')
   const [totals, setTotals] = useState<StatTotals | null>(null)
   const [history, setHistory] = useState<MeetingStatEntry[]>([])
@@ -1380,8 +1435,8 @@ function GroupValueSection() {
   }
 
   const PERIODS: { id: Period; label: string }[] = [
-    { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' },
-    { id: 'quarter', label: 'Quarter' }, { id: 'all', label: 'All time' },
+    { id: 'week', label: t('groupValue.week') }, { id: 'month', label: t('groupValue.month') },
+    { id: 'quarter', label: t('groupValue.quarter') }, { id: 'all', label: t('groupValue.allTime') },
   ]
 
   const Counter = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
@@ -1402,6 +1457,7 @@ function GroupValueSection() {
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-gray-900">Group Value</h1>
 
+
       {/* Period filter */}
       <div className="flex gap-1.5">
         {PERIODS.map(p => (
@@ -1418,10 +1474,10 @@ function GroupValueSection() {
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {([
-            { label: '1-on-1',       value: totals.total_1on1,                                 icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
-            { label: 'Referrals',    value: totals.total_referrals,                            icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
-            { label: 'Closed Deals', value: totals.total_deals,                                icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
-            { label: 'Total Amount', value: `₪${(totals.total_amount||0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+            { label: t('groupValue.oneOnOne'),    value: totals.total_1on1,                                 icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
+            { label: t('groupValue.referrals'),   value: totals.total_referrals,                            icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
+            { label: t('groupValue.closedDeals'), value: totals.total_deals,                                icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
+            { label: t('groupValue.totalAmount'), value: `₪${(totals.total_amount||0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           ] as { label: string; value: string|number; icon: React.ReactNode; color: string }[]).map(c => (
             <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
               <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
@@ -1435,9 +1491,9 @@ function GroupValueSection() {
       {/* ── Calculator ── */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <h2 className="font-semibold text-gray-800">Meeting Entry</h2>
+          <h2 className="font-semibold text-gray-800">{t('groupValue.meetingEntry')}</h2>
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-gray-500">Date:</span>
+            <span className="text-xs text-gray-500">{t('groupValue.date')}</span>
             <DatePickerInput value={meetingDate} onChange={setMeetingDate} />
           </div>
         </div>
@@ -1445,12 +1501,12 @@ function GroupValueSection() {
         {/* Input row — 4 equal columns */}
         <div className="grid grid-cols-4 gap-3 mb-4">
           {[
-            { label: '1-on-1',   node: <Counter value={inp1on1} onChange={setInp1on1} /> },
-            { label: 'Referrals', node: <Counter value={inpRef}   onChange={setInpRef} /> },
-            { label: 'Deals',    node: <Counter value={inpDeals} onChange={setInpDeals} /> },
-            { label: 'Amount ₪', node:
+            { label: t('groupValue.oneOnOne'),  node: <Counter value={inp1on1} onChange={setInp1on1} /> },
+            { label: t('groupValue.referrals'), node: <Counter value={inpRef}   onChange={setInpRef} /> },
+            { label: t('groupValue.deals'),     node: <Counter value={inpDeals} onChange={setInpDeals} /> },
+            { label: t('groupValue.amountLabel'), node:
               <input value={inpAmounts} onChange={e => { const v = e.target.value; setInpAmounts(v); const parsed = v.split(',').map(s => Number(s.trim())).filter(n => n > 0 && !isNaN(n)); setInpDeals(parsed.length) }}
-                placeholder="5000, 3000" onKeyDown={e => e.key === 'Enter' && addRow()}
+                placeholder={t('groupValue.amountsPlaceholder')} onKeyDown={e => e.key === 'Enter' && addRow()}
                 className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" />
             },
           ].map(col => (
@@ -1463,7 +1519,7 @@ function GroupValueSection() {
 
         <button onClick={addRow}
           className="w-full py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 text-sm hover:border-red-300 hover:text-red-500 transition-colors flex items-center justify-center gap-2">
-          <Plus size={15} /> Add Row
+          <Plus size={15} /> {t('groupValue.addRow')}
         </button>
       </div>
 
@@ -1474,10 +1530,10 @@ function GroupValueSection() {
             <thead>
               <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
                 <th className="px-4 py-3 font-medium text-left">#</th>
-                <th className="px-4 py-3 font-medium text-center">1-on-1</th>
-                <th className="px-4 py-3 font-medium text-center">Referrals</th>
-                <th className="px-4 py-3 font-medium text-center">Deals</th>
-                <th className="px-4 py-3 font-medium text-right">Amount ₪</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.oneOnOne')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.referrals')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.deals')}</th>
+                <th className="px-4 py-3 font-medium text-right">{t('groupValue.amountLabel')}</th>
                 <th className="px-3 py-3 w-10" />
               </tr>
             </thead>
@@ -1498,7 +1554,7 @@ function GroupValueSection() {
               ))}
               {/* ИТОГО row */}
               <tr className="bg-gray-50 text-sm font-semibold text-gray-900 border-t border-gray-100">
-                <td className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wide">Total</td>
+                <td className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wide">{t('groupValue.total')}</td>
                 <td className="px-4 py-3 text-center">{pt.meetings_1on1}</td>
                 <td className="px-4 py-3 text-center">{pt.referrals}</td>
                 <td className="px-4 py-3 text-center">{pt.closed_deals}</td>
@@ -1511,7 +1567,7 @@ function GroupValueSection() {
             <button onClick={openModal} disabled={!meetingDate || !pending.length}
               className="w-full py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
               style={{ background: RED }}>
-              🎉 Calculate & Save
+              {t('groupValue.calculateSave')}
             </button>
           </div>
         </div>
@@ -1521,16 +1577,16 @@ function GroupValueSection() {
       {history.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-800">History</h2>
+            <h2 className="font-semibold text-gray-800">{t('groupValue.history')}</h2>
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                <th className="px-4 py-3 font-medium text-left">Date</th>
-                <th className="px-4 py-3 font-medium text-center">1-on-1</th>
-                <th className="px-4 py-3 font-medium text-center">Referrals</th>
-                <th className="px-4 py-3 font-medium text-center">Deals</th>
-                <th className="px-4 py-3 font-medium text-right">Amount ₪</th>
+                <th className="px-4 py-3 font-medium text-left">{t('common.date')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.oneOnOne')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.referrals')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.deals')}</th>
+                <th className="px-4 py-3 font-medium text-right">{t('groupValue.amountLabel')}</th>
                 <th className="px-3 py-3 w-10" />
               </tr>
             </thead>
@@ -1564,15 +1620,15 @@ function GroupValueSection() {
               className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
               <div className="text-center mb-5">
                 <div className="text-4xl mb-2">🎉</div>
-                <h3 className="text-lg font-bold text-gray-900">Meeting Summary</h3>
+                <h3 className="text-lg font-bold text-gray-900">{t('groupValue.meetingSummary')}</h3>
                 <p className="text-sm text-gray-500 mt-1">{meetingDate}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {[
-                  { label: '1-on-1',   value: pt.meetings_1on1 },
-                  { label: 'Referrals', value: pt.referrals },
-                  { label: 'Deals',    value: pt.closed_deals },
-                  { label: 'Amount',   value: `₪${pt.deal_amount.toLocaleString()}` },
+                  { label: t('groupValue.oneOnOne'),  value: pt.meetings_1on1 },
+                  { label: t('groupValue.referrals'), value: pt.referrals },
+                  { label: t('groupValue.deals'),     value: pt.closed_deals },
+                  { label: t('groupValue.amount'),    value: `₪${pt.deal_amount.toLocaleString()}` },
                 ].map(c => (
                   <div key={c.label} className="text-center p-3 bg-gray-50 rounded-xl">
                     <p className="text-xl font-bold text-gray-900">{c.value}</p>
@@ -1580,16 +1636,16 @@ function GroupValueSection() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 text-center mb-4">📋 Report will be copied to clipboard</p>
+              <p className="text-xs text-gray-400 text-center mb-4">{t('groupValue.reportCopied')}</p>
               <div className="flex gap-2">
                 <button onClick={confirmSave} disabled={saving}
                   className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
                   style={{ background: RED }}>
-                  {saving ? 'Saving…' : '✓ Save & Copy'}
+                  {saving ? t('common.saving') : t('groupValue.saveCopy')}
                 </button>
                 <button onClick={() => setShowModal(false)}
                   className="px-5 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </motion.div>
@@ -1603,6 +1659,7 @@ function GroupValueSection() {
 // ─── Presentations Section ───────────────────────────────────────────────────
 
 function PresentationsSection() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<Presentation[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
@@ -1656,9 +1713,9 @@ function PresentationsSection() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Presentations</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('presentations.title')}</h1>
         <button onClick={startAdd} className="text-sm px-4 py-2 rounded-xl text-white flex items-center gap-2" style={{ background: RED }}>
-          <Plus size={14} /> Add
+          <Plus size={14} /> {t('presentations.add')}
         </button>
       </div>
 
@@ -1666,27 +1723,27 @@ function PresentationsSection() {
         {(adding || editing !== null) && (
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
             className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
-            <h3 className="font-semibold text-gray-800 mb-4">{editing ? 'Edit' : 'New Presentation'}</h3>
+            <h3 className="font-semibold text-gray-800 mb-4">{editing ? t('presentations.editPresentation') : t('presentations.newPresentation')}</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Meeting date</label>
+                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.meetingDateLabel')}</label>
                 <DatePickerInput value={form.meeting_date} onChange={v => setForm(f => ({ ...f, meeting_date: v }))} />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Member</label>
+                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.memberLabel')}</label>
                 <select value={form.member_name} onChange={e => setForm(f => ({ ...f, member_name: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
-                  <option value="">Select member</option>
+                  <option value="">{t('presentations.selectMember')}</option>
                   {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs font-medium text-gray-500 block mb-1">What they're presenting</label>
+                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.descriptionLabel')}</label>
                 <input value={form.change_description} onChange={e => setForm(f => ({ ...f, change_description: e.target.value }))}
-                  placeholder="New product / service…" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+                  placeholder={t('presentations.descriptionPlaceholder')} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
               </div>
               <div className="col-span-2">
-                <label className="text-xs font-medium text-gray-500 block mb-1">Notes</label>
+                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.notesLabel')}</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none" />
               </div>
@@ -1694,10 +1751,10 @@ function PresentationsSection() {
             <div className="flex gap-2 mt-4">
               <button onClick={save} disabled={saving || !form.member_name || !form.change_description}
                 className="px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50" style={{ background: RED }}>
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? t('presentations.saving') : t('presentations.save')}
               </button>
               <button onClick={() => { setAdding(false); setEditing(null) }}
-                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">Cancel</button>
+                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">{t('presentations.cancel')}</button>
             </div>
           </motion.div>
         )}
@@ -1739,6 +1796,8 @@ function PresentationsSection() {
 // ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { i18n } = useTranslation()
+  const isRtl = i18n.language === 'he'
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('admin_token'))
   const [section, setSection] = useState<Section>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
@@ -1776,7 +1835,8 @@ export default function App() {
     <div className="min-h-screen bg-gray-100">
       <Sidebar section={section} collapsed={collapsed} onNav={setSection}
         onCollapse={() => setCollapsed(c => !c)} onLogout={logout} />
-      <main className="transition-all duration-300 min-h-screen" style={{ paddingLeft: sidebarW }}>
+      <main className="transition-all duration-300 min-h-screen"
+        style={isRtl ? { paddingRight: sidebarW } : { paddingLeft: sidebarW }}>
         <div className="p-6 max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div key={section} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
