@@ -554,6 +554,18 @@ app.post('/api/send-contacts', async (req, res) => {
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
 });
 
+app.post('/api/whatsapp/send-catalog', async (req, res) => {
+  const { meeting_date } = req.body;
+  if (!meeting_date) return res.status(400).json({ error: 'meeting_date обязателен' });
+
+  const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled !== 0);
+  res.json({ sent: guests.length });
+
+  const text = 'Добро пожаловать в BNI Synergy! 🎉\n\nВот каталог наших участников:\nhttps://bnisynergy.biz/members-catalog\n\nЖдём вас на встрече!';
+  whatsapp.broadcast(guests, () => text)
+    .catch(err => console.error('[Broadcast] send-catalog error:', err.message));
+});
+
 // ─── Presentations ────────────────────────────────────────────────────────────
 
 app.get('/api/presentations', (req, res) => {

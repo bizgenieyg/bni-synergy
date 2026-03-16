@@ -867,6 +867,8 @@ function GuestsSection() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [nextMeeting, setNextMeeting] = useState('')
+  const [sendingCatalog, setSendingCatalog] = useState(false)
+  const [toastMsg, setToastMsg] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -900,11 +902,34 @@ function GuestsSection() {
 
   const paid = guests.filter(g => g.paid).length
 
+  const sendCatalog = async () => {
+    if (!selectedDate || sendingCatalog) return
+    setSendingCatalog(true)
+    try {
+      const r = await api('/api/whatsapp/send-catalog', { method: 'POST', body: JSON.stringify({ meeting_date: selectedDate }) })
+      const { sent } = await r.json()
+      setToastMsg(`Каталог отправлен ${sent} гостям`)
+      setTimeout(() => setToastMsg(''), 4000)
+    } finally {
+      setSendingCatalog(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
+      {toastMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl text-sm shadow-lg z-50 whitespace-nowrap">
+          {toastMsg}
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">Guests</h1>
         <div className="flex gap-2">
+          <button onClick={sendCatalog} disabled={sendingCatalog || !selectedDate}
+            className="text-xs px-3 py-2 rounded-xl border border-green-200 bg-white text-green-600 hover:border-green-300 flex items-center gap-1.5 disabled:opacity-50">
+            {sendingCatalog ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            Отправить каталог
+          </button>
           <a href="/api/pdf/list" target="_blank" className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
             <Download size={13} /> PDF list
           </a>
@@ -1170,6 +1195,7 @@ function VotingSection() {
   const [results, setResults] = useState<VoteResult[]>([])
   const [winners, setWinners] = useState<VoteWinner[]>([])
   const [loading, setLoading] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const load = useCallback(async () => {
     const [s, r, w] = await Promise.all([
@@ -1178,19 +1204,22 @@ function VotingSection() {
       api('/api/voting/winners').then(x => x.json()),
     ])
     setStatus(s); setResults(r); setWinners(w)
+    setLastUpdated(new Date())
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!status?.open) return
+    const interval = setInterval(() => { load() }, 10000)
+    return () => clearInterval(interval)
+  }, [status?.open, load])
 
   const openVoting = async () => { setLoading(true); await api('/api/voting/open', { method: 'POST' }); await load(); setLoading(false) }
   const closeVoting = async () => {
     setLoading(true); await api('/api/voting/close', { method: 'POST' })
     if (results[0]) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
     await load(); setLoading(false)
-  }
-  const resetVoting = async () => {
-    if (!confirm('Reset all votes?')) return
-    setLoading(true); await api('/api/voting/reset', { method: 'POST' }); await load(); setLoading(false)
   }
 
   const maxVotes = results[0]?.votes || 1
@@ -1215,16 +1244,15 @@ function VotingSection() {
                   {loading ? <Loader2 size={14} className="animate-spin" /> : 'Close Voting'}
                 </button>
             }
-            <button onClick={resetVoting} disabled={loading}
-              className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 disabled:opacity-50">
-              <RefreshCw size={14} />
-            </button>
           </div>
         </div>
       </div>
       {results.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-4">Current Results</h2>
+          <h2 className="font-semibold text-gray-800 mb-0.5">Current Results</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            {status?.open ? 'Обновляется каждые 10 сек · ' : ''}Последнее обновление: {lastUpdated?.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—'}
+          </p>
           <div className="space-y-3">
             {results.map((r, i) => (
               <div key={r.candidateId} className="flex items-center gap-3">
