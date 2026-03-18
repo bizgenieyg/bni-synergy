@@ -629,14 +629,22 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   const [selectedId, setSelectedId] = useState<number>(defaultMember?.id ?? members[0]?.id ?? 0)
   const [date, setDate] = useState(nextMeeting)
   const [type, setType] = useState<'guest' | 'substitute'>('guest')
+  const [phone, setPhone] = useState('')
 
   const member = members.find(m => m.id === selectedId)
   const encoded = member ? encodeURIComponent(member.name.split(' ')[0]) : ''
+  const phoneDigits = phone.replace(/\D/g, '').replace(/^0/, '972')
   const link = member
-    ? `https://bnisynergy.biz/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}`
+    ? `https://bnisynergy.biz/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}${phoneDigits ? `&phone=${phoneDigits}` : ''}`
     : ''
   const copy = () => link && navigator.clipboard.writeText(link)
-  const wa = () => link && window.open(`https://wa.me/?text=${encodeURIComponent(link)}`, '_blank')
+  const wa = () => {
+    if (!link) return
+    const url = phoneDigits
+      ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(link)}`
+      : `https://wa.me/?text=${encodeURIComponent(link)}`
+    window.open(url, '_blank')
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -659,6 +667,11 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">{t('invite.meetingDateLabel')}</label>
             <input value={date} onChange={e => setDate(e.target.value)} placeholder={t('invite.meetingDatePlaceholder')}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Телефон гостя <span className="font-normal text-gray-400">(опционально)</span></label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+972 050 000 0000"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
           </div>
         </div>
@@ -718,9 +731,33 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
   )
 }
 
+// ─── Date helpers ────────────────────────────────────────────────────────────
+
+function getNextMonday(): string {
+  const d = new Date()
+  const day = d.getDay() // 0=Sun, 1=Mon, …, 6=Sat
+  const daysUntil = day === 1 ? 7 : (8 - day) % 7
+  d.setDate(d.getDate() + daysUntil)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function shiftDDMM(ddmm: string, days: number): string {
+  const parts = ddmm.split('/')
+  if (parts.length < 2) return ddmm
+  const [d, m] = parts.map(Number)
+  const year = new Date().getFullYear()
+  const date = new Date(year, m - 1, d)
+  date.setDate(date.getDate() + days)
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 // ─── Dashboard ──────────────────────────────────────────────────────────────
 
-function Dashboard({ onInvite }: { onInvite: () => void }) {
+function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
+  onInvite: () => void
+  nextMeeting: string
+  onNextMeetingChange: (date: string) => void
+}) {
   const { t } = useTranslation()
   const [stats, setStats] = useState<GuestStat[]>([])
   const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null)
@@ -731,6 +768,15 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
   const [memberCount, setMemberCount] = useState(0)
   const [gvTotal, setGvTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [savingMeeting, setSavingMeeting] = useState(false)
+
+  const saveMeeting = async (date: string) => {
+    setSavingMeeting(true)
+    try {
+      const r = await api('/api/settings/next-meeting', { method: 'PATCH', body: JSON.stringify({ date }) })
+      if (r.ok) onNextMeetingChange(date)
+    } finally { setSavingMeeting(false) }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -791,6 +837,34 @@ function Dashboard({ onInvite }: { onInvite: () => void }) {
           style={{ background: RED }}>
           <Plus size={15} /> {t('dashboard.inviteGuest')}
         </button>
+      </div>
+
+      {/* Next Meeting Management */}
+      <div className="bg-white rounded-2xl px-5 py-3.5 shadow-sm flex items-center gap-3 flex-wrap">
+        <span className="text-sm font-medium text-gray-600 flex items-center gap-1.5">
+          <Calendar size={14} className="text-gray-400" />
+          Следующая встреча:
+        </span>
+        <div className="flex items-center gap-0.5 border border-gray-200 rounded-xl overflow-hidden">
+          <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, -7))}
+            disabled={savingMeeting || !nextMeeting}
+            className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-sm font-bold text-gray-900 min-w-[56px] text-center px-1">
+            {nextMeeting || '—'}
+          </span>
+          <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, 7))}
+            disabled={savingMeeting || !nextMeeting}
+            className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <button onClick={() => saveMeeting(getNextMonday())} disabled={savingMeeting}
+          className="text-xs px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition-colors">
+          Авто
+        </button>
+        {savingMeeting && <Loader2 size={14} className="animate-spin text-gray-400" />}
       </div>
 
       {/* KPI Cards */}
@@ -918,6 +992,8 @@ function GuestsSection() {
   const [nextMeeting, setNextMeeting] = useState('')
   const [sendingCatalog, setSendingCatalog] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
+  const [showAddDate, setShowAddDate] = useState(false)
+  const [addDateVal, setAddDateVal] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -988,15 +1064,67 @@ function GuestsSection() {
         </div>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {meetings.map(d => (
-          <button key={d} onClick={() => setSelectedDate(d)}
-            className={cn('px-3 py-1.5 rounded-full text-sm font-medium transition-all',
-              selectedDate === d ? 'text-white' : 'bg-white text-gray-600 border border-gray-200')}
-            style={selectedDate === d ? { background: RED } : {}}>
-            {d}{d === nextMeeting && <span className="ml-1 text-xs opacity-70">{t('guests.next')}</span>}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Arrow navigator */}
+        <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
+          <button
+            onClick={() => { const i = meetings.indexOf(selectedDate); if (i > 0) setSelectedDate(meetings[i - 1]) }}
+            disabled={meetings.indexOf(selectedDate) <= 0}
+            className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+            <ChevronLeft size={15} />
           </button>
-        ))}
+          <span className="text-sm font-semibold text-gray-900 min-w-[110px] text-center px-1">
+            {selectedDate || '—'}
+            {selectedDate === nextMeeting && <span className="ml-1 text-xs font-normal text-gray-400">{t('guests.next')}</span>}
+            {selectedDate && <span className="ml-1 text-xs font-normal text-gray-400">· {guests.length}</span>}
+          </span>
+          <button
+            onClick={() => { const i = meetings.indexOf(selectedDate); if (i < meetings.length - 1) setSelectedDate(meetings[i + 1]) }}
+            disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
+            className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+            <ChevronRight size={15} />
+          </button>
+        </div>
+
+        {/* Dot indicators */}
+        {meetings.length > 1 && (
+          <div className="flex gap-1.5 items-center">
+            {meetings.map(d => (
+              <button key={d} onClick={() => setSelectedDate(d)}
+                className="rounded-full transition-all"
+                style={{
+                  width: selectedDate === d ? 8 : 6,
+                  height: selectedDate === d ? 8 : 6,
+                  background: selectedDate === d ? RED : '#d1d5db',
+                }} />
+            ))}
+          </div>
+        )}
+
+        {/* Add date */}
+        {showAddDate ? (
+          <div className="flex items-center gap-1.5">
+            <input value={addDateVal} onChange={e => setAddDateVal(e.target.value)} placeholder="ДД/ММ"
+              className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm w-20 focus:outline-none focus:border-red-400" />
+            <button onClick={() => {
+              const v = addDateVal.trim()
+              if (v && !meetings.includes(v)) { setMeetings(m => [v, ...m]); setSelectedDate(v) }
+              else if (v && meetings.includes(v)) setSelectedDate(v)
+              setAddDateVal(''); setShowAddDate(false)
+            }} className="text-xs px-2.5 py-1.5 rounded-lg text-white font-medium" style={{ background: RED }}>
+              OK
+            </button>
+            <button onClick={() => { setShowAddDate(false); setAddDateVal('') }}
+              className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600">
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddDate(true)}
+            className="text-xs px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors">
+            <Plus size={12} /> Добавить дату
+          </button>
+        )}
       </div>
 
       {selectedDate && (
@@ -1823,7 +1951,7 @@ export default function App() {
   const sidebarW = collapsed ? 64 : 240
 
   const SECTIONS: Record<Section, React.ReactNode> = {
-    dashboard:     <Dashboard onInvite={() => setInviteForDashboard(true)} />,
+    dashboard:     <Dashboard onInvite={() => setInviteForDashboard(true)} nextMeeting={nextMeeting} onNextMeetingChange={setNextMeeting} />,
     guests:        <GuestsSection />,
     members:       <MembersSection />,
     voting:        <VotingSection />,

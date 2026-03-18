@@ -315,10 +315,19 @@
   </div>
 
   <script>
-    const params   = new URLSearchParams(location.search);
-    const refParam = params.get('ref');
-    const typeParam = params.get('type'); // 'guest' | 'sub'
-    const isSub    = typeParam === 'sub';
+    const params     = new URLSearchParams(location.search);
+    const refParam   = params.get('ref');
+    const typeParam  = params.get('type'); // 'guest' | 'sub'
+    const dateParam  = params.get('date'); // 'DD/MM'
+    const phoneParam = params.get('phone'); // '972XXXXXXXXX'
+    const isSub      = typeParam === 'sub';
+
+    // ── Pre-fill phone from URL ────────────────────────────────────────────────
+    if (phoneParam) {
+      // Convert 972XXXXXXXXX → 0XXXXXXXXX for display
+      const displayPhone = phoneParam.startsWith('972') ? '0' + phoneParam.slice(3) : phoneParam;
+      document.getElementById('phone').value = displayPhone;
+    }
 
     // ── Handle ?ref= ──────────────────────────────────────────────────────────
     if (refParam) {
@@ -341,10 +350,20 @@
     }
 
     // ── Meeting info ──────────────────────────────────────────────────────────
+    // Show immediately from URL param if available
+    if (dateParam) {
+      const el = document.getElementById('meetingInfo');
+      el.style.display = 'block';
+      el.innerHTML =
+        `📅 Следующая встреча: <strong>${dateParam}</strong> в 7:30<br/>` +
+        `📍 סמילנסקי 43 ראשון לציון`;
+    }
+
+    // Fallback: fetch from server (only update if no dateParam)
     fetch('/api/test')
       .then(r => r.json())
       .then(data => {
-        if (data.nextMeeting) {
+        if (data.nextMeeting && !dateParam) {
           const el = document.getElementById('meetingInfo');
           el.style.display = 'block';
           el.innerHTML =
@@ -393,6 +412,7 @@
           body:    JSON.stringify({
             firstName, lastName, phone, specialty, invitedBy,
             type: typeParam || 'guest',
+            meetingDate: dateParam || '',
           }),
         });
 
