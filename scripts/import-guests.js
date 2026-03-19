@@ -62,15 +62,23 @@ function normalizeDateStr(str) {
 
 /**
  * Возвращает двузначный год (строка) для даты DD/MM без года.
- * Логика: берём текущий год; если дата ещё не наступила — это прошлый год.
+ * Логика:
+ * 1. Если DD/MM — понедельник в текущем году → текущий год.
+ * 2. Иначе если понедельник в прошлом году → прошлый год.
+ * 3. Иначе: дата в прошлом → текущий год; в будущем → прошлый год.
  */
 function inferYear(dd, mm) {
-  const today       = new Date();
+  const today      = new Date();
   today.setHours(0, 0, 0, 0);
-  const currentYear = today.getFullYear();
-  const candidate   = new Date(currentYear, mm - 1, dd);
-  const year        = candidate > today ? currentYear - 1 : currentYear;
-  return String(year).slice(2);
+  const curYear    = today.getFullYear();
+  const isMonday   = (y) => new Date(y, mm - 1, dd).getDay() === 1;
+
+  if (isMonday(curYear))      return String(curYear).slice(2);
+  if (isMonday(curYear - 1))  return String(curYear - 1).slice(2);
+
+  // Fallback
+  const candidate = new Date(curYear, mm - 1, dd);
+  return String(candidate > today ? curYear - 1 : curYear).slice(2);
 }
 
 /** Normalise phone to 0XX-XXX-XXXX domestic format for dedup */

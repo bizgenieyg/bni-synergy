@@ -182,16 +182,41 @@ function getAllGuests() {
   return db.prepare('SELECT * FROM guests ORDER BY meetingDate DESC, createdAt ASC').all();
 }
 
+/**
+ * Compute a numeric sort score for a meeting date string.
+ * Handles DD/MM, DD/MM/YY, DD/MM/YYYY.
+ * For DD/MM without year: infers year using Monday-check then past/future check.
+ */
+function _dateScore(dateStr) {
+  const parts = dateStr.split('/');
+  if (parts.length < 2) return 0;
+  const dd = parseInt(parts[0], 10) || 0;
+  const mm = parseInt(parts[1], 10) || 0;
+  let year;
+  if (parts.length >= 3) {
+    const raw = parseInt(parts[2], 10) || 0;
+    year = raw < 100 ? 2000 + raw : raw;
+  } else {
+    // Infer year: prefer the year where this DD/MM falls on a Monday
+    const today    = new Date();
+    const curYear  = today.getFullYear();
+    const isMonday = (y) => new Date(y, mm - 1, dd).getDay() === 1;
+    if      (isMonday(curYear))     year = curYear;
+    else if (isMonday(curYear - 1)) year = curYear - 1;
+    else {
+      // Fallback: if date is in the future this year → last year
+      today.setHours(0, 0, 0, 0);
+      year = new Date(curYear, mm - 1, dd) > today ? curYear - 1 : curYear;
+    }
+  }
+  return year * 10000 + mm * 100 + dd;
+}
+
 function getMeetingDates() {
-  // Sort by DD/MM/YY: year desc → month desc → day desc
-  // SUBSTR(meetingDate,7,2) = YY, SUBSTR(4,2) = MM, SUBSTR(1,2) = DD
-  return db.prepare(`
-    SELECT DISTINCT meetingDate FROM guests
-    ORDER BY
-      CAST(SUBSTR(meetingDate, 7, 2) AS INTEGER) DESC,
-      CAST(SUBSTR(meetingDate, 4, 2) AS INTEGER) DESC,
-      CAST(SUBSTR(meetingDate, 1, 2) AS INTEGER) DESC
-  `).all().map(r => r.meetingDate);
+  const rows = db.prepare('SELECT DISTINCT meetingDate FROM guests').all();
+  return rows
+    .map(r => r.meetingDate)
+    .sort((a, b) => _dateScore(b) - _dateScore(a)); // newest first
 }
 
 function getGuestById(id) {
