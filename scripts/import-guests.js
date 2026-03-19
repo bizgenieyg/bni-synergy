@@ -1,48 +1,65 @@
 'use strict';
 // Запуск: node scripts/import-guests.js
-// Требует: credentials.json в корне проекта (Google Service Account key)
-// или GOOGLE_APPLICATION_CREDENTIALS=./credentials.json в .env
+// Использует те же env-переменные, что и сервер:
+//   GOOGLE_SERVICE_ACCOUNT_EMAIL
+//   GOOGLE_PRIVATE_KEY
+//   GOOGLE_SHEET_ID  (опционально — или хардкод ниже)
+
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const { google } = require('googleapis');
 const Database = require('better-sqlite3');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
+const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID || '1QIDMcAeMupan0oGjsQwMgi4vB5oeTgfOV-ovrxd5C6s';
+
+function createAuthClient() {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const key   = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+
+  if (!email || !key) {
+    throw new Error(
+      'Не заданы GOOGLE_SERVICE_ACCOUNT_EMAIL и/или GOOGLE_PRIVATE_KEY в .env',
+    );
+  }
+
+  return new google.auth.JWT(
+    email,
+    null,
+    key,
+    ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  );
+}
+
 async function importGuests() {
-  // 1. Подключиться к Google Sheets API
-  const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(__dirname, '../credentials.json'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-
+  const auth = createAuthClient();
+  await auth.authorize();
   const sheets = google.sheets({ version: 'v4', auth });
-  const SPREADSHEET_ID = '1QIDMcAeMupan0oGjsQwMgi4vB5oeTgfOV-ovrxd5C6s';
 
-  // 2. Получить список вкладок
+  // 1. Получить список вкладок
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
   const allSheets = meta.data.sheets.map(s => s.properties.title);
 
-  // 3. Фильтровать только вкладки с датами
-  // Форматы: DD/MM/YYYY, DD/MM/YY, DD.MM.YY, DD/MM, DD.MM
+  // 2. Фильтровать только вкладки с датами
+  // Поддерживает: DD/MM, DD/MM/YY, DD/MM/YYYY, DD.MM, DD.MM.YY, DD.MM.YYYY
   const dateRegex = /^\d{1,2}[\/\.\-]\d{1,2}([\/\.\-]\d{2,4})?$/;
   const dateSheets = allSheets.filter(name => dateRegex.test(name.trim()));
 
   console.log(`Найдено вкладок с датами: ${dateSheets.length}`);
   console.log(dateSheets.join(', '));
 
-  // 4. Открыть БД
+  // 3. Открыть БД
   const db = new Database(path.join(__dirname, '../data/guests.db'));
 
   let imported = 0;
   let skipped = 0;
 
   for (const sheetName of dateSheets) {
-    // Нормализовать дату встречи → DD/MM формат
     const meetingDate = normalizeDateStr(sheetName);
 
-    console.log(`\nОбрабатываю вкладку: ${sheetName} → ${meetingDate}`);
+    console.log(`\nОбрабатываю вкладку: "${sheetName}" → ${meetingDate}`);
 
-    // 5. Читать данные вкладки
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `'${sheetName}'!A:I`,
@@ -55,25 +72,27 @@ async function importGuests() {
       const row = rows[i];
       if (!row || row.length < 4) continue;
 
-      const fullName = (row[3] || '').trim(); // колонка D
+      const fullName = (row[3] || '').trim(); // D — Имя и Фамилия
       if (!fullName) continue;
 
       const profession  = (row[4] || '').trim(); // E
       const phone       = (row[5] || '').trim(); // F
       const invitedBy   = (row[6] || '').trim(); // G
-      // const notes    = (row[7] || '').trim(); // H — не используется пока
-      const paymentStr  = (row[1] || '').trim(); // B — способ оплаты
+      const paymentStr  = (row[1] || '').trim(); // B — Способ оплаты
 
-      // Определить статус оплаты
       const payLower = paymentStr.toLowerCase();
-      const paid = (payLower.includes('оплач') || payLower.includes('наличн')) ? 1 : 0;
+      const paid = (
+        payLower.includes('оплач') ||
+        payLower.includes('наличн') ||
+        payLower.includes('опл,')
+      ) ? 1 : 0;
 
-      // Разбить имя на firstName + lastName
+      // Имя + Фамилия
       const nameParts = fullName.split(/\s+/);
       const firstName  = nameParts[0] || fullName;
       const lastName   = nameParts.slice(1).join(' ') || '';
 
-      // Проверить дубликат (по имени + дате встречи)
+      // Проверить дубликат
       const existing = db.prepare(
         'SELECT id FROM guests WHERE firstName=? AND lastName=? AND meetingDate=?',
       ).get(firstName, lastName, meetingDate);
@@ -83,9 +102,9 @@ async function importGuests() {
         continue;
       }
 
-      // Вставить гостя
       db.prepare(`
-        INSERT INTO guests (id, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, createdAt, waSent, wa_enabled)
+        INSERT INTO guests
+          (id, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, createdAt, waSent, wa_enabled)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
       `).run(
         uuidv4(),
@@ -100,9 +119,8 @@ async function importGuests() {
       );
 
       imported++;
+      console.log(`  + ${firstName} ${lastName}`);
     }
-
-    console.log(`  Импортировано с этой вкладки: ${imported} (всего)`);
   }
 
   console.log(`\n✅ Готово! Импортировано: ${imported}, пропущено дубликатов: ${skipped}`);
@@ -110,7 +128,7 @@ async function importGuests() {
 }
 
 function normalizeDateStr(str) {
-  // Преобразует "12/05/2025", "12/05/25", "12.05.25" → "12/05"
+  // "12/05/2025", "12/05/25", "12.05.25" → "12/05"
   const clean = str.trim().replace(/\./g, '/');
   const parts  = clean.split('/');
   if (parts.length >= 2) {
