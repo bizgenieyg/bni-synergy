@@ -235,15 +235,9 @@
 
       <form id="regForm" novalidate>
         <div class="form-group">
-          <label for="firstName">Имя<span class="req">*</span></label>
-          <input type="text" id="firstName" name="firstName"
-                 placeholder="Иван" autocomplete="given-name" required />
-        </div>
-
-        <div class="form-group">
-          <label for="lastName">Фамилия<span class="req">*</span></label>
-          <input type="text" id="lastName" name="lastName"
-                 placeholder="Иванов" autocomplete="family-name" required />
+          <label for="guestName">Имя и фамилия<span class="req">*</span></label>
+          <input type="text" id="guestName" name="name"
+                 placeholder="Иван Иванов" autocomplete="name" required />
         </div>
 
         <div class="form-group">
@@ -382,15 +376,14 @@
       e.preventDefault();
       errorEl.style.display = 'none';
 
-      const firstName = document.getElementById('firstName').value.trim();
-      const lastName  = document.getElementById('lastName').value.trim();
+      const name      = document.getElementById('guestName').value.trim();
       const phone     = document.getElementById('phone').value.trim();
       const specialty = document.getElementById('specialty').value.trim();
       const invitedBy = refParam
         ? decodeURIComponent(refParam)
         : document.getElementById('invitedBy').value.trim();
 
-      if (!firstName || !lastName || !phone) {
+      if (!name || !phone) {
         errorEl.textContent   = 'Пожалуйста, заполните все обязательные поля.';
         errorEl.style.display = 'block';
         return;
@@ -410,7 +403,7 @@
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
-            firstName, lastName, phone, specialty, invitedBy,
+            name, phone, specialty, invitedBy,
             type: typeParam || 'guest',
             meetingDate: dateParam || '',
           }),
@@ -420,7 +413,7 @@
         if (!resp.ok) throw new Error(data.error || `Ошибка ${resp.status}`);
 
         // ── Success screen ──
-        document.getElementById('successTitle').textContent = `Спасибо, ${data.firstName}!`;
+        document.getElementById('successTitle').textContent = `Спасибо, ${(data.name || '').split(' ')[0] || data.name}!`;
 
         if (isSub) {
           document.getElementById('successSub').textContent =

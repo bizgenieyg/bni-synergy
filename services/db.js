@@ -43,6 +43,12 @@ try {
   db.exec('ALTER TABLE guests ADD COLUMN wa_enabled INTEGER NOT NULL DEFAULT 1');
 } catch { /* column already exists — ignore */ }
 
+// Migrate: merge firstName + lastName into single name column
+try {
+  db.exec('ALTER TABLE guests ADD COLUMN name TEXT NOT NULL DEFAULT \'\'');
+} catch { /* already exists */ }
+db.exec("UPDATE guests SET name = TRIM(firstName || ' ' || COALESCE(lastName, '')) WHERE name = '' OR name IS NULL");
+
 // ─── Schema: members ──────────────────────────────────────────────────────────
 
 db.exec(`
@@ -129,16 +135,16 @@ function normalizePhone(phone) {
 
 // ─── Guests CRUD ──────────────────────────────────────────────────────────────
 
-function insertGuest({ firstName, lastName, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null }) {
+function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
     INSERT INTO guests
-      (id, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled)
+    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id,
-    firstName.trim(), lastName.trim(), phone.trim(),
+    name.trim(), phone.trim(),
     (specialty || '').trim(), (invitedBy || '').trim(),
     meetingDate, paid, paidAt, createdAt,
   );
@@ -177,9 +183,15 @@ function getAllGuests() {
 }
 
 function getMeetingDates() {
-  return db.prepare(
-    'SELECT DISTINCT meetingDate FROM guests ORDER BY createdAt DESC'
-  ).all().map(r => r.meetingDate);
+  // Sort by DD/MM/YY: year desc → month desc → day desc
+  // SUBSTR(meetingDate,7,2) = YY, SUBSTR(4,2) = MM, SUBSTR(1,2) = DD
+  return db.prepare(`
+    SELECT DISTINCT meetingDate FROM guests
+    ORDER BY
+      CAST(SUBSTR(meetingDate, 7, 2) AS INTEGER) DESC,
+      CAST(SUBSTR(meetingDate, 4, 2) AS INTEGER) DESC,
+      CAST(SUBSTR(meetingDate, 1, 2) AS INTEGER) DESC
+  `).all().map(r => r.meetingDate);
 }
 
 function getGuestById(id) {

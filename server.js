@@ -134,28 +134,29 @@ app.get('/api/test', (req, res) => {
 // ─── Guest registration ───────────────────────────────────────────────────────
 
 app.post('/api/register', async (req, res) => {
-  const { firstName, lastName, phone, specialty, invitedBy, type } = req.body;
+  const { name, phone, specialty, invitedBy, type, meetingDate: bodyDate } = req.body;
 
-  if (!firstName || !lastName || !phone) {
-    return res.status(400).json({ error: 'Имя, фамилия и телефон обязательны' });
+  if (!name || !phone) {
+    return res.status(400).json({ error: 'Имя и телефон обязательны' });
   }
   if (specialty && specialty.length > 50) {
     return res.status(400).json({ error: 'Профессия не может быть длиннее 50 символов' });
   }
 
-  const meetingDate = NEXT_MEETING_DATE;
+  const meetingDate = (bodyDate && bodyDate.trim()) || NEXT_MEETING_DATE;
   const isSub       = type === 'sub';
+  const firstName   = name.split(' ')[0]; // for WA greeting
 
   // 1. Save to SQLite — substitutions are pre-marked as paid
   const id = db.insertGuest({
-    firstName, lastName, phone, specialty, invitedBy, meetingDate,
+    name, phone, specialty, invitedBy, meetingDate,
     paid:   isSub ? 1 : 0,
     paidAt: isSub ? new Date().toISOString() : null,
   });
 
   // 2. Google Sheets — non-blocking
   const paymentMethod = isSub ? `замена за ${invitedBy || '—'}` : 'онлайн';
-  sheets.appendGuest({ firstName, lastName, phone, specialty, invitedBy, meetingDate, paymentMethod })
+  sheets.appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod })
     .then(sheetRow => { if (sheetRow) db.updateSheetRow(id, sheetRow); })
     .catch(err => console.error('[Sheets] appendGuest failed:', err.message));
 
@@ -184,7 +185,7 @@ app.post('/api/register', async (req, res) => {
     .then(() => db.markWaSent(id))
     .catch(err => console.error('[WhatsApp] sendMessage failed:', err.message));
 
-  return res.json({ success: true, id, firstName, isSub });
+  return res.json({ success: true, id, name, isSub });
 });
 
 // ─── PayBox webhook ───────────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ app.post('/api/paybox-webhook', async (req, res) => {
     const guest = db.findGuestByPhone(rawPhone);
     if (guest && !guest.paid) {
       db.markPaid(guest.id);
-      console.log(`[PayBox] Marked paid: ${guest.firstName} ${guest.lastName}`);
+      console.log(`[PayBox] Marked paid: ${guest.name || guest.firstName + ' ' + guest.lastName}`);
       if (guest.sheetRow) {
         sheets.markPaid(guest.meetingDate, guest.sheetRow)
           .catch(err => console.error('[Sheets] markPaid failed:', err.message));
@@ -536,7 +537,7 @@ app.post('/api/send-voting', async (req, res) => {
 
   // Individual messages to guests (random variant per message)
   whatsapp.broadcast(guests, g =>
-    pickVariant(VOTING_VARIANTS)(g.firstName, votingLink)
+    pickVariant(VOTING_VARIANTS)(g.name ? g.name.split(' ')[0] : g.firstName, votingLink)
   ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
 });
 
@@ -550,7 +551,7 @@ app.post('/api/send-contacts', async (req, res) => {
   res.json({ success: true, total: guests.length, message: 'Рассылка запущена' });
 
   whatsapp.broadcast(guests, g =>
-    pickVariant(CONTACTS_VARIANTS)(g.firstName, contactsText)
+    pickVariant(CONTACTS_VARIANTS)(g.name ? g.name.split(' ')[0] : g.firstName, contactsText)
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
 });
 

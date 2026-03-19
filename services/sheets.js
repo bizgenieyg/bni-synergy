@@ -140,24 +140,27 @@ async function getNextRowNumber(sheets, tabTitle) {
  * Creates the tab if it doesn't exist.
  * Returns the 1-based sheet row index that was written.
  */
-async function appendGuest({ firstName, lastName, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн' }) {
+async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн' }) {
   const sheets = await getSheetsClient();
+
+  // Tab name is always DD/MM (strip year if present in meetingDate DD/MM/YY)
+  const tabTitle = meetingDate.split('/').slice(0, 2).join('/');
 
   // Ensure the tab exists
   const tabs = await getAllTabs(sheets);
-  if (!tabs.find(t => t.properties.title === meetingDate)) {
-    await createTab(sheets, meetingDate);
+  if (!tabs.find(t => t.properties.title === tabTitle)) {
+    await createTab(sheets, tabTitle);
   }
 
-  const rowNum  = await getNextRowNumber(sheets, meetingDate);
-  const fullName = `${firstName} ${lastName}`;
+  const rowNum   = await getNextRowNumber(sheets, tabTitle);
+  const fullName = name;
 
   // A=ВСТРЕЧА(empty) B=Способ оплаты C=№ D=Имя и Фамилия E=Профессия F=Телефон G=Кто пригласил H=Заметки(empty)
   const row = ['', paymentMethod, rowNum, fullName, specialty || '', phone, invitedBy || '', ''];
 
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${meetingDate}'!A:H`,
+    range: `'${tabTitle}'!A:H`,
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
@@ -168,18 +171,20 @@ async function appendGuest({ firstName, lastName, phone, specialty, invitedBy, m
   const match = updatedRange.match(/!A(\d+)/);
   const sheetRow = match ? parseInt(match[1], 10) : null;
 
-  console.log(`[Sheets] Appended "${fullName}" to tab "${meetingDate}" row ${sheetRow}`);
+  console.log(`[Sheets] Appended "${fullName}" to tab "${tabTitle}" row ${sheetRow}`);
   return sheetRow;
 }
 
 /**
  * Update column B of a guest's row to "опл,{DD/MM}" (e.g. "опл,09/03").
  */
-async function markPaid(sheetTab, sheetRow) {
-  if (!sheetTab || !sheetRow) return;
+async function markPaid(meetingDate, sheetRow) {
+  if (!meetingDate || !sheetRow) return;
 
-  const sheets = await getSheetsClient();
-  const value  = `опл,${sheetTab}`;
+  // Tab name is always DD/MM (strip year if present)
+  const sheetTab = meetingDate.split('/').slice(0, 2).join('/');
+  const sheets   = await getSheetsClient();
+  const value    = `опл,${sheetTab}`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,

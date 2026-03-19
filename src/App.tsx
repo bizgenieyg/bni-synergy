@@ -21,8 +21,7 @@ const RED = '#dc2626'
 
 interface Guest {
   id: string
-  firstName: string
-  lastName: string
+  name: string
   phone: string
   specialty: string
   invitedBy: string
@@ -738,17 +737,23 @@ function getNextMonday(): string {
   const day = d.getDay() // 0=Sun, 1=Mon, …, 6=Sat
   const daysUntil = day === 1 ? 7 : (8 - day) % 7
   d.setDate(d.getDate() + daysUntil)
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+  const yy = String(d.getFullYear()).slice(2)
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${yy}`
 }
 
 function shiftDDMM(ddmm: string, days: number): string {
   const parts = ddmm.split('/')
   if (parts.length < 2) return ddmm
   const [d, m] = parts.map(Number)
-  const year = new Date().getFullYear()
+  // Parse year: if YY provided use it, otherwise current year
+  const yyRaw = parts[2]
+  const year = yyRaw
+    ? (Number(yyRaw) < 100 ? 2000 + Number(yyRaw) : Number(yyRaw))
+    : new Date().getFullYear()
   const date = new Date(year, m - 1, d)
   date.setDate(date.getDate() + days)
-  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
+  const yy = String(date.getFullYear()).slice(2)
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${yy}`
 }
 
 // ─── Dashboard ──────────────────────────────────────────────────────────────
@@ -900,7 +905,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
               <tbody>
                 {recentGuests.map(g => (
                   <tr key={g.id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-2 font-medium text-gray-800">{g.firstName} {g.lastName}</td>
+                    <td className="py-2 font-medium text-gray-800">{g.name}</td>
                     <td className="py-2 text-gray-400 text-xs">{g.specialty}</td>
                     <td className="py-2 text-right">
                       {g.paid
@@ -1012,7 +1017,7 @@ function GuestsSection() {
   }, [selectedDate])
 
   const filtered = guests.filter(g =>
-    `${g.firstName} ${g.lastName} ${g.phone} ${g.specialty}`.toLowerCase().includes(search.toLowerCase()))
+    `${g.name} ${g.phone} ${g.specialty}`.toLowerCase().includes(search.toLowerCase()))
 
   const markPaid = async (id: string) => {
     await api(`/api/guests/${id}/paid`, { method: 'PUT' })
@@ -1065,23 +1070,25 @@ function GuestsSection() {
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Arrow navigator */}
+        {/* Arrow navigator — meetings[0]=newest, higher index=older; ←=older, →=newer */}
         <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
           <button
-            onClick={() => { const i = meetings.indexOf(selectedDate); if (i > 0) setSelectedDate(meetings[i - 1]) }}
-            disabled={meetings.indexOf(selectedDate) <= 0}
-            className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+            onClick={() => { const i = meetings.indexOf(selectedDate); if (i < meetings.length - 1) setSelectedDate(meetings[i + 1]) }}
+            disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
+            className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
+            title="Старее">
             <ChevronLeft size={15} />
           </button>
-          <span className="text-sm font-semibold text-gray-900 min-w-[110px] text-center px-1">
+          <span className="text-sm font-semibold text-gray-900 min-w-[120px] text-center px-1">
             {selectedDate || '—'}
             {selectedDate === nextMeeting && <span className="ml-1 text-xs font-normal text-gray-400">{t('guests.next')}</span>}
             {selectedDate && <span className="ml-1 text-xs font-normal text-gray-400">· {guests.length}</span>}
           </span>
           <button
-            onClick={() => { const i = meetings.indexOf(selectedDate); if (i < meetings.length - 1) setSelectedDate(meetings[i + 1]) }}
-            disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
-            className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+            onClick={() => { const i = meetings.indexOf(selectedDate); if (i > 0) setSelectedDate(meetings[i - 1]) }}
+            disabled={meetings.indexOf(selectedDate) <= 0}
+            className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
+            title="Новее">
             <ChevronRight size={15} />
           </button>
         </div>
@@ -1161,7 +1168,7 @@ function GuestsSection() {
             <tbody>
               {filtered.map(g => (
                 <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{g.firstName} {g.lastName}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
                   <td className="px-4 py-3 text-gray-500">
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
                       className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{g.phone}</a>
