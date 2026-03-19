@@ -34,12 +34,12 @@ function createAuthClient() {
 
 /**
  * Нормализовать название вкладки → DD/MM/YY
- * "16/03"       → "16/03/25"  (используем currentYear)
+ * "16/03"       → год определяется автоматически (см. inferYear)
  * "16/03/25"    → "16/03/25"
  * "16/03/2025"  → "16/03/25"
  * "16.03.2025"  → "16/03/25"
  */
-function normalizeDateStr(str, currentYY) {
+function normalizeDateStr(str) {
   const clean = str.trim().replace(/\./g, '/');
   const parts = clean.split('/');
   if (parts.length < 2) return str;
@@ -53,8 +53,24 @@ function normalizeDateStr(str, currentYY) {
     return `${dd}/${mm}/${yy}`;
   }
 
-  // No year in sheet name — use provided currentYY
-  return `${dd}/${mm}/${currentYY}`;
+  // Нет года в названии вкладки — определяем по логике:
+  // Если эта дата в текущем году ещё в будущем → прошлый год.
+  // Если уже прошла или сегодня → текущий год.
+  const yy = inferYear(Number(dd), Number(mm));
+  return `${dd}/${mm}/${yy}`;
+}
+
+/**
+ * Возвращает двузначный год (строка) для даты DD/MM без года.
+ * Логика: берём текущий год; если дата ещё не наступила — это прошлый год.
+ */
+function inferYear(dd, mm) {
+  const today       = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentYear = today.getFullYear();
+  const candidate   = new Date(currentYear, mm - 1, dd);
+  const year        = candidate > today ? currentYear - 1 : currentYear;
+  return String(year).slice(2);
 }
 
 /** Normalise phone to 0XX-XXX-XXXX domestic format for dedup */
@@ -80,8 +96,6 @@ async function importGuests() {
   console.log(`Найдено вкладок с датами: ${dateSheets.length}`);
   console.log(dateSheets.join(', '));
 
-  const currentYY = String(new Date().getFullYear()).slice(2);
-
   // 3. Открыть БД
   const db = new Database(path.join(__dirname, '../data/guests.db'));
 
@@ -89,7 +103,7 @@ async function importGuests() {
   let skipped  = 0;
 
   for (const sheetName of dateSheets) {
-    const meetingDate = normalizeDateStr(sheetName, currentYY);
+    const meetingDate = normalizeDateStr(sheetName);
 
     console.log(`\nОбрабатываю вкладку: "${sheetName}" → ${meetingDate}`);
 
