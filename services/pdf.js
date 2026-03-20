@@ -194,6 +194,7 @@ function generateBadges(res, guests, date) {
 // ─── Members Catalog PDF ──────────────────────────────────────────────────────
 
 const PLATFORM_ABBR = {
+  whatsapp:  'WA',
   instagram: 'IG',
   facebook:  'FB',
   tiktok:    'TK',
@@ -201,10 +202,11 @@ const PLATFORM_ABBR = {
   linkedin:  'LI',
   youtube:   'YT',
   website:   'WEB',
-  other:     '🔗',
+  other:     'LNK',
 };
 
 const PLATFORM_COLOR = {
+  whatsapp:  '#25D366',
   instagram: '#e1306c',
   facebook:  '#1877f2',
   tiktok:    '#010101',
@@ -224,20 +226,28 @@ function memberInitials(name) {
 
 /**
  * Generate members catalog PDF and pipe to response.
+ * Layout: 1 card per row, 3 per page.
+ * Each card: red top section (photo + name + professions + phone) +
+ *            white bottom section (social badges with handles).
  */
 function generateMembersCatalog(res, members, uploadsDir) {
-  const RED      = '#C41230';
-  const CARD_W   = 257;
-  const CARD_H   = 130;
-  const COLS     = 2;
-  const MARGIN_X = 20;
-  const MARGIN_Y = 28;
-  const GAP_X    = 15;
-  const GAP_Y    = 12;
-  const PHOTO_R  = 36;   // radius
-  const PHOTO_CX = 52;   // photo center x within card
-  const PHOTO_CY = CARD_H / 2; // centered vertically
-  const TEXT_X   = 102;  // text start x within card
+  const RED    = '#C41230';
+  const PW     = 595;
+  const PH     = 842;
+  const MX     = 28;    // left/right margin
+  const MY     = 20;    // top margin
+  const HDR_H  = 24;   // page header height
+  const HDR_G  = 8;    // gap between header and first card
+  const PER_PG = 3;    // cards per page
+  const CGAP   = 12;   // vertical gap between cards
+  const CARD_W = PW - 2 * MX;            // 539
+  const CARD_H = 240;
+  const RED_H  = Math.round(CARD_H * 0.6); // 144  – red top section height
+  const PHR    = 40;   // photo radius
+  const PHCX   = 60;   // photo center x from card left
+  const PHCY   = RED_H / 2; // photo center y from card top (72)
+  const TX     = 112;  // text start x from card left
+  const TW     = CARD_W - TX - 14; // text area width (413)
 
   const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
@@ -246,88 +256,143 @@ function generateMembersCatalog(res, members, uploadsDir) {
 
   const F = setupFonts(doc);
 
-  members.forEach((m, idx) => {
-    const perPage = COLS * Math.floor((PAGE_H - 2 * MARGIN_Y) / (CARD_H + GAP_Y));
-    if (idx > 0 && idx % perPage === 0) doc.addPage();
+  function drawPageHeader() {
+    doc.font(F.bold).fontSize(14).fillColor(RED)
+       .text('Члены группы', MX, MY, { lineBreak: false });
+    doc.font(F.bold).fontSize(14).fillColor('#1a1a1a')
+       .text('BNI SYNERGY', MX, MY, { width: CARD_W, align: 'right', lineBreak: false });
+  }
 
-    const pos  = idx % perPage;
-    const col  = pos % COLS;
-    const row  = Math.floor(pos / COLS);
-    const x    = MARGIN_X + col * (CARD_W + GAP_X);
-    const y    = MARGIN_Y + row * (CARD_H + GAP_Y);
+  // Extract short handle from social URL
+  function socialHandle(s) {
+    try {
+      const u = new URL(s.url);
+      const parts = u.pathname.split('/').filter(Boolean);
+      if (parts.length) return '@' + parts[parts.length - 1];
+      return u.hostname.replace('www.', '');
+    } catch {
+      return s.label || s.url.slice(0, 22);
+    }
+  }
+
+  // Format stored 972XXXXXXXXX → 05X-XXX-XXXX
+  function fmtPhone(phone) {
+    if (!phone) return '';
+    let d = String(phone).replace(/\D/g, '');
+    if (d.startsWith('972')) d = '0' + d.slice(3);
+    if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+    return phone;
+  }
+
+  drawPageHeader();
+
+  members.forEach((m, idx) => {
+    const pos = idx % PER_PG;
+    if (idx > 0 && pos === 0) {
+      doc.addPage();
+      drawPageHeader();
+    }
+
+    const cardX = MX;
+    const cardY = MY + HDR_H + HDR_G + pos * (CARD_H + CGAP);
 
     // ── Card background + border ──
-    doc.roundedRect(x, y, CARD_W, CARD_H, 6)
+    doc.roundedRect(cardX, cardY, CARD_W, CARD_H, 8)
        .fillAndStroke('#ffffff', '#e5e7eb');
 
-    // ── Red left stripe ──
+    // ── Red top section (clip rounded top corners) ──
     doc.save()
-       .roundedRect(x, y, 90, CARD_H, 6).clip()
-       .rect(x, y, 90, CARD_H).fill(RED)
+       .roundedRect(cardX, cardY, CARD_W, RED_H + 8, 8).clip()
+       .rect(cardX, cardY, CARD_W, RED_H).fill(RED)
        .restore();
 
-    // ── Photo circle ──
-    const cx = x + PHOTO_CX;
-    const cy = y + PHOTO_CY;
+    // ── Photo: white ring + clipped circle ──
+    const photoCx = cardX + PHCX;
+    const photoCy = cardY + PHCY;
+    doc.circle(photoCx, photoCy, PHR + 3).fill('#ffffff');
 
-    const photoFile = m.photo
-      ? path.join(uploadsDir, m.photo)
-      : null;
-    const hasPhoto = photoFile && fs.existsSync(photoFile);
-
-    doc.save()
-       .circle(cx, cy, PHOTO_R)
-       .clip();
-
+    const photoFile = m.photo ? path.join(uploadsDir, m.photo) : null;
+    const hasPhoto  = photoFile && fs.existsSync(photoFile);
+    doc.save().circle(photoCx, photoCy, PHR).clip();
     if (hasPhoto) {
       try {
-        doc.image(photoFile, cx - PHOTO_R, cy - PHOTO_R, {
-          width:  PHOTO_R * 2,
-          height: PHOTO_R * 2,
-          cover:  [PHOTO_R * 2, PHOTO_R * 2],
+        doc.image(photoFile, photoCx - PHR, photoCy - PHR, {
+          width: PHR * 2, height: PHR * 2, cover: [PHR * 2, PHR * 2],
         });
-      } catch {
-        drawInitialsCircle(doc, F, cx, cy, PHOTO_R, m.name);
-      }
+      } catch { drawInitialsCircle(doc, F, photoCx, photoCy, PHR, m.name); }
     } else {
-      drawInitialsCircle(doc, F, cx, cy, PHOTO_R, m.name);
+      drawInitialsCircle(doc, F, photoCx, photoCy, PHR, m.name);
     }
-
     doc.restore();
 
-    // ── Info ──
-    const tx = x + TEXT_X;
-    let   ty = y + 14;
+    // ── Text in red section ──
+    const tx = cardX + TX;
+    let   ty = cardY + 18;
 
-    doc.font(F.bold).fontSize(11).fillColor('#111827')
-       .text(m.name, tx, ty, { width: CARD_W - TEXT_X - 8, lineBreak: false, ellipsis: true });
-    ty += 17;
+    // Name
+    doc.font(F.bold).fontSize(14).fillColor('#ffffff')
+       .text(m.name || '', tx, ty, { width: TW, lineBreak: false, ellipsis: true });
+    ty += 22;
 
-    if (m.profession) {
-      doc.font(F.regular).fontSize(8.5).fillColor('#6b7280')
-         .text(m.profession, tx, ty, { width: CARD_W - TEXT_X - 8, lineBreak: false, ellipsis: true });
-      ty += 14;
+    // Professions: RU left, HE right (or single line if only one)
+    // White-on-red blend: rgba(255,255,255,0.85) ≈ #f5d8de on #C41230
+    const profRu = (m.profession    || '').trim();
+    const profHe = (m.profession_he || '').trim();
+    if (profRu || profHe) {
+      if (profRu && profHe) {
+        const hw = Math.floor(TW / 2) - 6;
+        doc.font(F.regular).fontSize(9).fillColor('#f5d8de')
+           .text(profRu, tx, ty, { width: hw, lineBreak: false, ellipsis: true });
+        doc.font(F.regular).fontSize(9).fillColor('#f5d8de')
+           .text(profHe, tx + hw + 12, ty, { width: hw, lineBreak: false, ellipsis: true });
+      } else {
+        doc.font(F.regular).fontSize(9).fillColor('#f5d8de')
+           .text(profRu || profHe, tx, ty, { width: TW, lineBreak: false, ellipsis: true });
+      }
+      ty += 16;
     }
 
+    // Phone  (rgba(255,255,255,0.7) ≈ #edb8c1 on #C41230)
     if (m.phone) {
-      doc.font(F.regular).fontSize(8.5).fillColor('#374151')
-         .text(`📱 ${m.phone}`, tx, ty, { lineBreak: false });
-      ty += 14;
+      doc.font(F.regular).fontSize(9).fillColor('#edb8c1')
+         .text(fmtPhone(m.phone), tx, ty, { lineBreak: false });
     }
 
-    // ── Socials ──
+    // ── White section: social badges with handles ──
     if (m.socials && m.socials.length) {
-      let sx = tx;
-      for (const s of m.socials.slice(0, 6)) {
-        const abbr  = PLATFORM_ABBR[s.platform] || s.platform.slice(0, 3).toUpperCase();
-        const color = PLATFORM_COLOR[s.platform] || '#6b7280';
-        const bw    = Math.max(20, abbr.length * 6 + 8);
+      const wsX  = cardX + 12;
+      const wEnd = cardX + CARD_W - 12;
+      let   bx   = wsX;
+      let   by   = cardY + RED_H + 6;
+      const BH   = 17;   // badge height
+      const BGAP = 6;    // horizontal gap between items
+      const ROW  = BH + 6; // row height
 
-        doc.roundedRect(sx, ty, bw, 12, 3).fill(color);
-        doc.font(F.bold).fontSize(6).fillColor('#ffffff')
-           .text(abbr, sx, ty + 3, { width: bw, align: 'center', lineBreak: false });
-        sx += bw + 4;
-        if (sx > x + CARD_W - 16) break;
+      for (const s of m.socials) {
+        const abbrRaw = PLATFORM_ABBR[s.platform] || s.platform.slice(0, 3).toUpperCase();
+        const abbr    = abbrRaw === '🔗' ? 'LNK' : abbrRaw;
+        const color   = PLATFORM_COLOR[s.platform] || '#6b7280';
+        const handle  = socialHandle(s);
+        const abbrW   = abbr.length * 5.5 + 12;
+        const handleW = Math.min(handle.length * 4.3 + 4, 110);
+        const itemW   = abbrW + 4 + handleW;
+
+        if (bx + itemW > wEnd) {
+          bx  = wsX;
+          by += ROW;
+          if (by + BH > cardY + CARD_H - 4) break;
+        }
+
+        // Abbr badge
+        doc.roundedRect(bx, by, abbrW, BH, 3).fill(color);
+        doc.font(F.bold).fontSize(6.5).fillColor('#ffffff')
+           .text(abbr, bx, by + 5, { width: abbrW, align: 'center', lineBreak: false });
+
+        // Handle text
+        doc.font(F.regular).fontSize(7.5).fillColor('#4b5563')
+           .text(handle, bx + abbrW + 4, by + 5, { width: handleW, lineBreak: false, ellipsis: true });
+
+        bx += itemW + BGAP;
       }
     }
   });
@@ -339,7 +404,7 @@ function generateMembersCatalog(res, members, uploadsDir) {
     doc.font(F.regular).fontSize(7).fillColor('#9ca3af')
        .text(
          `BNI SYNERGY — Каталог участников | ${new Date().toLocaleDateString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
-         MARGIN_X, PAGE_H - 18, { width: PAGE_W - 2 * MARGIN_X, align: 'center' },
+         MX, PH - 16, { width: CARD_W, align: 'center' },
        );
   }
 

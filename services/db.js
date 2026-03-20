@@ -275,32 +275,34 @@ function getMemberById(id) {
   return db.prepare('SELECT * FROM members WHERE id = ?').get(id);
 }
 
-function insertMember({ name, profession, phone, birthday }) {
+function insertMember({ name, profession, profession_he, phone, birthday }) {
   const createdAt = new Date().toISOString();
   const info = db.prepare(
-    `INSERT INTO members (name, profession, phone, birthday, active, createdAt)
-     VALUES (?, ?, ?, ?, 1, ?)`
-  ).run(name.trim(), (profession || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt);
+    `INSERT INTO members (name, profession, profession_he, phone, birthday, active, createdAt)
+     VALUES (?, ?, ?, ?, ?, 1, ?)`
+  ).run(name.trim(), (profession || '').trim(), (profession_he || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt);
   return info.lastInsertRowid;
 }
 
-function updateMember(id, { name, profession, phone, birthday, active }) {
+function updateMember(id, { name, profession, profession_he, phone, birthday, active }) {
   const current = getMemberById(id);
   if (!current) return null;
   db.prepare(
     `UPDATE members SET
-       name       = ?,
-       profession = ?,
-       phone      = ?,
-       birthday   = ?,
-       active     = ?
+       name          = ?,
+       profession    = ?,
+       profession_he = ?,
+       phone         = ?,
+       birthday      = ?,
+       active        = ?
      WHERE id = ?`
   ).run(
-    (name       ?? current.name).trim(),
-    (profession ?? current.profession).trim(),
+    (name          ?? current.name).trim(),
+    (profession    ?? current.profession).trim(),
+    (profession_he ?? current.profession_he ?? '').trim(),
     normalizePhone(phone ?? current.phone),
-    (birthday   ?? current.birthday).trim(),
-    active      ?? current.active,
+    (birthday      ?? current.birthday).trim(),
+    active         ?? current.active,
     id,
   );
   return getMemberById(id);
@@ -338,9 +340,9 @@ function getMembersBirthday(ddmm) {
 }
 
 // Migrate existing DBs: add photo column to members
-try {
-  db.exec("ALTER TABLE members ADD COLUMN photo TEXT");
-} catch { /* already exists */ }
+try { db.exec("ALTER TABLE members ADD COLUMN photo TEXT"); } catch {}
+// Migrate: add Hebrew profession
+try { db.exec("ALTER TABLE members ADD COLUMN profession_he TEXT NOT NULL DEFAULT ''"); } catch {}
 
 // ─── Schema: settings ─────────────────────────────────────────────────────────
 

@@ -849,6 +849,48 @@ cron.schedule('0 18 * * 0', async () => {
   console.log(`[Cron] Готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
 }, { timezone: 'Asia/Jerusalem' });
 
+// ─── Cron: Sunday 19:00 — send unconfirmed list to Irina Zamanskaya ──────────
+
+cron.schedule('0 19 * * 0', async () => {
+  console.log('[Cron] Воскресенье 19:00 — отправка списка неподтверждённых Ирине');
+  const settings = db.getAllSettings();
+  const today    = getTodayStr();
+  // Only run if confirmations were sent today
+  if (settings.confirmation_sent_date !== today) {
+    console.log('[Cron] Подтверждения сегодня не отправлялись, пропускаем');
+    return;
+  }
+  const nextMeeting = settings.next_meeting_date || NEXT_MEETING_DATE;
+  if (!nextMeeting) return;
+
+  const unconfirmed = db.db.prepare(
+    'SELECT name, phone FROM guests WHERE meetingDate=? AND confirmed=0 AND wa_enabled=1 ORDER BY name ASC'
+  ).all(nextMeeting);
+  if (!unconfirmed.length) {
+    console.log('[Cron] Все гости подтвердили участие, список не отправляем');
+    return;
+  }
+
+  const irina = db.db.prepare(
+    "SELECT phone FROM members WHERE name LIKE '%Заманская%' AND active=1"
+  ).get();
+  if (!irina?.phone) {
+    console.log('[Cron] Ирина Заманская не найдена в базе, пропускаем');
+    return;
+  }
+
+  const dateStr = formatMeetingDate(nextMeeting);
+  const list    = unconfirmed.map((g, i) => `${i + 1}. ${g.name} — ${g.phone}`).join('\n');
+  const text    = `Ирина, добрый вечер! 👋\n\nСписок гостей на встречу ${dateStr}, которые ещё не подтвердили участие (${unconfirmed.length} чел.):\n\n${list}\n\nBNI Synergy`;
+
+  try {
+    await whatsapp.sendMessage(irina.phone, text);
+    console.log(`[Cron] Отправлен список ${unconfirmed.length} неподтверждённых Ирине Заманской`);
+  } catch (e) {
+    console.error('[Cron] Не удалось отправить Ирине:', e.message);
+  }
+}, { timezone: 'Asia/Jerusalem' });
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
