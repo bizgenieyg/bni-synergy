@@ -238,7 +238,8 @@ app.get('/api/paybox-webhook', (req, res) => {
 
 app.get('/api/guests', (req, res) => {
   const { date } = req.query;
-  res.json(date ? db.getGuestsByDate(date) : db.getAllGuests());
+  const guests = date ? db.getGuestsByDate(date) : db.getAllGuests();
+  res.json(guests.map(g => ({ ...g, name: g.name || `${g.firstName || ''} ${g.lastName || ''}`.trim() })));
 });
 
 app.get('/api/meetings', (req, res) => {

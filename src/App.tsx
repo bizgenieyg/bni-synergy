@@ -133,6 +133,16 @@ function waPhone(phone: string) {
   return phone.replace(/\D/g, '').replace(/^0/, '972')
 }
 
+function parseDateStr(str: string): number {
+  const parts = str.split('/')
+  if (parts.length < 3) {
+    const year = new Date().getFullYear()
+    return new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0])).getTime()
+  }
+  const year = parseInt(parts[2]) < 100 ? 2000 + parseInt(parts[2]) : parseInt(parts[2])
+  return new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0])).getTime()
+}
+
 function formatPhoneDisplay(phone: string): string {
   if (!phone) return ''
   let digits = phone.replace(/\D/g, '')
@@ -1014,7 +1024,7 @@ function GuestsSection() {
       api('/api/settings/next-meeting').then(r => r.json()),
     ]).then(([m, s]) => {
       // Sort oldest-first: ‹=i-1=older, ›=i+1=newer, default=last=newest
-      const sorted = [...m].reverse()
+      const sorted = [...m].sort((a, b) => parseDateStr(a) - parseDateStr(b))
       setMeetings(sorted); setNextMeeting(s.date || '')
       if (sorted.length) setSelectedDate(sorted[sorted.length - 1])
     })
@@ -1079,7 +1089,8 @@ function GuestsSection() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3 flex-wrap">
         {/* Arrow navigator — sorted oldest-first; ‹=i-1=older, ›=i+1=newer, default=last */}
         <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
           <button
@@ -1103,21 +1114,6 @@ function GuestsSection() {
           </button>
         </div>
 
-        {/* Dot indicators */}
-        {meetings.length > 1 && (
-          <div className="flex gap-1.5 items-center">
-            {meetings.map(d => (
-              <button key={d} onClick={() => setSelectedDate(d)}
-                className="rounded-full transition-all"
-                style={{
-                  width: selectedDate === d ? 8 : 6,
-                  height: selectedDate === d ? 8 : 6,
-                  background: selectedDate === d ? RED : '#d1d5db',
-                }} />
-            ))}
-          </div>
-        )}
-
         {/* Add date */}
         {showAddDate ? (
           <div className="flex items-center gap-1.5">
@@ -1125,7 +1121,7 @@ function GuestsSection() {
               className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm w-20 focus:outline-none focus:border-red-400" />
             <button onClick={() => {
               const v = addDateVal.trim()
-              if (v && !meetings.includes(v)) { setMeetings(m => [...m, v]); setSelectedDate(v) }
+              if (v && !meetings.includes(v)) { setMeetings(m => [...m, v].sort((a, b) => parseDateStr(a) - parseDateStr(b))); setSelectedDate(v) }
               else if (v && meetings.includes(v)) setSelectedDate(v)
               setAddDateVal(''); setShowAddDate(false)
             }} className="text-xs px-2.5 py-1.5 rounded-lg text-white font-medium" style={{ background: RED }}>
@@ -1141,6 +1137,19 @@ function GuestsSection() {
             className="text-xs px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors">
             <Plus size={12} /> Добавить дату
           </button>
+        )}
+        </div>
+        {meetings.length > 1 && (
+          <div className="flex gap-1.5 items-center">
+            {meetings.map(d => (
+              <button
+                key={d}
+                onClick={() => setSelectedDate(d)}
+                title={d}
+                className={cn('w-1.5 h-1.5 rounded-full transition-colors', d === selectedDate ? 'bg-red-500' : 'bg-gray-200 hover:bg-gray-400')}
+              />
+            ))}
+          </div>
         )}
       </div>
 
