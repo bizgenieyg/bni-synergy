@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>BNI SYNERGY — Подтверждение участия</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:      #C41230;
+      --red-dark: #9e0e26;
+      --text:     #1a1a1a;
+      --muted:    #6b7280;
+      --border:   #d1d5db;
+      --bg:       #f8f9fa;
+      --radius:   10px;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px 40px;
+    }
+
+    .logo-block { text-align: center; margin-bottom: 24px; }
+    .logo-title {
+      font-family: Arial Black, Arial, sans-serif;
+      font-size: 28px;
+      color: var(--red);
+      letter-spacing: -1px;
+    }
+    .logo-title span { font-size: 16px; color: #333; }
+    .logo-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 2px 16px rgba(0,0,0,.09);
+      width: 100%;
+      max-width: 420px;
+      padding: 28px 24px;
+    }
+
+    .greeting {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 18px 0;
+    }
+
+    .info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .info-row .icon { font-size: 16px; line-height: 1.4; flex-shrink: 0; }
+    .info-row a { color: var(--red); word-break: break-all; }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: opacity .15s;
+    }
+    .btn:active { opacity: .8; }
+    .btn-yes {
+      background: #16a34a;
+      color: #fff;
+    }
+    .btn-no {
+      background: #f3f4f6;
+      color: #6b7280;
+      margin-top: 8px;
+    }
+
+    .result-card {
+      text-align: center;
+      padding: 32px 24px;
+    }
+    .result-icon { font-size: 48px; margin-bottom: 12px; }
+    .result-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .result-sub { font-size: 14px; color: var(--muted); }
+
+    .loading {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .error-msg {
+      text-align: center;
+      padding: 40px 24px;
+      color: #ef4444;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-block">
+    <div class="logo-title">BNI <span>SYNERGY</span></div>
+    <div class="logo-sub">Business Network International</div>
+  </div>
+
+  <div class="card" id="app">
+    <div class="loading" id="loading">Загрузка…</div>
+  </div>
+
+  <script>
+    const params  = new URLSearchParams(location.search);
+    const guestId = params.get('id');
+
+    function formatDate(ddmmyy) {
+      if (!ddmmyy) return '';
+      const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+      const parts = ddmmyy.split('/');
+      if (parts.length < 2) return ddmmyy;
+      const dd = parseInt(parts[0], 10);
+      const mm = parseInt(parts[1], 10);
+      const yy = parts[2] ? parseInt(parts[2], 10) + 2000 : new Date().getFullYear();
+      return `${dd} ${months[mm - 1]} ${yy}`;
+    }
+
+    function renderMeeting(data) {
+      const app = document.getElementById('app');
+      const firstName = (data.name || 'Гость').trim().split(' ')[0];
+      const dateStr = formatDate(data.meetingDate);
+
+      let locationHtml;
+      if (data.meetingType === 'zoom') {
+        locationHtml = `
+          <div class="info-row"><span class="icon">💻</span><span>Встреча пройдёт онлайн в Zoom</span></div>
+          <div class="info-row"><span class="icon">🔗</span><a href="${data.zoomUrl}" target="_blank" rel="noopener">${data.zoomUrl || '—'}</a></div>`;
+      } else {
+        locationHtml = `
+          <div class="info-row"><span class="icon">📍</span><span>${data.location || ''}</span></div>`;
+      }
+
+      app.innerHTML = `
+        <div class="greeting">Здравствуйте, ${firstName}! 👋</div>
+        <div class="subtitle">Подтвердите участие во встрече</div>
+        <div class="divider"></div>
+        <div class="info-row"><span class="icon">📅</span><span><b>Понедельник, ${dateStr}</b> в 7:30</span></div>
+        ${locationHtml}
+        <div class="divider"></div>
+        <button class="btn btn-yes" id="btn-yes">✅ Я приду!</button>
+        <button class="btn btn-no"  id="btn-no">😔 К сожалению, не смогу</button>`;
+
+      document.getElementById('btn-yes').addEventListener('click', confirm);
+      document.getElementById('btn-no').addEventListener('click', decline);
+    }
+
+    function renderResult(yes) {
+      const app = document.getElementById('app');
+      if (yes) {
+        app.innerHTML = `
+          <div class="result-card">
+            <div class="result-icon">🎉</div>
+            <div class="result-title">Отлично!</div>
+            <div class="result-sub">Ждём вас на встрече!</div>
+          </div>`;
+      } else {
+        app.innerHTML = `
+          <div class="result-card">
+            <div class="result-icon">🙏</div>
+            <div class="result-title">Спасибо, что сообщили</div>
+            <div class="result-sub">Будем рады видеть вас на следующей встрече!</div>
+          </div>`;
+      }
+    }
+
+    function renderError(msg) {
+      document.getElementById('app').innerHTML = `<div class="error-msg">${msg}</div>`;
+    }
+
+    async function confirm() {
+      try {
+        await fetch(`/api/guests/${guestId}/confirm`, { method: 'POST' });
+        renderResult(true);
+      } catch {
+        renderResult(true); // show success anyway — best-effort
+      }
+    }
+
+    function decline() {
+      renderResult(false);
+    }
+
+    // ── Init ──
+    if (!guestId) {
+      renderError('Неверная ссылка — отсутствует ID гостя.');
+    } else {
+      fetch(`/api/guests/${guestId}/public`)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+          if (data.confirmed) {
+            renderResult(true); // already confirmed
+          } else {
+            renderMeeting(data);
+          }
+        })
+        .catch(() => renderError('Гость не найден или ссылка устарела.'));
+    }
+  </script>
+</body>
+</html>

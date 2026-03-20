@@ -7,6 +7,7 @@ const cors    = require('cors');
 const path    = require('path');
 const fs      = require('fs');
 const multer  = require('multer');
+const cron    = require('node-cron');
 
 const db       = require('./services/db');
 const sheets   = require('./services/sheets');
@@ -58,6 +59,44 @@ const upload = multer({
   fileFilter: (req, file, cb) =>
     cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)),
 });
+
+// ─── Utility helpers ──────────────────────────────────────────────────────────
+
+function formatMeetingDate(ddmmyy) {
+  if (!ddmmyy) return '';
+  const parts = ddmmyy.split('/');
+  if (parts.length < 2) return ddmmyy;
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dd = parseInt(parts[0], 10);
+  const mm = parseInt(parts[1], 10);
+  const yy = parts[2] ? (parseInt(parts[2], 10) + 2000) : new Date().getFullYear();
+  return `${dd} ${months[mm - 1]} ${yy}`;
+}
+
+function getTodayStr() {
+  const d = new Date();
+  return String(d.getDate()).padStart(2, '0') + '/' +
+         String(d.getMonth() + 1).padStart(2, '0') + '/' +
+         String(d.getFullYear()).slice(2);
+}
+
+function buildConfirmationMessage(guest, settings) {
+  const meetingType = settings.meeting_type || 'offline';
+  const location    = settings.meeting_location || WAZE_ADDRESS;
+  const zoomUrl     = settings.meeting_zoom_url || '';
+  const dateStr     = formatMeetingDate(guest.meetingDate);
+  const firstName   = whatsapp.getFirstName(guest.name);
+  const locationLine = meetingType === 'zoom'
+    ? `💻 Встреча пройдёт онлайн в Zoom\n🔗 ${zoomUrl}`
+    : `📍 ${location}`;
+  return `Здравствуйте, ${firstName}! 👋\n\n` +
+    `Напоминаем о встрече BNI Synergy:\n` +
+    `📅 Понедельник, ${dateStr} в 7:30\n\n` +
+    `${locationLine}\n\n` +
+    `Пожалуйста, подтвердите участие:\n` +
+    `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
+    `BNI Synergy`;
+}
 
 // ─── Message variants (anti-spam) ─────────────────────────────────────────────
 
@@ -126,6 +165,7 @@ app.get('/admin',           (req, res) => {
   if (fs.existsSync(spa)) return res.sendFile(spa);
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
+app.get('/confirm',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'confirm.html')));
 app.get('/member',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'member.html')));
 app.get('/voting',          (req, res) => res.sendFile(path.join(__dirname, 'public', 'voting.html')));
 app.get('/profile',         (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
@@ -266,6 +306,28 @@ app.patch('/api/guests/:id/wa-toggle', (req, res) => {
   const next = db.toggleWaEnabled(req.params.id);
   if (next === null) return res.status(404).json({ error: 'Гость не найден' });
   res.json({ success: true, wa_enabled: next });
+});
+
+// Public endpoint — no auth required
+app.get('/api/guests/:id/public', (req, res) => {
+  const guest = db.getGuestById(req.params.id);
+  if (!guest) return res.status(404).json({ error: 'Гость не найден' });
+  const settings = db.getAllSettings();
+  res.json({
+    name:        guest.name || `${guest.firstName || ''} ${guest.lastName || ''}`.trim(),
+    meetingDate: guest.meetingDate,
+    confirmed:   guest.confirmed || 0,
+    meetingType: settings.meeting_type || 'offline',
+    location:    settings.meeting_location || WAZE_ADDRESS,
+    zoomUrl:     settings.meeting_zoom_url || '',
+  });
+});
+
+app.post('/api/guests/:id/confirm', (req, res) => {
+  const guest = db.getGuestById(req.params.id);
+  if (!guest) return res.status(404).json({ error: 'Гость не найден' });
+  db.markConfirmed(guest.id);
+  res.json({ success: true, confirmed: 1 });
 });
 
 // ─── Members API ──────────────────────────────────────────────────────────────
@@ -418,6 +480,18 @@ app.patch('/api/settings/next-meeting', (req, res) => {
   res.json({ success: true, date: NEXT_MEETING_DATE });
 });
 
+app.get('/api/settings', (req, res) => {
+  res.json(db.getAllSettings());
+});
+
+app.put('/api/settings', (req, res) => {
+  const { key, value } = req.body;
+  if (!key) return res.status(400).json({ error: 'key обязателен' });
+  db.setSetting(key, value ?? '');
+  if (key === 'next_meeting_date') NEXT_MEETING_DATE = String(value ?? '');
+  res.json({ success: true });
+});
+
 // ─── Birthdays ────────────────────────────────────────────────────────────────
 
 app.get('/api/birthdays/upcoming', (req, res) => {
@@ -550,8 +624,8 @@ app.post('/api/send-voting', async (req, res) => {
   res.json({ success: true, total: guests.length, groupSent: !!groupId, message: 'Рассылка запущена' });
 
   // Individual messages to guests (random variant per message)
-  whatsapp.broadcast(guests, g =>
-    pickVariant(VOTING_VARIANTS)((g.name || '').split(' ')[0], votingLink)
+  whatsapp.sendWithDelay(guests, g =>
+    pickVariant(VOTING_VARIANTS)(whatsapp.getFirstName(g.name), votingLink)
   ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
 });
 
@@ -576,9 +650,29 @@ app.post('/api/whatsapp/send-catalog', async (req, res) => {
   const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled !== 0);
   res.json({ sent: guests.length });
 
-  const text = 'Добро пожаловать в BNI Synergy! 🎉\n\nВот каталог наших участников:\nhttps://bnisynergy.biz/members-catalog\n\nЖдём вас на встрече!';
-  whatsapp.broadcast(guests, () => text)
-    .catch(err => console.error('[Broadcast] send-catalog error:', err.message));
+  whatsapp.sendWithDelay(guests, g =>
+    `Здравствуйте, ${whatsapp.getFirstName(g.name)}! 👋\n\n` +
+    `Добро пожаловать в BNI Synergy!\n` +
+    `Вот каталог наших участников:\nhttps://bnisynergy.biz/members-catalog\n\n` +
+    `Ждём вас на встрече! 🤝\nBNI Synergy`
+  ).catch(err => console.error('[Broadcast] send-catalog error:', err.message));
+});
+
+app.post('/api/whatsapp/send-confirmations', async (req, res) => {
+  const { meeting_date } = req.body;
+  if (!meeting_date) return res.status(400).json({ error: 'meeting_date обязателен' });
+
+  const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled === 1 && !g.confirmed);
+  const settings = db.getAllSettings();
+  db.setSetting('confirmation_sent_for', meeting_date);
+  res.json({ sent: guests.length });
+
+  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings))
+    .then(r => {
+      db.setSetting('confirmation_sent_date', getTodayStr());
+      console.log(`[Confirmations] Done: ${r.sent} sent, ${r.failed} failed`);
+    })
+    .catch(err => console.error('[Broadcast] send-confirmations error:', err.message));
 });
 
 // ─── Presentations ────────────────────────────────────────────────────────────
@@ -729,6 +823,31 @@ function checkBirthdays() {
 
 setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
 checkBirthdays();
+
+// ─── Cron: Sunday 18:00 — send confirmation reminders ────────────────────────
+
+cron.schedule('0 18 * * 0', async () => {
+  console.log('[Cron] Воскресенье 18:00 — проверка рассылки подтверждений');
+  const settings = db.getAllSettings();
+  const nextMeeting = settings.next_meeting_date || NEXT_MEETING_DATE;
+  if (!nextMeeting) return;
+
+  const today = getTodayStr();
+  if (settings.confirmation_sent_date === today) {
+    console.log('[Cron] Уже отправляли сегодня, пропускаем');
+    return;
+  }
+
+  const guests = db.db.prepare(
+    'SELECT * FROM guests WHERE meetingDate=? AND wa_enabled=1 AND confirmed=0'
+  ).all(nextMeeting);
+  console.log(`[Cron] Найдено ${guests.length} неподтверждённых гостей`);
+
+  const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings));
+  db.setSetting('confirmation_sent_date', today);
+  db.setSetting('confirmation_sent_for', nextMeeting);
+  console.log(`[Cron] Готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
+}, { timezone: 'Asia/Jerusalem' });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 

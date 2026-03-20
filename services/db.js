@@ -49,6 +49,12 @@ try {
 } catch { /* already exists */ }
 db.exec("UPDATE guests SET name = TRIM(firstName || ' ' || COALESCE(lastName, '')) WHERE name = '' OR name IS NULL");
 
+// Migrate: add guest confirmation columns
+try { db.exec('ALTER TABLE guests ADD COLUMN confirmed INTEGER DEFAULT 0'); } catch {}
+try { db.exec('ALTER TABLE guests ADD COLUMN confirmed_at TEXT'); } catch {}
+// Auto-confirm all guests registered before 2026-03-20
+db.exec("UPDATE guests SET confirmed = 1 WHERE createdAt < '2026-03-20T00:00:00.000Z' AND confirmed = 0");
+
 // ─── Schema: members ──────────────────────────────────────────────────────────
 
 db.exec(`
@@ -178,6 +184,11 @@ function markWaSent(id) {
 
 function markPaid(id) {
   db.prepare('UPDATE guests SET paid = 1, paidAt = ? WHERE id = ?')
+    .run(new Date().toISOString(), id);
+}
+
+function markConfirmed(id) {
+  db.prepare('UPDATE guests SET confirmed = 1, confirmed_at = ? WHERE id = ?')
     .run(new Date().toISOString(), id);
 }
 
@@ -350,6 +361,11 @@ function getSetting(key) {
 
 function setSetting(key, value) {
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, String(value));
+}
+
+function getAllSettings() {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
 // ─── Schema: votes ────────────────────────────────────────────────────────────
@@ -710,6 +726,7 @@ module.exports = {
   updateSheetRow,
   markWaSent,
   markPaid,
+  markConfirmed,
   toggleWaEnabled,
   getGuestsByDate,
   getAllGuests,
@@ -734,6 +751,7 @@ module.exports = {
   // settings
   getSetting,
   setSetting,
+  getAllSettings,
   // votes
   hasVoted,
   insertVote,

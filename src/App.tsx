@@ -30,6 +30,8 @@ interface Guest {
   waSent: number
   wa_enabled: number
   createdAt: string
+  confirmed: number
+  confirmed_at: string
 }
 
 interface Member {
@@ -792,6 +794,17 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
   const [gvTotal, setGvTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [savingMeeting, setSavingMeeting] = useState(false)
+  const [meetingType, setMeetingType] = useState<'offline' | 'zoom'>('offline')
+  const [meetingLocation, setMeetingLocation] = useState('')
+  const [meetingZoomUrl, setMeetingZoomUrl] = useState('')
+  const [savingMeetingField, setSavingMeetingField] = useState<string | null>(null)
+
+  const saveMeetingField = async (key: string, value: string) => {
+    setSavingMeetingField(key)
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value }) })
+    } finally { setSavingMeetingField(null) }
+  }
 
   const saveMeeting = async (date: string) => {
     setSavingMeeting(true)
@@ -810,7 +823,8 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       api('/api/birthdays/upcoming?days=14').then(r => r.json()),
       api('/api/members?active=true').then(r => r.json()),
       api('/api/group-value/totals?period=all').then(r => r.json()),
-    ]).then(([s, vs, vr, gc, b, m, gv]) => {
+      api('/api/settings').then(r => r.json()),
+    ]).then(([s, vs, vr, gc, b, m, gv, cfg]) => {
       setStats(s)
       setVotingStatus(vs)
       setResults(vr)
@@ -818,6 +832,9 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       setBirthdays(b)
       setMemberCount(m.length)
       setGvTotal(gv?.total_amount || 0)
+      if (cfg.meeting_type) setMeetingType(cfg.meeting_type as 'offline' | 'zoom')
+      if (cfg.meeting_location) setMeetingLocation(cfg.meeting_location)
+      if (cfg.meeting_zoom_url) setMeetingZoomUrl(cfg.meeting_zoom_url)
       if (gc.date) api(`/api/guests?date=${gc.date}`).then(r => r.json()).then(g => setRecentGuests(g.slice(0, 5)))
     })
   }, [])
@@ -888,6 +905,47 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
           Авто
         </button>
         {savingMeeting && <Loader2 size={14} className="animate-spin text-gray-400" />}
+      </div>
+
+      {/* Meeting Settings */}
+      <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🏢 Формат встречи</p>
+        <div className="flex gap-2 mb-3">
+          {(['offline', 'zoom'] as const).map(type => (
+            <button key={type}
+              onClick={() => { setMeetingType(type); saveMeetingField('meeting_type', type) }}
+              className={cn('px-4 py-1.5 rounded-xl text-sm font-medium border transition-colors',
+                meetingType === type
+                  ? 'border-red-400 text-white'
+                  : 'border-gray-200 text-gray-600 hover:border-gray-300')}
+              style={meetingType === type ? { background: RED } : {}}>
+              {type === 'offline' ? 'Офлайн' : 'Zoom'}
+            </button>
+          ))}
+        </div>
+        {meetingType === 'offline' ? (
+          <div className="flex gap-2">
+            <input value={meetingLocation} onChange={e => setMeetingLocation(e.target.value)}
+              placeholder="Адрес встречи…"
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+            <button onClick={() => saveMeetingField('meeting_location', meetingLocation)}
+              disabled={savingMeetingField === 'meeting_location'}
+              className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
+              {savingMeetingField === 'meeting_location' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input value={meetingZoomUrl} onChange={e => setMeetingZoomUrl(e.target.value)}
+              placeholder="https://zoom.us/j/…"
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+            <button onClick={() => saveMeetingField('meeting_zoom_url', meetingZoomUrl)}
+              disabled={savingMeetingField === 'meeting_zoom_url'}
+              className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
+              {savingMeetingField === 'meeting_zoom_url' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -1014,6 +1072,8 @@ function GuestsSection() {
   const [loading, setLoading] = useState(false)
   const [nextMeeting, setNextMeeting] = useState('')
   const [sendingCatalog, setSendingCatalog] = useState(false)
+  const [sendingConfirmations, setSendingConfirmations] = useState(false)
+  const [confirmationSentFor, setConfirmationSentFor] = useState('')
   const [toastMsg, setToastMsg] = useState('')
   const [showAddDate, setShowAddDate] = useState(false)
   const [addDateVal, setAddDateVal] = useState('')
@@ -1022,10 +1082,12 @@ function GuestsSection() {
     Promise.all([
       api('/api/meetings').then(r => r.json()),
       api('/api/settings/next-meeting').then(r => r.json()),
-    ]).then(([m, s]) => {
+      api('/api/settings').then(r => r.json()),
+    ]).then(([m, s, cfg]) => {
       // Sort oldest-first: ‹=i-1=older, ›=i+1=newer, default=last=newest
       const sorted = [...m].sort((a, b) => parseDateStr(a) - parseDateStr(b))
       setMeetings(sorted); setNextMeeting(s.date || '')
+      setConfirmationSentFor(cfg.confirmation_sent_for || '')
       if (sorted.length) setSelectedDate(sorted[sorted.length - 1])
     })
   }, [])
@@ -1050,7 +1112,8 @@ function GuestsSection() {
     setGuests(gs => gs.map(g => g.id === id ? { ...g, wa_enabled } : g))
   }
 
-  const paid = guests.filter(g => g.paid).length
+  const paid      = guests.filter(g => g.paid).length
+  const confirmed = guests.filter(g => g.confirmed).length
 
   const sendCatalog = async () => {
     if (!selectedDate || sendingCatalog) return
@@ -1065,6 +1128,18 @@ function GuestsSection() {
     }
   }
 
+  const sendConfirmations = async () => {
+    if (!selectedDate || sendingConfirmations) return
+    setSendingConfirmations(true)
+    try {
+      const r = await api('/api/whatsapp/send-confirmations', { method: 'POST', body: JSON.stringify({ meeting_date: selectedDate }) })
+      const { sent } = await r.json()
+      setConfirmationSentFor(selectedDate)
+      setToastMsg(`Подтверждения отправлены: ${sent}`)
+      setTimeout(() => setToastMsg(''), 4000)
+    } finally { setSendingConfirmations(false) }
+  }
+
   return (
     <div className="space-y-5">
       {toastMsg && (
@@ -1075,6 +1150,11 @@ function GuestsSection() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('guests.title')}</h1>
         <div className="flex gap-2">
+          <button onClick={sendConfirmations} disabled={sendingConfirmations || !selectedDate}
+            className="text-xs px-3 py-2 rounded-xl border border-blue-200 bg-white text-blue-600 hover:border-blue-300 flex items-center gap-1.5 disabled:opacity-50">
+            {sendingConfirmations ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            Разослать подтверждения
+          </button>
           <button onClick={sendCatalog} disabled={sendingCatalog || !selectedDate}
             className="text-xs px-3 py-2 rounded-xl border border-green-200 bg-white text-green-600 hover:border-green-300 flex items-center gap-1.5 disabled:opacity-50">
             {sendingCatalog ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
@@ -1157,7 +1237,8 @@ function GuestsSection() {
         <div className="flex gap-3 text-sm text-gray-600">
           <span className="font-semibold text-gray-900">{guests.length}</span> {t('guests.guests')} ·
           <span className="text-green-600 font-semibold">{paid}</span> {t('guests.paid')} ·
-          <span className="text-gray-400">{guests.length - paid}</span> {t('guests.unpaid')}
+          <span className="text-gray-400">{guests.length - paid}</span> {t('guests.unpaid')} ·
+          <span className="text-blue-600 font-semibold">{confirmed}</span> подтвердили
         </div>
       )}
 
@@ -1181,6 +1262,7 @@ function GuestsSection() {
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
                 <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('guests.colInvitedBy')}</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
+                <th className="px-4 py-3 font-medium">Подтверждение</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
               </tr>
             </thead>
@@ -1199,6 +1281,14 @@ function GuestsSection() {
                       className={cn('px-2 py-1 rounded-full text-xs font-medium', g.wa_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
                       {g.wa_enabled ? t('guests.waOn') : t('guests.waOff')}
                     </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    {g.confirmed
+                      ? <span className="text-xs font-medium text-green-600">✅ Подтвердил</span>
+                      : confirmationSentFor === selectedDate && g.wa_enabled
+                        ? <span className="text-xs font-medium text-amber-500">📨 Отправлено</span>
+                        : <span className="text-xs text-gray-400">⏳ Ожидает</span>
+                    }
                   </td>
                   <td className="px-4 py-3">
                     {g.paid

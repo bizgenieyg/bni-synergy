@@ -95,4 +95,34 @@ async function broadcast(recipients, buildText) {
   return results;
 }
 
-module.exports = { sendMessage, sendGroupMessage, broadcast, toChatId };
+/**
+ * Send messages with a longer random delay (5–25 s) between sends.
+ * Returns { sent, failed, errors }.
+ */
+async function sendWithDelay(recipients, messageFn) {
+  const results = { sent: 0, failed: 0, errors: [] };
+  for (const recipient of recipients) {
+    if (!recipient.phone) { results.failed++; continue; }
+    try {
+      const text = messageFn(recipient);
+      await sendMessage(recipient.phone, text);
+      results.sent++;
+      console.log(`[WA] Sent to ${recipient.phone}`);
+    } catch (e) {
+      results.failed++;
+      results.errors.push({ phone: recipient.phone, error: e.message });
+      console.error(`[WA] Failed for ${recipient.phone}:`, e.message);
+    }
+    const delay = Math.random() * 20000 + 5000; // 5–25 s
+    console.log(`[WA] Waiting ${Math.round(delay / 1000)}s...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  return results;
+}
+
+function getFirstName(fullName) {
+  if (!fullName) return 'Гость';
+  return fullName.trim().split(' ')[0];
+}
+
+module.exports = { sendMessage, sendGroupMessage, broadcast, sendWithDelay, getFirstName, toChatId };
