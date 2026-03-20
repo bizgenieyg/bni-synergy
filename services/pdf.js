@@ -225,29 +225,29 @@ function memberInitials(name) {
 }
 
 /**
- * Generate members catalog PDF and pipe to response.
- * Layout: 1 card per row, 3 per page.
- * Each card: red top section (photo + name + professions + phone) +
- *            white bottom section (social badges with handles).
+ * Generate members catalog PDF matching the reference design (Члены BNI.pdf).
+ * Layout: 1 card per row × 3 per page.
+ * Card top  (red, ~58%): circular photo left + name centered + divider + professions RU/HE
+ * Card bottom (white, ~42%): social items — colored circle icon + label text
  */
 function generateMembersCatalog(res, members, uploadsDir) {
   const RED    = '#C41230';
   const PW     = 595;
   const PH     = 842;
-  const MX     = 28;    // left/right margin
-  const MY     = 20;    // top margin
-  const HDR_H  = 24;   // page header height
-  const HDR_G  = 8;    // gap between header and first card
+  const MX     = 28;   // left/right margin
+  const MY     = 20;   // top margin
+  const HDR_H  = 32;   // page header height (larger, more prominent)
+  const HDR_G  = 6;    // gap header → first card
   const PER_PG = 3;    // cards per page
-  const CGAP   = 12;   // vertical gap between cards
-  const CARD_W = PW - 2 * MX;            // 539
+  const CGAP   = 10;   // vertical gap between cards
+  const CARD_W = PW - 2 * MX;              // 539
   const CARD_H = 240;
-  const RED_H  = Math.round(CARD_H * 0.6); // 144  – red top section height
-  const PHR    = 40;   // photo radius
-  const PHCX   = 60;   // photo center x from card left
-  const PHCY   = RED_H / 2; // photo center y from card top (72)
-  const TX     = 112;  // text start x from card left
-  const TW     = CARD_W - TX - 14; // text area width (413)
+  const RED_H  = Math.round(CARD_H * 0.58);// 139 — red section height
+  const PHR    = 55;   // photo radius (bigger, nearly fills red section height)
+  const PHCX   = 68;   // photo center x from card left
+  const PHCY   = RED_H / 2 + 2; // photo center y (slightly below center)
+  const TX     = 132;  // text area start x (right of photo + gap)
+  const TW     = CARD_W - TX - 14; // text area width (393)
 
   const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
@@ -256,32 +256,26 @@ function generateMembersCatalog(res, members, uploadsDir) {
 
   const F = setupFonts(doc);
 
+  // ─── Page header: "Члены группы"  |  BNI SYNERGY ─────────────────────────
   function drawPageHeader() {
-    doc.font(F.bold).fontSize(14).fillColor(RED)
-       .text('Члены группы', MX, MY, { lineBreak: false });
-    doc.font(F.bold).fontSize(14).fillColor('#1a1a1a')
-       .text('BNI SYNERGY', MX, MY, { width: CARD_W, align: 'right', lineBreak: false });
+    const hy = MY + 4;
+    doc.font(F.bold).fontSize(22).fillColor('#111111')
+       .text('Члены группы', MX, hy, { lineBreak: false });
+    doc.font(F.bold).fontSize(22).fillColor(RED)
+       .text('BNI SYNERGY', MX, hy, { width: CARD_W, align: 'right', lineBreak: false });
+    // Thin underline
+    doc.moveTo(MX, MY + 30).lineTo(MX + CARD_W, MY + 30)
+       .strokeColor('#e5e7eb').lineWidth(0.5).stroke();
   }
 
-  // Extract short handle from social URL
-  function socialHandle(s) {
+  // Display text for a social entry: stored label or URL-extracted handle
+  function socialText(s) {
+    if (s.label) return s.label;
     try {
       const u = new URL(s.url);
       const parts = u.pathname.split('/').filter(Boolean);
-      if (parts.length) return '@' + parts[parts.length - 1];
-      return u.hostname.replace('www.', '');
-    } catch {
-      return s.label || s.url.slice(0, 22);
-    }
-  }
-
-  // Format stored 972XXXXXXXXX → 05X-XXX-XXXX
-  function fmtPhone(phone) {
-    if (!phone) return '';
-    let d = String(phone).replace(/\D/g, '');
-    if (d.startsWith('972')) d = '0' + d.slice(3);
-    if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
-    return phone;
+      return parts.length ? '@' + parts[parts.length - 1] : u.hostname.replace('www.', '');
+    } catch { return s.url.slice(0, 26); }
   }
 
   drawPageHeader();
@@ -296,20 +290,20 @@ function generateMembersCatalog(res, members, uploadsDir) {
     const cardX = MX;
     const cardY = MY + HDR_H + HDR_G + pos * (CARD_H + CGAP);
 
-    // ── Card background + border ──
-    doc.roundedRect(cardX, cardY, CARD_W, CARD_H, 8)
-       .fillAndStroke('#ffffff', '#e5e7eb');
+    // ── Card background + subtle border ──
+    doc.roundedRect(cardX, cardY, CARD_W, CARD_H, 10)
+       .fillAndStroke('#ffffff', '#d1d5db');
 
-    // ── Red top section (clip rounded top corners) ──
+    // ── Red top section (clip to rounded top) ──
     doc.save()
-       .roundedRect(cardX, cardY, CARD_W, RED_H + 8, 8).clip()
+       .roundedRect(cardX, cardY, CARD_W, RED_H + 10, 10).clip()
        .rect(cardX, cardY, CARD_W, RED_H).fill(RED)
        .restore();
 
-    // ── Photo: white ring + clipped circle ──
+    // ── Photo: white ring + clipped photo circle ──
     const photoCx = cardX + PHCX;
     const photoCy = cardY + PHCY;
-    doc.circle(photoCx, photoCy, PHR + 3).fill('#ffffff');
+    doc.circle(photoCx, photoCy, PHR + 4).fill('#ffffff');
 
     const photoFile = m.photo ? path.join(uploadsDir, m.photo) : null;
     const hasPhoto  = photoFile && fs.existsSync(photoFile);
@@ -327,72 +321,73 @@ function generateMembersCatalog(res, members, uploadsDir) {
 
     // ── Text in red section ──
     const tx = cardX + TX;
-    let   ty = cardY + 18;
+    let   ty = cardY + 14;
 
-    // Name
-    doc.font(F.bold).fontSize(14).fillColor('#ffffff')
-       .text(m.name || '', tx, ty, { width: TW, lineBreak: false, ellipsis: true });
-    ty += 22;
+    // Name — centered in text area
+    doc.font(F.bold).fontSize(18).fillColor('#ffffff')
+       .text(m.name || '', tx, ty, { width: TW, align: 'center', lineBreak: false, ellipsis: true });
+    ty += 24;
 
-    // Professions: RU left, HE right (or single line if only one)
-    // White-on-red blend: rgba(255,255,255,0.85) ≈ #f5d8de on #C41230
+    // Thin white divider line
+    doc.moveTo(tx + 20, ty).lineTo(tx + TW - 20, ty)
+       .strokeColor('#ffffff').lineWidth(0.6).stroke();
+    ty += 8;
+
+    // Professions: RU left-aligned, HE right-aligned
+    // Blended white on red: 85% ≈ #f5d8de
     const profRu = (m.profession    || '').trim();
     const profHe = (m.profession_he || '').trim();
     if (profRu || profHe) {
       if (profRu && profHe) {
-        const hw = Math.floor(TW / 2) - 6;
-        doc.font(F.regular).fontSize(9).fillColor('#f5d8de')
-           .text(profRu, tx, ty, { width: hw, lineBreak: false, ellipsis: true });
-        doc.font(F.regular).fontSize(9).fillColor('#f5d8de')
-           .text(profHe, tx + hw + 12, ty, { width: hw, lineBreak: false, ellipsis: true });
+        const hw = Math.floor(TW / 2) - 4;
+        doc.font(F.bold).fontSize(10).fillColor('#f5d8de')
+           .text(profRu, tx, ty, { width: hw, lineBreak: true, height: 30, ellipsis: true });
+        doc.font(F.bold).fontSize(10).fillColor('#f5d8de')
+           .text(profHe, tx + hw + 8, ty, { width: hw, align: 'right', lineBreak: true, height: 30, ellipsis: true });
       } else {
-        doc.font(F.regular).fontSize(9).fillColor('#f5d8de')
-           .text(profRu || profHe, tx, ty, { width: TW, lineBreak: false, ellipsis: true });
+        doc.font(F.bold).fontSize(10).fillColor('#f5d8de')
+           .text(profRu || profHe, tx, ty, { width: TW, align: 'center', lineBreak: false, ellipsis: true });
       }
-      ty += 16;
     }
 
-    // Phone  (rgba(255,255,255,0.7) ≈ #edb8c1 on #C41230)
-    if (m.phone) {
-      doc.font(F.regular).fontSize(9).fillColor('#edb8c1')
-         .text(fmtPhone(m.phone), tx, ty, { lineBreak: false });
-    }
-
-    // ── White section: social badges with handles ──
+    // ── White section: social items (circle icon + label text) ──
     if (m.socials && m.socials.length) {
-      const wsX  = cardX + 12;
-      const wEnd = cardX + CARD_W - 12;
-      let   bx   = wsX;
-      let   by   = cardY + RED_H + 6;
-      const BH   = 17;   // badge height
-      const BGAP = 6;    // horizontal gap between items
-      const ROW  = BH + 6; // row height
+      const wsX   = cardX + 14;
+      const wEnd  = cardX + CARD_W - 14;
+      let   bx    = wsX;
+      let   by    = cardY + RED_H + 7;
+      const CD    = 22;   // circle icon diameter
+      const SGAP  = 8;    // gap between items
+      const ROW_H = CD + 6;
+      const MAX_Y = cardY + CARD_H - 5;
 
       for (const s of m.socials) {
-        const abbrRaw = PLATFORM_ABBR[s.platform] || s.platform.slice(0, 3).toUpperCase();
-        const abbr    = abbrRaw === '🔗' ? 'LNK' : abbrRaw;
-        const color   = PLATFORM_COLOR[s.platform] || '#6b7280';
-        const handle  = socialHandle(s);
-        const abbrW   = abbr.length * 5.5 + 12;
-        const handleW = Math.min(handle.length * 4.3 + 4, 110);
-        const itemW   = abbrW + 4 + handleW;
+        const abbr  = (PLATFORM_ABBR[s.platform] || s.platform.slice(0, 3).toUpperCase()).replace('🔗', 'LNK');
+        const color = PLATFORM_COLOR[s.platform] || '#6b7280';
+        const label = socialText(s);
+
+        // Estimate text width (9pt ≈ 5pt per char avg)
+        const labelW = Math.min(label.length * 5.0 + 4, 130);
+        const itemW  = CD + 5 + labelW;
 
         if (bx + itemW > wEnd) {
           bx  = wsX;
-          by += ROW;
-          if (by + BH > cardY + CARD_H - 4) break;
+          by += ROW_H;
+          if (by + CD > MAX_Y) break;
         }
 
-        // Abbr badge
-        doc.roundedRect(bx, by, abbrW, BH, 3).fill(color);
+        // Colored circle icon
+        doc.circle(bx + CD / 2, by + CD / 2, CD / 2).fill(color);
         doc.font(F.bold).fontSize(6.5).fillColor('#ffffff')
-           .text(abbr, bx, by + 5, { width: abbrW, align: 'center', lineBreak: false });
+           .text(abbr, bx, by + (CD - 8) / 2, { width: CD, align: 'center', lineBreak: false });
 
-        // Handle text
-        doc.font(F.regular).fontSize(7.5).fillColor('#4b5563')
-           .text(handle, bx + abbrW + 4, by + 5, { width: handleW, lineBreak: false, ellipsis: true });
+        // Label text
+        doc.font(F.bold).fontSize(9).fillColor('#1f2937')
+           .text(label, bx + CD + 5, by + (CD - 9) / 2, {
+             width: labelW, lineBreak: false, ellipsis: true,
+           });
 
-        bx += itemW + BGAP;
+        bx += itemW + SGAP;
       }
     }
   });
