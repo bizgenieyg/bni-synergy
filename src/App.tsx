@@ -133,6 +133,14 @@ function waPhone(phone: string) {
   return phone.replace(/\D/g, '').replace(/^0/, '972')
 }
 
+function formatPhoneDisplay(phone: string): string {
+  if (!phone) return ''
+  let digits = phone.replace(/\D/g, '')
+  if (digits.startsWith('972')) digits = '0' + digits.slice(3)
+  if (digits.length === 10) return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`
+  return phone
+}
+
 // ─── Login ──────────────────────────────────────────────────────────────────
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
@@ -1172,7 +1180,7 @@ function GuestsSection() {
                   <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
                   <td className="px-4 py-3 text-gray-500">
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
-                      className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{g.phone}</a>
+                      className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{formatPhoneDisplay(g.phone)}</a>
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{g.specialty}</td>
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.invitedBy}</td>
@@ -1320,7 +1328,7 @@ function MembersSection() {
                     {m.phone && (
                       <a href={`https://wa.me/${waPhone(m.phone)}`} target="_blank" rel="noopener noreferrer"
                         className="text-gray-500 hover:text-green-600 flex items-center gap-1 text-xs">
-                        <Phone size={11} /> {m.phone}
+                        <Phone size={11} /> {formatPhoneDisplay(m.phone)}
                       </a>
                     )}
                   </td>

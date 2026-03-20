@@ -81,11 +81,14 @@ function inferYear(dd, mm) {
   return String(candidate > today ? curYear - 1 : curYear).slice(2);
 }
 
-/** Normalise phone to 0XX-XXX-XXXX domestic format for dedup */
+/** Normalise phone to 972XXXXXXXXX for storage */
 function normalizePhone(phone) {
-  let d = String(phone).replace(/\D/g, '');
-  if (d.startsWith('972')) d = '0' + d.slice(3);
-  return d;
+  if (!phone) return '';
+  let digits = String(phone).replace(/\D/g, '');
+  if (digits.startsWith('972')) digits = digits.slice(3);
+  if (digits.startsWith('0'))   digits = digits.slice(1);
+  if (digits.length !== 9) return String(phone);
+  return '972' + digits;
 }
 
 async function importGuests() {

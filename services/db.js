@@ -128,10 +128,27 @@ seedAll();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalizePhone(phone) {
-  let d = String(phone).replace(/\D/g, '');
-  if (d.startsWith('972')) d = '0' + d.slice(3);
-  return d;
+  if (!phone) return '';
+  let digits = String(phone).replace(/\D/g, '');
+  if (digits.startsWith('972')) digits = digits.slice(3);
+  if (digits.startsWith('0'))   digits = digits.slice(1);
+  if (digits.length !== 9) return String(phone); // unrecognised — keep original
+  return '972' + digits;
 }
+
+// Migrate existing phones to 972XXXXXXXXX — idempotent, runs every startup
+;(function migratePhones() {
+  const gRows = db.prepare('SELECT id, phone FROM guests').all();
+  for (const g of gRows) {
+    const n = normalizePhone(g.phone);
+    if (n !== g.phone) db.prepare('UPDATE guests SET phone=? WHERE id=?').run(n, g.id);
+  }
+  const mRows = db.prepare('SELECT id, phone FROM members').all();
+  for (const m of mRows) {
+    const n = normalizePhone(m.phone);
+    if (n !== m.phone) db.prepare('UPDATE members SET phone=? WHERE id=?').run(n, m.id);
+  }
+}());
 
 // ─── Guests CRUD ──────────────────────────────────────────────────────────────
 
@@ -144,7 +161,7 @@ function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0,
     VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id,
-    name.trim(), phone.trim(),
+    name.trim(), normalizePhone(phone),
     (specialty || '').trim(), (invitedBy || '').trim(),
     meetingDate, paid, paidAt, createdAt,
   );
@@ -252,7 +269,7 @@ function insertMember({ name, profession, phone, birthday }) {
   const info = db.prepare(
     `INSERT INTO members (name, profession, phone, birthday, active, createdAt)
      VALUES (?, ?, ?, ?, 1, ?)`
-  ).run(name.trim(), (profession || '').trim(), (phone || '').trim(), (birthday || '').trim(), createdAt);
+  ).run(name.trim(), (profession || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt);
   return info.lastInsertRowid;
 }
 
@@ -270,7 +287,7 @@ function updateMember(id, { name, profession, phone, birthday, active }) {
   ).run(
     (name       ?? current.name).trim(),
     (profession ?? current.profession).trim(),
-    (phone      ?? current.phone).trim(),
+    normalizePhone(phone ?? current.phone),
     (birthday   ?? current.birthday).trim(),
     active      ?? current.active,
     id,
@@ -293,7 +310,7 @@ function updateMemberProfile(id, { profession, phone, birthday }) {
     'UPDATE members SET profession = ?, phone = ?, birthday = ? WHERE id = ?'
   ).run(
     (profession ?? current.profession).trim(),
-    (phone      ?? current.phone).trim(),
+    normalizePhone(phone ?? current.phone),
     (birthday   ?? current.birthday).trim(),
     id,
   );
