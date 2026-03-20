@@ -865,7 +865,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
             <ChevronLeft size={16} />
           </button>
           <span className="text-sm font-bold text-gray-900 min-w-[56px] text-center px-1">
-            {nextMeeting || '—'}
+            {nextMeeting ? nextMeeting.split('/').slice(0,2).join('/') : '—'}
           </span>
           <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, 7))}
             disabled={savingMeeting || !nextMeeting}
@@ -1013,9 +1013,10 @@ function GuestsSection() {
       api('/api/meetings').then(r => r.json()),
       api('/api/settings/next-meeting').then(r => r.json()),
     ]).then(([m, s]) => {
-      // meetings[0] = newest; ‹ = i+1 = older, › = i-1 = newer
-      setMeetings(m); setNextMeeting(s.date || '')
-      if (m.length) setSelectedDate(m[0])
+      // Sort oldest-first: ‹=i-1=older, ›=i+1=newer, default=last=newest
+      const sorted = [...m].reverse()
+      setMeetings(sorted); setNextMeeting(s.date || '')
+      if (sorted.length) setSelectedDate(sorted[sorted.length - 1])
     })
   }, [])
 
@@ -1079,11 +1080,11 @@ function GuestsSection() {
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Arrow navigator — meetings[0]=newest; ‹=i+1=older, ›=i-1=newer */}
+        {/* Arrow navigator — sorted oldest-first; ‹=i-1=older, ›=i+1=newer, default=last */}
         <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
           <button
-            onClick={() => { const i = meetings.indexOf(selectedDate); if (i < meetings.length - 1) setSelectedDate(meetings[i + 1]) }}
-            disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
+            onClick={() => { const i = meetings.indexOf(selectedDate); if (i > 0) setSelectedDate(meetings[i - 1]) }}
+            disabled={meetings.indexOf(selectedDate) <= 0}
             className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
             title="Старее">
             <ChevronLeft size={15} />
@@ -1094,8 +1095,8 @@ function GuestsSection() {
             {selectedDate && <span className="ml-1 text-xs font-normal text-gray-400">· {guests.length}</span>}
           </span>
           <button
-            onClick={() => { const i = meetings.indexOf(selectedDate); if (i > 0) setSelectedDate(meetings[i - 1]) }}
-            disabled={meetings.indexOf(selectedDate) <= 0}
+            onClick={() => { const i = meetings.indexOf(selectedDate); if (i < meetings.length - 1) setSelectedDate(meetings[i + 1]) }}
+            disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
             className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
             title="Новее">
             <ChevronRight size={15} />
@@ -1124,7 +1125,7 @@ function GuestsSection() {
               className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm w-20 focus:outline-none focus:border-red-400" />
             <button onClick={() => {
               const v = addDateVal.trim()
-              if (v && !meetings.includes(v)) { setMeetings(m => [v, ...m]); setSelectedDate(v) }
+              if (v && !meetings.includes(v)) { setMeetings(m => [...m, v]); setSelectedDate(v) }
               else if (v && meetings.includes(v)) setSelectedDate(v)
               setAddDateVal(''); setShowAddDate(false)
             }} className="text-xs px-2.5 py-1.5 rounded-lg text-white font-medium" style={{ background: RED }}>

@@ -24,6 +24,19 @@ if (db.getSetting('next_meeting_date') === null && _envDate) {
 }
 let NEXT_MEETING_DATE = db.getSetting('next_meeting_date') ?? _envDate;
 
+// Migrate NEXT_MEETING_DATE from DD/MM to DD/MM/YY if needed
+if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
+  const _parts = NEXT_MEETING_DATE.split('/');
+  const _dd = parseInt(_parts[0], 10), _mm = parseInt(_parts[1], 10);
+  const _today = new Date(); _today.setHours(0, 0, 0, 0);
+  const _curY = _today.getFullYear();
+  const _isMon = (y) => new Date(y, _mm - 1, _dd).getDay() === 1;
+  let _year = _isMon(_curY) ? _curY : _isMon(_curY - 1) ? _curY - 1
+    : (new Date(_curY, _mm - 1, _dd) > _today ? _curY - 1 : _curY);
+  NEXT_MEETING_DATE = `${String(_dd).padStart(2,'0')}/${String(_mm).padStart(2,'0')}/${String(_year).slice(2)}`;
+  db.setSetting('next_meeting_date', NEXT_MEETING_DATE);
+}
+
 const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
 const WAZE_LINK         = 'https://waze.com/ul/hsv8tzcptn';
 const WAZE_ADDRESS      = 'סמילנסקי 43 ראשון לציון';
