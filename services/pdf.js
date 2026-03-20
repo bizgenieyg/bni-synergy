@@ -105,7 +105,7 @@ function generateGuestList(res, guests, date) {
     if (doc.y > PAGE_H - 60) {
       doc.addPage();
     }
-    drawRow(i + 1, `${g.firstName} ${g.lastName}`, g.specialty || '—', g.phone, g.paid ? '✓' : '✗', false);
+    drawRow(i + 1, g.name || '', g.specialty || '—', g.phone, g.paid ? '✓' : '✗', false);
   });
 
   // ── Footer ──
@@ -165,7 +165,7 @@ function generateBadges(res, guests, date) {
        .text('BNI SYNERGY', x, y + 8, { width: BADGE_W, align: 'center', lineBreak: false });
 
     // ── Full name (large, centred) ──
-    const fullName = `${g.firstName} ${g.lastName}`;
+    const fullName = g.name || '';
     doc.font(F.bold).fontSize(18).fillColor('#000000')
        .text(fullName, x + 8, y + 36, { width: BADGE_W - 16, align: 'center', lineBreak: false });
 

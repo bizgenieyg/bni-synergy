@@ -202,7 +202,7 @@ app.post('/api/paybox-webhook', async (req, res) => {
     const guest = db.findGuestByPhone(rawPhone);
     if (guest && !guest.paid) {
       db.markPaid(guest.id);
-      console.log(`[PayBox] Marked paid: ${guest.name || guest.firstName + ' ' + guest.lastName}`);
+      console.log(`[PayBox] Marked paid: ${guest.name}`);
       if (guest.sheetRow) {
         sheets.markPaid(guest.meetingDate, guest.sheetRow)
           .catch(err => console.error('[Sheets] markPaid failed:', err.message));
@@ -537,7 +537,7 @@ app.post('/api/send-voting', async (req, res) => {
 
   // Individual messages to guests (random variant per message)
   whatsapp.broadcast(guests, g =>
-    pickVariant(VOTING_VARIANTS)(g.name ? g.name.split(' ')[0] : g.firstName, votingLink)
+    pickVariant(VOTING_VARIANTS)((g.name || '').split(' ')[0], votingLink)
   ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
 });
 
@@ -551,7 +551,7 @@ app.post('/api/send-contacts', async (req, res) => {
   res.json({ success: true, total: guests.length, message: 'Рассылка запущена' });
 
   whatsapp.broadcast(guests, g =>
-    pickVariant(CONTACTS_VARIANTS)(g.name ? g.name.split(' ')[0] : g.firstName, contactsText)
+    pickVariant(CONTACTS_VARIANTS)((g.name || '').split(' ')[0], contactsText)
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
 });
 

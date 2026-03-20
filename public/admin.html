@@ -1272,7 +1272,7 @@
   function renderGuests(guests) {
     const q     = searchQuery;
     const list  = q ? guests.filter(g =>
-      [g.firstName, g.lastName, g.specialty, g.phone, g.invitedBy].some(v =>
+      [g.name, g.specialty, g.phone, g.invitedBy].some(v =>
         (v || '').toLowerCase().includes(q))
     ) : guests;
 
@@ -1293,7 +1293,7 @@
       if (!g.wa_enabled) tr.classList.add('wa-off');
       tr.innerHTML = `
         <td>${i + 1}</td>
-        <td><strong>${esc(g.firstName)} ${esc(g.lastName)}</strong></td>
+        <td><strong>${esc(g.name || '')}</strong></td>
         <td>${esc(g.specialty || '—')}</td>
         <td>${esc(g.phone)}</td>
         <td>${esc(g.invitedBy || '—')}</td>
