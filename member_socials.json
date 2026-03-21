@@ -1,0 +1,390 @@
+[
+  {
+    "name": "Татьяна Лев",
+    "profession_he": "יועצת עסקית ומנטלית",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/tanya_lev_il", "label": "@tanya_lev_il" },
+      { "platform": "Facebook", "url": "https://facebook.com/TatianaLev", "label": "Tatiana Lev" },
+      { "platform": "Facebook", "url": "https://facebook.com/TatianaLev2", "label": "Таня Лев" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972526331457", "label": "0526331457" },
+      { "platform": "Telegram", "url": "https://t.me/tatyana_lev_il", "label": "PRO Систему и стратегию | Татьяна Лев" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@tatiana_lev_il", "label": "@tatiana_lev_il" },
+      { "platform": "Website", "url": "https://tatyana-lev.com", "label": "@tatyana-lev" }
+    ]
+  },
+  {
+    "name": "Елена Смолкин",
+    "profession_he": "יעוץ תדמית וסטיילינג",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/elenasmolkin", "label": "@elenasmolkin" },
+      { "platform": "Facebook", "url": "https://facebook.com/ElenaSmolkin", "label": "ElenaSmolkin" },
+      { "platform": "Facebook", "url": "https://facebook.com/smolkin.elena", "label": "סטיילינג עם ילנה סמולקין" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972544744053", "label": "0544744053" },
+      { "platform": "Telegram", "url": "https://t.me/smolkin_elena", "label": "ДЕТОКС ГАРДЕРОБА с Еленой Смолкиной" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@smolkin_elena", "label": "@smolkin_elena" }
+    ]
+  },
+  {
+    "name": "Дариен Ройтман",
+    "profession_he": "אקדמיה AI לעסקים",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/darienroytman", "label": "@darienroytman" },
+      { "platform": "Facebook", "url": "https://facebook.com/darienroytman", "label": "Дариен Шауль Ройтман" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972545919330", "label": "0545919330" },
+      { "platform": "Website", "url": "https://pixaidreamstudio.com", "label": "pixaidreamstudio" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@darienroytman", "label": "@darienroytman" },
+      { "platform": "LinkedIn", "url": "https://linkedin.com/in/darien-roytman", "label": "Darien S. Roytman Ph.D." }
+    ]
+  },
+  {
+    "name": "Дарья Марис",
+    "profession_he": "אומנית דקור פנים",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/dar_art_design", "label": "@dar_art_design" },
+      { "platform": "Facebook", "url": "https://facebook.com/DaryaMaris", "label": "Darya Maris" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972587060973", "label": "0587060973" }
+    ]
+  },
+  {
+    "name": "Виктория Фогель",
+    "profession_he": "עו\"ד נדל\"ן",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/viktoriafogellawfirm", "label": "viktoriafogellawfirm" },
+      { "platform": "Facebook", "url": "https://facebook.com/FogelViktoria", "label": "Fogel Viktoria Adv - עו\"ד ויקטוריה פוגל" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972525681177", "label": "0525681177" },
+      { "platform": "Website", "url": "https://vfogel-law.com", "label": "vfogel-law.com" }
+    ]
+  },
+  {
+    "name": "Диана Шаривкер",
+    "profession_he": "סוכנות ביטוח",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/sharivkerdiana", "label": "@sharivkerdiana" },
+      { "platform": "Facebook", "url": "https://facebook.com/DianaSharivker", "label": "Diana Sharivker" },
+      { "platform": "Facebook", "url": "https://facebook.com/DianaSharivkerAshdod", "label": "Страховое агентство Diana Sharivker | Ashdod" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972503399829", "label": "0503399829" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@dianasharivker", "label": "@dianasharivker" }
+    ]
+  },
+  {
+    "name": "Рита Хазанович",
+    "profession_he": "רו\"ח",
+    "socials": [
+      { "platform": "WhatsApp", "url": "https://wa.me/972545809092", "label": "0545809092" }
+    ]
+  },
+  {
+    "name": "Игорь Лупинский",
+    "profession_he": "הנהלת חשבונות",
+    "socials": [
+      { "platform": "Website", "url": "https://taxpayers.bitrix24.ru", "label": "taxpayers.bitrix24" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972505812236", "label": "0505812236" }
+    ]
+  },
+  {
+    "name": "Александр Коско",
+    "profession_he": "מיומנות דיבור מול קהל",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/alexanderkosko", "label": "@alexanderkosko" },
+      { "platform": "Facebook", "url": "https://facebook.com/AlexanderKosko", "label": "Александр Коско" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972528966740", "label": "0528966740" }
+    ]
+  },
+  {
+    "name": "Евгений Сидельский",
+    "profession_he": "בית דפוס",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/sidelskijevgen", "label": "@sidelskijevgen" },
+      { "platform": "Facebook", "url": "https://facebook.com/All4you247", "label": "All4you247.com" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@slaiderroom", "label": "@slaiderroom" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972546554221", "label": "0546554221" }
+    ]
+  },
+  {
+    "name": "Евгения Писман",
+    "profession_he": "כותבת תוכן",
+    "socials": [
+      { "platform": "Facebook", "url": "https://facebook.com/GeniaWr", "label": "Genia W-r" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972503204861", "label": "0503204861" }
+    ]
+  },
+  {
+    "name": "Ольга Грановская",
+    "profession_he": "SarafanPRO - קידום SEO AI Deep Research",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/sarafanpro.israel", "label": "@sarafanpro.israel" },
+      { "platform": "Instagram", "url": "https://instagram.com/olgagrano.il", "label": "@olgagrano.il" },
+      { "platform": "Facebook", "url": "https://facebook.com/sarafanproil", "label": "sarafanproil" },
+      { "platform": "Facebook", "url": "https://facebook.com/OlgaGranovskaya", "label": "Olga Granovskaya" },
+      { "platform": "Facebook", "url": "https://facebook.com/BizKlubSarafanPRO", "label": "Бизнес-клуб SarafanPRO" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972535390080", "label": "0535390080" },
+      { "platform": "Website", "url": "https://sarafanpro.com", "label": "sarafanpro.com" }
+    ]
+  },
+  {
+    "name": "Сабина Эренштейн",
+    "profession_he": "מגשרת משפחתית",
+    "socials": [
+      { "platform": "Facebook", "url": "https://facebook.com/SabinaErenshtein", "label": "Sabina Erenshtein" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972526775571", "label": "0526775571" }
+    ]
+  },
+  {
+    "name": "Дмитрий Мелгорски",
+    "profession_he": "עיצוב גרפי ובניית אתרים",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/dmitrimelgorski", "label": "@dmitrimelgorski" },
+      { "platform": "Facebook", "url": "https://facebook.com/DmitriMelgorski", "label": "Dmitri Melgorski" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972539290639", "label": "0539290639" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@dmitriimelgorskii", "label": "@dmitriimelgorskii" }
+    ]
+  },
+  {
+    "name": "Ольга Гасперт",
+    "profession_he": "עיצוב מפרחים טריים ומשי",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/olga_gaspert_kaleydoskop", "label": "@olga_gaspert_kaleydoskop" },
+      { "platform": "Facebook", "url": "https://facebook.com/OlgaKaleydoskop", "label": "קליידוסקופ אולגה" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972528191040", "label": "0528191040" },
+      { "platform": "Telegram", "url": "https://t.me/HomeDecorIsrael", "label": "Home decor Israel" }
+    ]
+  },
+  {
+    "name": "Ирина Заманская",
+    "profession_he": "ציורי פנים וגוף",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/artfacetlv", "label": "@artfacetlv" },
+      { "platform": "Facebook", "url": "https://facebook.com/IrinaZamanskaya", "label": "Ирина Заманская" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972585040567", "label": "0585040567" }
+    ]
+  },
+  {
+    "name": "Сергей Фишбах",
+    "profession_he": "צלם/וידאו לאירועים",
+    "socials": [
+      { "platform": "Facebook", "url": "https://facebook.com/SergeyFishbakh", "label": "Сергей Фишбах" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972502714814", "label": "0502714814" }
+    ]
+  },
+  {
+    "name": "Людмила Рассказов",
+    "profession_he": "קייטרינג/עוגות וקינוחים/סדנאות",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/ludmila_rasskazov_chircov_", "label": "@ludmila_rasskazov_chircov_" },
+      { "platform": "Facebook", "url": "https://facebook.com/LudmilaRasskazov", "label": "Ludmila Rasskazov" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972526765562", "label": "0526765562" }
+    ]
+  },
+  {
+    "name": "Леонид Лурия",
+    "profession_he": "לוריא קוסמטיקס בע\"מ",
+    "socials": [
+      { "platform": "email", "url": "mailto:leonid.lurya@gmail.com", "label": "leonid.lurya@gmail.com" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972544956734", "label": "0544956734" },
+      { "platform": "LinkedIn", "url": "https://linkedin.com/in/leonid-luriya", "label": "@leonid-luriya" }
+    ]
+  },
+  {
+    "name": "Алексей Поповских",
+    "profession_he": "מעסה רפואי",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/medical_massage.rishonlezion", "label": "@medical_massage.rishonlezion" },
+      { "platform": "Facebook", "url": "https://facebook.com/AlekseiPopovskikh", "label": "Алексей Поповских" },
+      { "platform": "Facebook", "url": "https://facebook.com/MedicalMassageIsrael", "label": "Medical.Massage.Israel" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972522751187", "label": "0522751187" }
+    ]
+  },
+  {
+    "name": "Татьяна Вайс",
+    "profession_he": "עו\"ד דיני תעבורה ופלילי",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/tatyana.wyss.adv", "label": "@tatyana.wyss.adv" },
+      { "platform": "Facebook", "url": "https://facebook.com/TatyanaWyssAdv", "label": "Tatyana Wyss Adv" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972546960404", "label": "0546960404" }
+    ]
+  },
+  {
+    "name": "Тэнзиля Коренберг",
+    "profession_he": "מעצבת שיער",
+    "socials": [
+      { "platform": "WhatsApp", "url": "https://wa.me/972534453912", "label": "0534453912" }
+    ]
+  },
+  {
+    "name": "Александр Кудинов",
+    "profession_he": "בית ספר לכלכלת המשפחה",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/gde.moidengi", "label": "@gde.moidengi" },
+      { "platform": "Facebook", "url": "https://facebook.com/GdeMoidengi", "label": "Где мои деньги? | Giv'atayim" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972549019324", "label": "0549019324" },
+      { "platform": "Website", "url": "https://gmd.witm.info", "label": "gmd.witm.info" },
+      { "platform": "Telegram", "url": "https://t.me/gdemoidengi", "label": "@gdemoidengi" }
+    ]
+  },
+  {
+    "name": "Ирина Кроль",
+    "profession_he": "מספרת כלבים",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/irakrollulkin", "label": "@irakrollulkin" },
+      { "platform": "Facebook", "url": "https://facebook.com/IrinaKrolLulkina", "label": "Ирина Кроль Люлькина" },
+      { "platform": "Facebook", "url": "https://facebook.com/BarkiRehovot", "label": "Barki - לבעלי החיים הטובים | Rehovot" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972523986032", "label": "0523986032" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@irina.koronaterra", "label": "@irina.koronaterra" }
+    ]
+  },
+  {
+    "name": "Марта Штайнберг",
+    "profession_he": "מתוקים טבעיים",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/martas_fruitina", "label": "@martas_fruitina" },
+      { "platform": "Facebook", "url": "https://facebook.com/MartaSteinberg", "label": "Marta Shteinberg" },
+      { "platform": "Facebook", "url": "https://facebook.com/MartasFrutinaTA", "label": "Marta's Fruitina | Tel Aviv" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972526074257", "label": "0526074257" }
+    ]
+  },
+  {
+    "name": "Даниель Биленсон",
+    "profession_he": "עו\"ד ניזיקין וביטוח לאומי",
+    "socials": [
+      { "platform": "WhatsApp", "url": "https://wa.me/972546444999", "label": "0546444999" },
+      { "platform": "Website", "url": "https://bn-law.co.il", "label": "bn-law.co.il" },
+      { "platform": "Facebook", "url": "https://facebook.com/DanielBilinsonAdv", "label": "Daniel Bilinson Adv" }
+    ]
+  },
+  {
+    "name": "Натали Жук",
+    "profession_he": "שפית ביתית",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/nato.zhuk", "label": "@nato.zhuk" },
+      { "platform": "Facebook", "url": "https://facebook.com/NataliaZhuk", "label": "Наталия Жук" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972587958060", "label": "0587958060" },
+      { "platform": "email", "url": "mailto:tamarapavlovna1936@gmail.com", "label": "tamarapavlovna1936@gmail.com" }
+    ]
+  },
+  {
+    "name": "Людмила Губарева",
+    "profession_he": "NLP + אימון",
+    "socials": [
+      { "platform": "Facebook", "url": "https://facebook.com/LiudmilaGubарева", "label": "Людмила Губарева" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972534882340", "label": "0534882340" }
+    ]
+  },
+  {
+    "name": "Михаил Ткач",
+    "profession_he": "מתווך בירת הנגב ואיזור הדרום",
+    "socials": [
+      { "platform": "WhatsApp", "url": "https://wa.me/972545619163", "label": "0545619163" },
+      { "platform": "Website", "url": "https://mishatkach-realtor.com", "label": "mishatkach-realtor.com" },
+      { "platform": "Facebook", "url": "https://facebook.com/MishaTkach", "label": "Misha Tkach" },
+      { "platform": "email", "url": "mailto:realtor.misha@gmail.com", "label": "realtor.misha@gmail.com" }
+    ]
+  },
+  {
+    "name": "Юля Тронза",
+    "profession_he": "יועצת נדל\"ן, יבנה ושפלה",
+    "socials": [
+      { "platform": "WhatsApp", "url": "https://wa.me/972544757547", "label": "0544757547" },
+      { "platform": "Facebook", "url": "https://facebook.com/JuliaTronzaRealEstate", "label": "Julia Tronza Real Estate" },
+      { "platform": "email", "url": "mailto:Julia.tronza@gmail.com", "label": "Julia.tronza@gmail.com" }
+    ]
+  },
+  {
+    "name": "Виктория Колтун",
+    "profession_he": "מגה מקס הובלות",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/mega_max_moving", "label": "@mega_max_moving" },
+      { "platform": "Facebook", "url": "https://facebook.com/megamaxmoving", "label": "megamaxmoving" },
+      { "platform": "Facebook", "url": "https://facebook.com/megamaxhovalot", "label": "מגה מקס הובלות" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972546815561", "label": "0546815561" },
+      { "platform": "Website", "url": "https://megamax.co.il", "label": "megamax.co.il" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@mega_max_moving", "label": "@mega_max_moving" }
+    ]
+  },
+  {
+    "name": "Олег Волох",
+    "profession_he": "יועץ משכנתאות ואשראי",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/olegvolokh", "label": "@olegvolokh" },
+      { "platform": "Facebook", "url": "https://facebook.com/OlegVolokh", "label": "Олег Волох" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972546690524", "label": "0546690524" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@olegvolokh5", "label": "@olegvolokh5" }
+    ]
+  },
+  {
+    "name": "Лора Блантер",
+    "profession_he": "Cartel בוטיק אופנה",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/cartelstyle", "label": "@cartelstyle" },
+      { "platform": "Facebook", "url": "https://facebook.com/CartelStyleRishon", "label": "Cartel Style | Rishon Le Zion" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972548041987", "label": "0548041987" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@cartelstyle", "label": "@cartelstyle" }
+    ]
+  },
+  {
+    "name": "Марина Кондратьев",
+    "profession_he": "קוסמטיקאית",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/m.k.beauty_marina", "label": "@m.k.beauty_marina" },
+      { "platform": "Facebook", "url": "https://facebook.com/MKBeautyRishon", "label": "M.K.Beauty | Rishon Le Zion" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972509887199", "label": "0509887199" }
+    ]
+  },
+  {
+    "name": "Андрей Скиба",
+    "profession_he": "די ג'יי סקיבה",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/andrew_skiba", "label": "@andrew_skiba" },
+      { "platform": "Facebook", "url": "https://facebook.com/AndrewSkiba", "label": "Andrew Skiba" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972547602162", "label": "0547602162" }
+    ]
+  },
+  {
+    "name": "Артур Блаер",
+    "profession_he": "עו\"ד דיני הגירה ומעמד בישראל",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/arthur_blaer", "label": "@arthur_blaer" },
+      { "platform": "Facebook", "url": "https://facebook.com/ArthurBlaerAdv", "label": "ArthurBlaerAdv" },
+      { "platform": "Facebook", "url": "https://facebook.com/AdvokatArturBlaer", "label": "Адвокат Артур Блаер" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972546469080", "label": "0546469080" },
+      { "platform": "Website", "url": "https://blaerlaw.com", "label": "blaerlaw.com" },
+      { "platform": "TikTok", "url": "https://tiktok.com/@arth_blaer", "label": "@arth_blaer" },
+      { "platform": "YouTube", "url": "https://youtube.com/@ArthurBlaer", "label": "@ArthurBlaer" }
+    ]
+  },
+  {
+    "name": "Юрий Голд",
+    "profession_he": "אוטומציה עסקית",
+    "socials": [
+      { "platform": "Facebook", "url": "https://facebook.com/BizGenie4U", "label": "BizGenie4U" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972525159393", "label": "0525159393" }
+    ]
+  },
+  {
+    "name": "Шарон Соколовски",
+    "profession_he": "עורכת דין חדלות פירעון",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/sharon_sokolovsky_adv", "label": "sharon_sokolovsky_adv" },
+      { "platform": "Facebook", "url": "https://facebook.com/SharonSokolovskyAdv", "label": "שרון סוקולובסקי עו\"ד" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972547394897", "label": "0547394897" },
+      { "platform": "Website", "url": "https://sokolovsky-law.co.il", "label": "sokolovsky-law.co.il" }
+    ]
+  },
+  {
+    "name": "Игорь Бутин",
+    "profession_he": "הנדימן-חשמלאי",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/igorbutin", "label": "@igorbutin" },
+      { "platform": "Facebook", "url": "https://facebook.com/DomashnyMaster", "label": "Домашний мастер" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972533711029", "label": "0533711029" }
+    ]
+  },
+  {
+    "name": "Антон Михеев",
+    "profession_he": "מכירת והתקנת דלתות",
+    "socials": [
+      { "platform": "Instagram", "url": "https://instagram.com/anton_sababa", "label": "@anton_sababa" },
+      { "platform": "Facebook", "url": "https://facebook.com/AntonMikheev", "label": "Anton Mikheev" },
+      { "platform": "WhatsApp", "url": "https://wa.me/972557717776", "label": "0557717776" }
+    ]
+  }
+]
