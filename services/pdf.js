@@ -58,73 +58,92 @@ function setupFonts(doc) {
  * @param {string} date  - DD/MM format
  */
 function generateGuestList(res, guests, date) {
-  const paid  = guests.filter(g => g.paid).length;
-  const label = `Встреча: ${date} | Всего: ${guests.length} | Оплатили: ${paid}`;
+  const paidCount = guests.filter(g => g.paid).length;
+  const label = `Встреча: ${date} | Всего: ${guests.length} | Оплатили: ${paidCount}`;
 
-  const doc = new PDFDocument({ margin: 40, size: 'A4', bufferPages: true });
+  const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="guests-${date.replace('/', '-')}.pdf"`);
   doc.pipe(res);
 
   const F = setupFonts(doc);
 
-  // ── Header ──
-  doc.font(F.bold).fontSize(18).fillColor('#C41230')
-     .text('BNI SYNERGY', { align: 'center' });
-  doc.font(F.regular).fontSize(11).fillColor('#333333')
-     .text(label, { align: 'center' });
-  doc.moveDown(0.8);
+  // Fixed column layout (absolute x from page left edge)
+  const C = {
+    num:   { x: 40,  w: 25  },
+    name:  { x: 65,  w: 150 },
+    prof:  { x: 215, w: 160 },
+    phone: { x: 375, w: 90  },
+    inv:   { x: 465, w: 90  },
+    paid:  { x: 555, w: 30  },
+  };
+  const TL = 40;   // table left
+  const TR = 585;  // table right
+  const TW = TR - TL;
 
-  // ── Table ──
-  const LEFT  = 40;
-  const WIDTHS = { num: 28, name: 170, prof: 140, phone: 105, paid: 50 };
-
-  function drawRow(num, name, prof, phone, paidMark, isHeader) {
-    const font = isHeader ? F.bold : F.regular;
-    const size = 9;
-    const y    = doc.y;
-
-    doc.font(font).fontSize(size).fillColor('#111111');
-    doc.text(String(num),  LEFT,                                                    y, { width: WIDTHS.num,   lineBreak: false });
-    doc.text(name,         LEFT + WIDTHS.num,                                       y, { width: WIDTHS.name,  lineBreak: false });
-    doc.text(prof,         LEFT + WIDTHS.num + WIDTHS.name,                         y, { width: WIDTHS.prof,  lineBreak: false });
-    doc.text(phone,        LEFT + WIDTHS.num + WIDTHS.name + WIDTHS.prof,           y, { width: WIDTHS.phone, lineBreak: false });
-    doc.text(paidMark,     LEFT + WIDTHS.num + WIDTHS.name + WIDTHS.prof + WIDTHS.phone, y, { width: WIDTHS.paid,  lineBreak: false });
-
-    doc.moveDown(0.15);
-
-    if (!isHeader) {
-      const lineY = doc.y;
-      doc.moveTo(LEFT, lineY).lineTo(LEFT + 513, lineY)
-         .strokeColor('#e5e7eb').lineWidth(0.4).stroke();
-    }
+  // Choose font based on whether text contains Hebrew characters
+  function pickFont(str, bold) {
+    const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(str || '');
+    return bold
+      ? (heb ? F.hebBold : F.bold)
+      : (heb ? F.hebReg  : F.regular);
   }
 
-  // Header row
-  drawRow('#', 'Имя и Фамилия', 'Профессия', 'Телефон', 'Оплата', true);
-  const headerBottom = doc.y;
-  doc.moveTo(LEFT, headerBottom).lineTo(LEFT + 513, headerBottom)
-     .strokeColor('#333').lineWidth(0.8).stroke();
-  doc.moveDown(0.3);
+  // Draw one cell with auto Hebrew font + ellipsis
+  function cell(text, col, y, bold, align) {
+    const str = String(text || '');
+    doc.font(pickFont(str, bold)).fontSize(9).fillColor('#111111')
+       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: align || 'left' });
+  }
 
-  // Data rows
+  // ── Page header ──
+  doc.font(F.bold).fontSize(18).fillColor('#C41230')
+     .text('BNI SYNERGY', TL, 28, { width: TW, align: 'center', lineBreak: false });
+  doc.font(F.regular).fontSize(11).fillColor('#333333')
+     .text(label, TL, 52, { width: TW, align: 'center', lineBreak: false });
+
+  // ── Column headers ──
+  const HDR_Y = 76;
+  doc.font(F.bold).fontSize(9).fillColor('#333333');
+  doc.text('#',         C.num.x,   HDR_Y, { width: C.num.w,   lineBreak: false });
+  doc.text('Имя',       C.name.x,  HDR_Y, { width: C.name.w,  lineBreak: false });
+  doc.text('Профессия', C.prof.x,  HDR_Y, { width: C.prof.w,  lineBreak: false });
+  doc.text('Телефон',   C.phone.x, HDR_Y, { width: C.phone.w, lineBreak: false });
+  doc.text('Пригласил', C.inv.x,   HDR_Y, { width: C.inv.w,   lineBreak: false });
+  doc.text('$',         C.paid.x,  HDR_Y, { width: C.paid.w,  lineBreak: false, align: 'center' });
+
+  const HDR_LINE = HDR_Y + 14;
+  doc.moveTo(TL, HDR_LINE).lineTo(TR, HDR_LINE).strokeColor('#333333').lineWidth(0.8).stroke();
+
+  // ── Data rows ──
+  const ROW_H = 17;
+  let ry = HDR_LINE + 5;
+
   guests.forEach((g, i) => {
-    // New page if close to bottom
-    if (doc.y > PAGE_H - 60) {
+    if (ry > PAGE_H - 50) {
       doc.addPage();
+      ry = 40;
     }
-    drawRow(i + 1, g.name || '', g.specialty || '—', g.phone, g.paid ? '✓' : '✗', false);
+
+    cell(i + 1,              C.num,   ry, false);
+    cell(g.name,             C.name,  ry, false);
+    cell(g.specialty || '—', C.prof,  ry, false);
+    cell(g.phone,            C.phone, ry, false);
+    cell(g.invitedBy || '—', C.inv,   ry, false);
+    cell(g.paid ? '✓' : '✗', C.paid, ry, false, 'center');
+
+    ry += ROW_H;
+    doc.moveTo(TL, ry - 3).lineTo(TR, ry - 3).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
   });
 
-  // ── Footer ──
+  // ── Footer on every page ──
   const pageCount = doc.bufferedPageRange().count;
   for (let p = 0; p < pageCount; p++) {
     doc.switchToPage(p);
-    const footerY = PAGE_H - 25;
     doc.font(F.regular).fontSize(8).fillColor('#999999')
        .text(
          `Распечатано: ${new Date().toLocaleString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
-         LEFT, footerY, { align: 'left', width: 515 },
+         TL, PAGE_H - 18, { width: TW, align: 'left' },
        );
   }
 
