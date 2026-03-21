@@ -4,9 +4,11 @@ const path = require('path');
 const fs   = require('fs');
 const PDFDocument = require('pdfkit');
 
-const FONTS_DIR    = path.join(__dirname, '..', 'fonts');
-const FONT_REGULAR = path.join(FONTS_DIR, 'NotoSans-Regular.ttf');
-const FONT_BOLD    = path.join(FONTS_DIR, 'NotoSans-Bold.ttf');
+const FONTS_DIR        = path.join(__dirname, '..', 'fonts');
+const FONT_REGULAR     = path.join(FONTS_DIR, 'NotoSans-Regular.ttf');
+const FONT_BOLD        = path.join(FONTS_DIR, 'NotoSans-Bold.ttf');
+const FONT_HEB_REGULAR = path.join(FONTS_DIR, 'NotoSansHebrew-Regular.ttf');
+const FONT_HEB_BOLD    = path.join(FONTS_DIR, 'NotoSansHebrew-Bold.ttf');
 
 // Badge dimensions: 90mm × 50mm ≈ 255pt × 142pt
 const BADGE_W = 255;
@@ -31,13 +33,19 @@ const GAP_V     = (PAGE_H - 2 * MARGIN_V - ROWS * BADGE_H) / (ROWS - 1); // ~22p
 function setupFonts(doc) {
   const hasRegular = fs.existsSync(FONT_REGULAR);
   const hasBold    = fs.existsSync(FONT_BOLD);
+  const hasHebReg  = fs.existsSync(FONT_HEB_REGULAR);
+  const hasHebBold = fs.existsSync(FONT_HEB_BOLD);
 
-  if (hasRegular) doc.registerFont('Regular', FONT_REGULAR);
-  if (hasBold)    doc.registerFont('Bold',    FONT_BOLD);
+  if (hasRegular) doc.registerFont('Regular',     FONT_REGULAR);
+  if (hasBold)    doc.registerFont('Bold',        FONT_BOLD);
+  if (hasHebReg)  doc.registerFont('HebrewReg',   FONT_HEB_REGULAR);
+  if (hasHebBold) doc.registerFont('HebrewBold',  FONT_HEB_BOLD);
 
   return {
-    regular: hasRegular ? 'Regular' : 'Helvetica',
-    bold:    hasBold    ? 'Bold'    : 'Helvetica-Bold',
+    regular:  hasRegular ? 'Regular'    : 'Helvetica',
+    bold:     hasBold    ? 'Bold'       : 'Helvetica-Bold',
+    hebReg:   hasHebReg  ? 'HebrewReg'  : (hasRegular ? 'Regular' : 'Helvetica'),
+    hebBold:  hasHebBold ? 'HebrewBold' : (hasBold    ? 'Bold'    : 'Helvetica-Bold'),
   };
 }
 
@@ -341,12 +349,15 @@ function generateMembersCatalog(res, members, uploadsDir) {
       if (profRu && profHe) {
         const hw = Math.floor(TW / 2) - 4;
         doc.font(F.bold).fontSize(10).fillColor('#f5d8de')
-           .text(profRu, tx, ty, { width: hw, lineBreak: true, height: 30, ellipsis: true });
-        doc.font(F.bold).fontSize(10).fillColor('#f5d8de')
-           .text(profHe, tx + hw + 8, ty, { width: hw, align: 'right', lineBreak: true, height: 30, ellipsis: true });
+           .text(profRu, tx, ty, { width: hw, lineBreak: false, ellipsis: true });
+        doc.font(F.hebBold).fontSize(10).fillColor('#f5d8de')
+           .text(profHe, tx + hw + 8, ty, { width: hw, align: 'right', lineBreak: false, ellipsis: true });
+      } else if (profHe) {
+        doc.font(F.hebBold).fontSize(10).fillColor('#f5d8de')
+           .text(profHe, tx, ty, { width: TW, align: 'right', lineBreak: false, ellipsis: true });
       } else {
         doc.font(F.bold).fontSize(10).fillColor('#f5d8de')
-           .text(profRu || profHe, tx, ty, { width: TW, align: 'center', lineBreak: false, ellipsis: true });
+           .text(profRu, tx, ty, { width: TW, align: 'center', lineBreak: false, ellipsis: true });
       }
     }
 

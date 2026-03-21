@@ -13,16 +13,14 @@ const path  = require('path');
 
 const FONTS_DIR = path.join(__dirname, '..', 'fonts');
 
+const BASE_NS  = 'https://github.com/notofonts/noto-fonts/raw/main/hinted/ttf/NotoSans';
+const BASE_HEB = 'https://github.com/notofonts/noto-fonts/raw/main/hinted/ttf/NotoSansHebrew';
+
 const FONTS = [
-  {
-    name: 'NotoSans-Regular.ttf',
-    // GitHub raw content → redirects to objects.githubusercontent.com
-    url: 'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf',
-  },
-  {
-    name: 'NotoSans-Bold.ttf',
-    url: 'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf',
-  },
+  { name: 'NotoSans-Regular.ttf',         url: `${BASE_NS}/NotoSans-Regular.ttf` },
+  { name: 'NotoSans-Bold.ttf',             url: `${BASE_NS}/NotoSans-Bold.ttf` },
+  { name: 'NotoSansHebrew-Regular.ttf',    url: `${BASE_HEB}/NotoSansHebrew-Regular.ttf` },
+  { name: 'NotoSansHebrew-Bold.ttf',       url: `${BASE_HEB}/NotoSansHebrew-Bold.ttf` },
 ];
 
 function download(url, dest, redirectCount = 0) {
