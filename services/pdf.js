@@ -61,49 +61,55 @@ function generateGuestList(res, guests, date) {
   const paidCount = guests.filter(g => g.paid).length;
   const label = `Встреча: ${date} | Всего: ${guests.length} | Оплатили: ${paidCount}`;
 
-  const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
+  // A4 landscape: 841 × 595 pt
+  const LS_W = 841;
+  const LS_H = 595;
+
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0, bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="guests-${date.replace('/', '-')}.pdf"`);
   doc.pipe(res);
 
   const F = setupFonts(doc);
 
-  // Fixed column layout (absolute x from page left edge)
+  // Fixed column layout
   const C = {
-    num:   { x: 40,  w: 25  },
-    name:  { x: 65,  w: 150 },
-    prof:  { x: 215, w: 160 },
-    phone: { x: 375, w: 90  },
-    inv:   { x: 465, w: 90  },
-    paid:  { x: 555, w: 30  },
+    num:   { x: 30,  w: 25  },
+    name:  { x: 55,  w: 160 },
+    prof:  { x: 215, w: 220 },
+    phone: { x: 435, w: 110 },
+    inv:   { x: 545, w: 120 },
+    paid:  { x: 665, w: 50  },
   };
-  const TL = 40;   // table left
-  const TR = 585;  // table right
+  const TL = 30;
+  const TR = 715;
   const TW = TR - TL;
 
-  // Choose font based on whether text contains Hebrew characters
-  function pickFont(str, bold) {
-    const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(str || '');
-    return bold
-      ? (heb ? F.hebBold : F.bold)
-      : (heb ? F.hebReg  : F.regular);
+  function isHebrew(text) {
+    return /[\u0590-\u05FF]/.test(text || '');
   }
 
-  // Draw one cell with auto Hebrew font + ellipsis
-  function cell(text, col, y, bold, align) {
+  function pickFont(str, bold) {
+    return isHebrew(str)
+      ? (bold ? F.hebBold : F.hebReg)
+      : (bold ? F.bold    : F.regular);
+  }
+
+  function cell(text, col, y, bold, forceAlign) {
     const str = String(text || '');
+    const align = forceAlign || (isHebrew(str) ? 'right' : 'left');
     doc.font(pickFont(str, bold)).fontSize(9).fillColor('#111111')
-       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: align || 'left' });
+       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align });
   }
 
   // ── Page header ──
   doc.font(F.bold).fontSize(18).fillColor('#C41230')
-     .text('BNI SYNERGY', TL, 28, { width: TW, align: 'center', lineBreak: false });
+     .text('BNI SYNERGY', TL, 22, { width: TW, align: 'center', lineBreak: false });
   doc.font(F.regular).fontSize(11).fillColor('#333333')
-     .text(label, TL, 52, { width: TW, align: 'center', lineBreak: false });
+     .text(label, TL, 46, { width: TW, align: 'center', lineBreak: false });
 
   // ── Column headers ──
-  const HDR_Y = 76;
+  const HDR_Y = 70;
   doc.font(F.bold).fontSize(9).fillColor('#333333');
   doc.text('#',         C.num.x,   HDR_Y, { width: C.num.w,   lineBreak: false });
   doc.text('Имя',       C.name.x,  HDR_Y, { width: C.name.w,  lineBreak: false });
@@ -120,9 +126,9 @@ function generateGuestList(res, guests, date) {
   let ry = HDR_LINE + 5;
 
   guests.forEach((g, i) => {
-    if (ry > PAGE_H - 50) {
+    if (ry > LS_H - 40) {
       doc.addPage();
-      ry = 40;
+      ry = 30;
     }
 
     cell(i + 1,              C.num,   ry, false);
@@ -143,7 +149,7 @@ function generateGuestList(res, guests, date) {
     doc.font(F.regular).fontSize(8).fillColor('#999999')
        .text(
          `Распечатано: ${new Date().toLocaleString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
-         TL, PAGE_H - 18, { width: TW, align: 'left' },
+         TL, LS_H - 16, { width: TW, align: 'left' },
        );
   }
 
