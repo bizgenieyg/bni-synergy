@@ -15,24 +15,18 @@ const bidi = bidiFactory();
 function fixHebrew(text) {
   if (!text) return '';
   if (!/[\u0590-\u05FF]/.test(text)) return text;
-  try {
-    // Step 1: bidi reorder (fixes word order RTL)
-    const levels = bidi.getEmbeddingLevels(text, 'rtl');
-    const flips  = bidi.getReorderSegments(text, levels);
-    const chars  = [...text];
-    flips.forEach(([s, e]) => {
-      let l = s, r = e;
-      while (l < r) { [chars[l], chars[r]] = [chars[r], chars[l]]; l++; r--; }
-    });
-    const reordered = chars.join('');
 
-    // Step 2: reverse characters within each Hebrew word (fixes letter order)
-    return reordered.split(' ').map(word =>
-      /[\u0590-\u05FF]/.test(word) ? [...word].reverse().join('') : word
-    ).join(' ');
-  } catch {
-    return text;
-  }
+  // Split by spaces first, process each token, then rejoin
+  return text
+    .split(' ')
+    .map(word => {
+      if (!word) return '';
+      if (/[\u0590-\u05FF]/.test(word)) {
+        return word.split('').reverse().join('');
+      }
+      return word;
+    })
+    .join(' ');
 }
 
 const FONTS_DIR        = path.join(__dirname, '..', 'fonts');
@@ -106,8 +100,8 @@ function generateGuestList(res, guests, date) {
     num:   { x: 30,  w: 20  },
     name:  { x: 55,  w: 140 },
     prof:  { x: 200, w: 255 },
-    phone: { x: 490, w: 120 },
-    inv:   { x: 615, w: 130 },
+    phone: { x: 510, w: 120 },
+    inv:   { x: 635, w: 125 },
     paid:  { x: 750, w: 40  },
   };
   const TL = 30;   // table left
