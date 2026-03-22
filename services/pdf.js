@@ -7,26 +7,13 @@ const bidiFactory = require('bidi-js');
 
 const bidi = bidiFactory();
 
-/**
- * Fix Hebrew text for correct visual rendering in PDFKit (LTR renderer).
- * Step 1 — bidi reorder: fixes word order (RTL sentence structure).
- * Step 2 — char reverse per word: fixes individual letter order within each word.
- */
 function fixHebrew(text) {
   if (!text) return '';
   if (!/[\u0590-\u05FF]/.test(text)) return text;
 
-  // Split by spaces first, process each token, then rejoin
-  return text
-    .split(' ')
-    .map(word => {
-      if (!word) return '';
-      if (/[\u0590-\u05FF]/.test(word)) {
-        return word.split('').reverse().join('');
-      }
-      return word;
-    })
-    .join(' ');
+  // PDFKit renders Hebrew letters correctly on its own.
+  // Only reverse word order for RTL display:
+  return text.split(' ').reverse().join(' ');
 }
 
 const FONTS_DIR        = path.join(__dirname, '..', 'fonts');
