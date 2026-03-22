@@ -8,24 +8,30 @@ const bidiFactory = require('bidi-js');
 const bidi = bidiFactory();
 
 /**
- * Reorder Hebrew (RTL) text for correct visual rendering in PDFKit,
- * which renders characters strictly left-to-right.
+ * Fix Hebrew text for correct visual rendering in PDFKit (LTR renderer).
+ * Step 1 — bidi reorder: fixes word order (RTL sentence structure).
+ * Step 2 — char reverse per word: fixes individual letter order within each word.
  */
-function prepareText(str) {
-  if (!str) return '';
-  const hasHebrew = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(str);
-  if (!hasHebrew) return str;
+function fixHebrew(text) {
+  if (!text) return '';
+  if (!/[\u0590-\u05FF]/.test(text)) return text;
   try {
-    const levels = bidi.getEmbeddingLevels(str, 'rtl');
-    const flips  = bidi.getReorderSegments(str, levels);
-    const chars  = [...str];
+    // Step 1: bidi reorder (fixes word order RTL)
+    const levels = bidi.getEmbeddingLevels(text, 'rtl');
+    const flips  = bidi.getReorderSegments(text, levels);
+    const chars  = [...text];
     flips.forEach(([s, e]) => {
       let l = s, r = e;
       while (l < r) { [chars[l], chars[r]] = [chars[r], chars[l]]; l++; r--; }
     });
-    return chars.join('');
+    const reordered = chars.join('');
+
+    // Step 2: reverse characters within each Hebrew word (fixes letter order)
+    return reordered.split(' ').map(word =>
+      /[\u0590-\u05FF]/.test(word) ? [...word].reverse().join('') : word
+    ).join(' ');
   } catch {
-    return str;
+    return text;
   }
 }
 
@@ -120,7 +126,7 @@ function generateGuestList(res, guests, date) {
   function cell(text, col, y, bold, align) {
     const raw = String(text || '');
     const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(raw);
-    const str = prepareText(raw);
+    const str = fixHebrew(raw);
     const a   = align || (heb ? 'right' : 'left');
     doc.font(pickFont(raw, bold)).fontSize(9).fillColor('#111111')
        .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: a });
@@ -392,7 +398,7 @@ function generateMembersCatalog(res, members, uploadsDir) {
     // Professions: RU left-aligned, HE right-aligned
     // Blended white on red: 85% ≈ #f5d8de
     const profRu = (m.profession    || '').trim();
-    const profHe = prepareText((m.profession_he || '').trim());
+    const profHe = fixHebrew((m.profession_he || '').trim());
     if (profRu || profHe) {
       if (profRu && profHe) {
         const hw = Math.floor(TW / 2) - 4;
