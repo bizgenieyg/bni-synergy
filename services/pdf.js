@@ -11,10 +11,15 @@ function fixHebrew(text) {
   if (!text) return '';
   if (!/[\u0590-\u05FF]/.test(text)) return text;
 
-  // Normalize all whitespace variants to regular space
-  const normalized = text.replace(/[\u00A0\u2000-\u200B\u202F\uFEFF]/g, ' ').trim();
-
-  return normalized.split(' ').filter(w => w.length > 0).reverse().join(' ');
+  // PDFKit renders LTR only. For Hebrew we need:
+  // 1. Reverse word order (RTL sentence → LTR)
+  // 2. Reverse characters within each Hebrew word
+  return text
+    .trim()
+    .split(/\s+/)
+    .reverse()
+    .map(word => /[\u0590-\u05FF]/.test(word) ? word.split('').reverse().join('') : word)
+    .join(' ');
 }
 
 const FONTS_DIR        = path.join(__dirname, '..', 'fonts');
