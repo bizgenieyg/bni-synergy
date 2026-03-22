@@ -11,9 +11,10 @@ function fixHebrew(text) {
   if (!text) return '';
   if (!/[\u0590-\u05FF]/.test(text)) return text;
 
-  // PDFKit renders Hebrew letters correctly on its own.
-  // Only reverse word order for RTL display:
-  return text.split(' ').reverse().join(' ');
+  // Normalize all whitespace variants to regular space
+  const normalized = text.replace(/[\u00A0\u2000-\u200B\u202F\uFEFF]/g, ' ').trim();
+
+  return normalized.split(' ').filter(w => w.length > 0).reverse().join(' ');
 }
 
 const FONTS_DIR        = path.join(__dirname, '..', 'fonts');
@@ -143,6 +144,8 @@ function generateGuestList(res, guests, date) {
 
     cell(i + 1,               C.num,   ry, false);
     cell(g.name,              C.name,  ry, false);
+    console.log('PROF RAW:', JSON.stringify(g.specialty));
+    console.log('PROF FIXED:', JSON.stringify(fixHebrew(g.specialty || '')));
     cell(g.specialty || '—',  C.prof,  ry, false);
     cell(g.phone,             C.phone, ry, false);
     cell(g.invitedBy || '—',  C.inv,   ry, false);
