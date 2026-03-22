@@ -61,90 +61,79 @@ function generateGuestList(res, guests, date) {
   const paidCount = guests.filter(g => g.paid).length;
   const label = `Встреча: ${date} | Всего: ${guests.length} | Оплатили: ${paidCount}`;
 
-  // A4 landscape: 841 × 595 pt
-  const LS_W = 841;
-  const LS_H = 595;
-  const MARGIN = 30;
-
-  const doc = new PDFDocument({
-    size: 'A4',
-    layout: 'landscape',
-    margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
-    bufferPages: true,
-  });
+  const doc = new PDFDocument({ size: "A4", layout: "landscape", margins: { top: 30, bottom: 30, left: 30, right: 30 }, bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="guests-${date.replace('/', '-')}.pdf"`);
   doc.pipe(res);
 
   const F = setupFonts(doc);
 
-  const ROW_HEIGHT = 22;
-
-  const COLS = [
-    { key: 'num',       label: '#',         x: 30,  w: 20  },
-    { key: 'name',      label: 'Имя',       x: 50,  w: 170 },
-    { key: 'prof',      label: 'Профессия', x: 220, w: 210 },
-    { key: 'phone',     label: 'Телефон',   x: 430, w: 110 },
-    { key: 'invitedBy', label: 'Пригласил', x: 540, w: 130 },
-    { key: 'paid',      label: '₪',         x: 670, w: 50  },
-  ];
-  const TL = COLS[0].x;
-  const lastCol = COLS[COLS.length - 1];
-  const TR = lastCol.x + lastCol.w;
+  // Fixed column layout (absolute x from page left edge)
+  const C = {
+    num:   { x: 30,  w: 20  },
+    name:  { x: 50,  w: 180 },
+    prof:  { x: 230, w: 220 },
+    phone: { x: 450, w: 120 },
+    inv:   { x: 570, w: 130 },
+    paid:  { x: 700, w: 40  },
+  };
+  const TL = 40;   // table left
+  const TR = 585;  // table right
   const TW = TR - TL;
 
-  function isHebrew(text) {
-    return /[\u0590-\u05FF]/.test(text || '');
-  }
-
+  // Choose font based on whether text contains Hebrew characters
   function pickFont(str, bold) {
-    return isHebrew(str)
-      ? (bold ? F.hebBold : F.hebReg)
-      : (bold ? F.bold    : F.regular);
+    const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(str || '');
+    return bold
+      ? (heb ? F.hebBold : F.bold)
+      : (heb ? F.hebReg  : F.regular);
   }
 
-  function cell(text, col, y, bold, forceAlign) {
+  // Draw one cell with auto Hebrew font + ellipsis
+  function cell(text, col, y, bold, align) {
     const str = String(text || '');
-    const align = forceAlign || (isHebrew(str) ? 'right' : 'left');
     doc.font(pickFont(str, bold)).fontSize(9).fillColor('#111111')
-       .text(str, col.x, y, { width: col.w, height: ROW_HEIGHT, lineBreak: false, ellipsis: true, align });
+       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: align || 'left' });
   }
 
   // ── Page header ──
   doc.font(F.bold).fontSize(18).fillColor('#C41230')
-     .text('BNI SYNERGY', TL, 22, { width: TW, align: 'center', lineBreak: false });
+     .text('BNI SYNERGY', TL, 28, { width: TW, align: 'center', lineBreak: false });
   doc.font(F.regular).fontSize(11).fillColor('#333333')
-     .text(label, TL, 46, { width: TW, align: 'center', lineBreak: false });
+     .text(label, TL, 52, { width: TW, align: 'center', lineBreak: false });
 
   // ── Column headers ──
-  const HDR_Y = 70;
+  const HDR_Y = 76;
   doc.font(F.bold).fontSize(9).fillColor('#333333');
-  COLS.forEach(col => {
-    const align = col.key === 'paid' ? 'center' : 'left';
-    doc.text(col.label, col.x, HDR_Y, { width: col.w, lineBreak: false, align });
-  });
+  doc.text('#',         C.num.x,   HDR_Y, { width: C.num.w,   lineBreak: false });
+  doc.text('Имя',       C.name.x,  HDR_Y, { width: C.name.w,  lineBreak: false });
+  doc.text('Профессия', C.prof.x,  HDR_Y, { width: C.prof.w,  lineBreak: false });
+  doc.text('Телефон',   C.phone.x, HDR_Y, { width: C.phone.w, lineBreak: false });
+  doc.text('Пригласил', C.inv.x,   HDR_Y, { width: C.inv.w,   lineBreak: false });
+  doc.text('$',         C.paid.x,  HDR_Y, { width: C.paid.w,  lineBreak: false, align: 'center' });
 
   const HDR_LINE = HDR_Y + 14;
   doc.moveTo(TL, HDR_LINE).lineTo(TR, HDR_LINE).strokeColor('#333333').lineWidth(0.8).stroke();
 
   // ── Data rows ──
-  let ry = HDR_LINE + 4;
+  const ROW_H = 17;
+  let ry = HDR_LINE + 5;
 
   guests.forEach((g, i) => {
-    if (ry + ROW_HEIGHT > LS_H - MARGIN) {
+    if (ry > PAGE_H - 50) {
       doc.addPage();
-      ry = MARGIN;
+      ry = 40;
     }
 
-    cell(i + 1,               COLS[0], ry, false);
-    cell(g.name,              COLS[1], ry, false);
-    cell(g.specialty || '—',  COLS[2], ry, false);
-    cell(g.phone,             COLS[3], ry, false);
-    cell(g.invitedBy || '—',  COLS[4], ry, false);
-    cell(g.paid ? '✓' : '✗', COLS[5], ry, false, 'center');
+    cell(i + 1,              C.num,   ry, false);
+    cell(g.name,             C.name,  ry, false);
+    cell(g.specialty || '—', C.prof,  ry, false);
+    cell(g.phone,            C.phone, ry, false);
+    cell(g.invitedBy || '—', C.inv,   ry, false);
+    cell(g.paid ? '✓' : '✗', C.paid, ry, false, 'center');
 
-    ry += ROW_HEIGHT;
-    doc.moveTo(TL, ry - 2).lineTo(TR, ry - 2).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
+    ry += ROW_H;
+    doc.moveTo(TL, ry - 3).lineTo(TR, ry - 3).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
   });
 
   // ── Footer on every page ──
@@ -154,7 +143,7 @@ function generateGuestList(res, guests, date) {
     doc.font(F.regular).fontSize(8).fillColor('#999999')
        .text(
          `Распечатано: ${new Date().toLocaleString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
-         TL, LS_H - MARGIN + 8, { width: TW, align: 'left' },
+         TL, PAGE_H - 18, { width: TW, align: 'left' },
        );
   }
 
@@ -287,7 +276,7 @@ function generateMembersCatalog(res, members, uploadsDir) {
   const TX     = 132;  // text area start x (right of photo + gap)
   const TW     = CARD_W - TX - 14; // text area width (393)
 
-  const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
+  const doc = new PDFDocument({ size: "A4", layout: "landscape", margins: { top: 30, bottom: 30, left: 30, right: 30 }, bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="members-catalog.pdf"');
   doc.pipe(res);
