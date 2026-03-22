@@ -148,7 +148,7 @@ function generateGuestList(res, guests, date) {
     }
 
     cell(i + 1,               C.num,   ry, false);
-    cell(g.name,              C.name,  ry, false);
+    cell(fixHebrew(g.name),   C.name,  ry, false);
     cell(fixHebrew(g.specialty) || '—',  C.prof,  ry, false);
     cell(g.phone,             C.phone, ry, false);
     cell(g.invitedBy || '—',  C.inv,   ry, false);
