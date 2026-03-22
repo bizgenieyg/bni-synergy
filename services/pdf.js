@@ -64,25 +64,33 @@ function generateGuestList(res, guests, date) {
   // A4 landscape: 841 × 595 pt
   const LS_W = 841;
   const LS_H = 595;
+  const MARGIN = 30;
 
-  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0, bufferPages: true });
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+    bufferPages: true,
+  });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="guests-${date.replace('/', '-')}.pdf"`);
   doc.pipe(res);
 
   const F = setupFonts(doc);
 
-  // Fixed column layout
-  const C = {
-    num:   { x: 30,  w: 25  },
-    name:  { x: 55,  w: 160 },
-    prof:  { x: 215, w: 220 },
-    phone: { x: 435, w: 110 },
-    inv:   { x: 545, w: 120 },
-    paid:  { x: 665, w: 50  },
-  };
-  const TL = 30;
-  const TR = 715;
+  const ROW_HEIGHT = 22;
+
+  const COLS = [
+    { key: 'num',       label: '#',         x: 30,  w: 20  },
+    { key: 'name',      label: 'Имя',       x: 50,  w: 170 },
+    { key: 'prof',      label: 'Профессия', x: 220, w: 210 },
+    { key: 'phone',     label: 'Телефон',   x: 430, w: 110 },
+    { key: 'invitedBy', label: 'Пригласил', x: 540, w: 130 },
+    { key: 'paid',      label: '₪',         x: 670, w: 50  },
+  ];
+  const TL = COLS[0].x;
+  const lastCol = COLS[COLS.length - 1];
+  const TR = lastCol.x + lastCol.w;
   const TW = TR - TL;
 
   function isHebrew(text) {
@@ -99,7 +107,7 @@ function generateGuestList(res, guests, date) {
     const str = String(text || '');
     const align = forceAlign || (isHebrew(str) ? 'right' : 'left');
     doc.font(pickFont(str, bold)).fontSize(9).fillColor('#111111')
-       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align });
+       .text(str, col.x, y, { width: col.w, height: ROW_HEIGHT, lineBreak: false, ellipsis: true, align });
   }
 
   // ── Page header ──
@@ -111,35 +119,32 @@ function generateGuestList(res, guests, date) {
   // ── Column headers ──
   const HDR_Y = 70;
   doc.font(F.bold).fontSize(9).fillColor('#333333');
-  doc.text('#',         C.num.x,   HDR_Y, { width: C.num.w,   lineBreak: false });
-  doc.text('Имя',       C.name.x,  HDR_Y, { width: C.name.w,  lineBreak: false });
-  doc.text('Профессия', C.prof.x,  HDR_Y, { width: C.prof.w,  lineBreak: false });
-  doc.text('Телефон',   C.phone.x, HDR_Y, { width: C.phone.w, lineBreak: false });
-  doc.text('Пригласил', C.inv.x,   HDR_Y, { width: C.inv.w,   lineBreak: false });
-  doc.text('$',         C.paid.x,  HDR_Y, { width: C.paid.w,  lineBreak: false, align: 'center' });
+  COLS.forEach(col => {
+    const align = col.key === 'paid' ? 'center' : 'left';
+    doc.text(col.label, col.x, HDR_Y, { width: col.w, lineBreak: false, align });
+  });
 
   const HDR_LINE = HDR_Y + 14;
   doc.moveTo(TL, HDR_LINE).lineTo(TR, HDR_LINE).strokeColor('#333333').lineWidth(0.8).stroke();
 
   // ── Data rows ──
-  const ROW_H = 17;
-  let ry = HDR_LINE + 5;
+  let ry = HDR_LINE + 4;
 
   guests.forEach((g, i) => {
-    if (ry > LS_H - 40) {
+    if (ry + ROW_HEIGHT > LS_H - MARGIN) {
       doc.addPage();
-      ry = 30;
+      ry = MARGIN;
     }
 
-    cell(i + 1,              C.num,   ry, false);
-    cell(g.name,             C.name,  ry, false);
-    cell(g.specialty || '—', C.prof,  ry, false);
-    cell(g.phone,            C.phone, ry, false);
-    cell(g.invitedBy || '—', C.inv,   ry, false);
-    cell(g.paid ? '✓' : '✗', C.paid, ry, false, 'center');
+    cell(i + 1,               COLS[0], ry, false);
+    cell(g.name,              COLS[1], ry, false);
+    cell(g.specialty || '—',  COLS[2], ry, false);
+    cell(g.phone,             COLS[3], ry, false);
+    cell(g.invitedBy || '—',  COLS[4], ry, false);
+    cell(g.paid ? '✓' : '✗', COLS[5], ry, false, 'center');
 
-    ry += ROW_H;
-    doc.moveTo(TL, ry - 3).lineTo(TR, ry - 3).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
+    ry += ROW_HEIGHT;
+    doc.moveTo(TL, ry - 2).lineTo(TR, ry - 2).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
   });
 
   // ── Footer on every page ──
@@ -149,7 +154,7 @@ function generateGuestList(res, guests, date) {
     doc.font(F.regular).fontSize(8).fillColor('#999999')
        .text(
          `Распечатано: ${new Date().toLocaleString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
-         TL, LS_H - 16, { width: TW, align: 'left' },
+         TL, LS_H - MARGIN + 8, { width: TW, align: 'left' },
        );
   }
 
