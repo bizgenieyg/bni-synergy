@@ -68,20 +68,23 @@ function generateGuestList(res, guests, date) {
 
   const F = setupFonts(doc);
 
-  // Fixed column layout (absolute x from page left edge)
+  // A4 landscape: 841 × 595 pt
+  const LS_H = 595;
+
   const C = {
     num:   { x: 30,  w: 20  },
-    name:  { x: 50,  w: 180 },
-    prof:  { x: 230, w: 220 },
-    phone: { x: 450, w: 120 },
-    inv:   { x: 570, w: 130 },
-    paid:  { x: 700, w: 40  },
+    name:  { x: 55,  w: 140 },
+    prof:  { x: 200, w: 255 },
+    phone: { x: 460, w: 125 },
+    inv:   { x: 590, w: 155 },
+    paid:  { x: 750, w: 40  },
   };
-  const TL = 40;   // table left
-  const TR = 585;  // table right
+  const TL = 30;   // table left
+  const TR = 810;  // table right (landscape width)
   const TW = TR - TL;
 
-  // Choose font based on whether text contains Hebrew characters
+  const ROW_HEIGHT = 22;
+
   function pickFont(str, bold) {
     const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(str || '');
     return bold
@@ -89,51 +92,51 @@ function generateGuestList(res, guests, date) {
       : (heb ? F.hebReg  : F.regular);
   }
 
-  // Draw one cell with auto Hebrew font + ellipsis
   function cell(text, col, y, bold, align) {
     const str = String(text || '');
+    const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(str);
+    const a = align || (heb ? 'right' : 'left');
     doc.font(pickFont(str, bold)).fontSize(9).fillColor('#111111')
-       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: align || 'left' });
+       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: a });
   }
 
   // ── Page header ──
   doc.font(F.bold).fontSize(18).fillColor('#C41230')
-     .text('BNI SYNERGY', TL, 28, { width: TW, align: 'center', lineBreak: false });
+     .text('BNI SYNERGY', TL, 22, { width: TW, align: 'center', lineBreak: false });
   doc.font(F.regular).fontSize(11).fillColor('#333333')
-     .text(label, TL, 52, { width: TW, align: 'center', lineBreak: false });
+     .text(label, TL, 46, { width: TW, align: 'center', lineBreak: false });
 
   // ── Column headers ──
-  const HDR_Y = 76;
+  const HDR_Y = 70;
   doc.font(F.bold).fontSize(9).fillColor('#333333');
   doc.text('#',         C.num.x,   HDR_Y, { width: C.num.w,   lineBreak: false });
   doc.text('Имя',       C.name.x,  HDR_Y, { width: C.name.w,  lineBreak: false });
   doc.text('Профессия', C.prof.x,  HDR_Y, { width: C.prof.w,  lineBreak: false });
   doc.text('Телефон',   C.phone.x, HDR_Y, { width: C.phone.w, lineBreak: false });
   doc.text('Пригласил', C.inv.x,   HDR_Y, { width: C.inv.w,   lineBreak: false });
-  doc.text('$',         C.paid.x,  HDR_Y, { width: C.paid.w,  lineBreak: false, align: 'center' });
+  doc.text('₪',         C.paid.x,  HDR_Y, { width: C.paid.w,  lineBreak: false, align: 'center' });
 
   const HDR_LINE = HDR_Y + 14;
   doc.moveTo(TL, HDR_LINE).lineTo(TR, HDR_LINE).strokeColor('#333333').lineWidth(0.8).stroke();
 
   // ── Data rows ──
-  const ROW_H = 17;
-  let ry = HDR_LINE + 5;
+  let ry = HDR_LINE + 4;
 
   guests.forEach((g, i) => {
-    if (ry > PAGE_H - 50) {
+    if (ry + ROW_HEIGHT > LS_H - 30) {
       doc.addPage();
-      ry = 40;
+      ry = 30;
     }
 
-    cell(i + 1,              C.num,   ry, false);
-    cell(g.name,             C.name,  ry, false);
-    cell(g.specialty || '—', C.prof,  ry, false);
-    cell(g.phone,            C.phone, ry, false);
-    cell(g.invitedBy || '—', C.inv,   ry, false);
-    cell(g.paid ? '✓' : '✗', C.paid, ry, false, 'center');
+    cell(i + 1,               C.num,   ry, false);
+    cell(g.name,              C.name,  ry, false);
+    cell(g.specialty || '—',  C.prof,  ry, false);
+    cell(g.phone,             C.phone, ry, false);
+    cell(g.invitedBy || '—',  C.inv,   ry, false);
+    cell(g.paid ? '✓' : '✗', C.paid,  ry, false, 'center');
 
-    ry += ROW_H;
-    doc.moveTo(TL, ry - 3).lineTo(TR, ry - 3).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
+    ry += ROW_HEIGHT;
+    doc.moveTo(TL, ry - 2).lineTo(TR, ry - 2).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
   });
 
   // ── Footer on every page ──
@@ -143,7 +146,7 @@ function generateGuestList(res, guests, date) {
     doc.font(F.regular).fontSize(8).fillColor('#999999')
        .text(
          `Распечатано: ${new Date().toLocaleString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
-         TL, PAGE_H - 18, { width: TW, align: 'left' },
+         TL, LS_H - 18, { width: TW, align: 'left' },
        );
   }
 
