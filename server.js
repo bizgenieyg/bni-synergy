@@ -238,6 +238,17 @@ app.post('/api/register', async (req, res) => {
     .then(() => db.markWaSent(id))
     .catch(err => console.error('[WhatsApp] sendMessage failed:', err.message));
 
+  // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
+  const settings = db.getAllSettings();
+  if (settings.confirmation_sent_for === meetingDate) {
+    const confirmMsg = buildConfirmationMessage({ id, name, phone, specialty, invitedBy }, settings);
+    setTimeout(() => {
+      whatsapp.sendMessage(phone, confirmMsg)
+        .then(() => db.markWaSent(id))
+        .catch(err => console.error('[WhatsApp] late-reg confirm failed:', err.message));
+    }, 30000); // 30s delay so registration WA goes first
+  }
+
   return res.json({ success: true, id, name, isSub });
 });
 
@@ -326,8 +337,13 @@ app.get('/api/guests/:id/public', (req, res) => {
 app.post('/api/guests/:id/confirm', (req, res) => {
   const guest = db.getGuestById(req.params.id);
   if (!guest) return res.status(404).json({ error: 'Гость не найден' });
-  db.markConfirmed(guest.id);
-  res.json({ success: true, confirmed: 1 });
+  const status = req.body?.confirmed === -1 ? -1 : 1;
+  if (status === -1) {
+    db.markDeclined(guest.id);
+  } else {
+    db.markConfirmed(guest.id);
+  }
+  res.json({ success: true, confirmed: status });
 });
 
 // ─── Members API ──────────────────────────────────────────────────────────────

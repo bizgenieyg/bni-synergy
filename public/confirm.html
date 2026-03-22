@@ -217,7 +217,14 @@
       }
     }
 
-    function decline() {
+    async function decline() {
+      try {
+        await fetch(`/api/guests/${guestId}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmed: -1 }),
+        });
+      } catch {}
       renderResult(false);
     }
 

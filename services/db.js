@@ -192,6 +192,11 @@ function markConfirmed(id) {
     .run(new Date().toISOString(), id);
 }
 
+function markDeclined(id) {
+  db.prepare('UPDATE guests SET confirmed = -1, wa_enabled = 0, confirmed_at = ? WHERE id = ?')
+    .run(new Date().toISOString(), id);
+}
+
 function toggleWaEnabled(id) {
   const guest = db.prepare('SELECT wa_enabled FROM guests WHERE id = ?').get(id);
   if (!guest) return null;
@@ -729,6 +734,7 @@ module.exports = {
   markWaSent,
   markPaid,
   markConfirmed,
+  markDeclined,
   toggleWaEnabled,
   getGuestsByDate,
   getAllGuests,

@@ -874,7 +874,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
     setLoading(false)
   }
 
-  const chartData = [...stats].reverse().map(s => ({
+  const chartData = [...stats].map(s => ({
     name: s.date.slice(0, 5), Guests: s.total, Paid: s.paid,
   }))
 
@@ -1295,11 +1295,15 @@ function GuestsSection() {
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    {g.confirmed
+                    {g.confirmed === 1
                       ? <span className="text-xs font-medium text-green-600">✅ Подтвердил</span>
-                      : confirmationSentFor === selectedDate && g.wa_enabled
-                        ? <span className="text-xs font-medium text-amber-500">📨 Отправлено</span>
-                        : <span className="text-xs text-gray-400">⏳ Ожидает</span>
+                      : g.confirmed === -1
+                        ? <span className="text-xs font-medium text-red-500">❌ Отказал</span>
+                        : g.waSent === 1
+                          ? <span className="text-xs font-medium text-amber-500">⏱ Ожидает</span>
+                          : g.wa_enabled === 0
+                            ? <span className="text-xs text-red-400">🚫 Отказал</span>
+                            : <span className="text-xs text-gray-400">📭 Не отправлено</span>
                     }
                   </td>
                   <td className="px-4 py-3">
