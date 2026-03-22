@@ -19,7 +19,7 @@ function fixHebrew(text) {
     .split(/\s+/)
     .reverse()
     .map(word => /[\u0590-\u05FF]/.test(word) ? word.split('').reverse().join('') : word)
-    .join(' ');
+    .join('\u00A0');
 }
 
 const FONTS_DIR        = path.join(__dirname, '..', 'fonts');
