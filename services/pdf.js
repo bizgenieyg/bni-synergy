@@ -100,8 +100,8 @@ function generateGuestList(res, guests, date) {
     num:   { x: 30,  w: 20  },
     name:  { x: 55,  w: 140 },
     prof:  { x: 200, w: 255 },
-    phone: { x: 460, w: 125 },
-    inv:   { x: 590, w: 155 },
+    phone: { x: 490, w: 120 },
+    inv:   { x: 615, w: 130 },
     paid:  { x: 750, w: 40  },
   };
   const TL = 30;   // table left
