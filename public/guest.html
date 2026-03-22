@@ -238,6 +238,9 @@
           <label for="guestName">Имя и фамилия<span class="req">*</span></label>
           <input type="text" id="guestName" name="name"
                  placeholder="Иван Иванов" autocomplete="name" required />
+          <span id="nameHebErr" style="display:none;color:#dc2626;font-size:12px;margin-top:4px;display:none">
+            Пожалуйста, введите имя на русском или английском языке
+          </span>
         </div>
 
         <div class="form-group">
@@ -250,6 +253,9 @@
           <label for="specialty">Профессия / вид деятельности</label>
           <input type="text" id="specialty" name="specialty"
                  placeholder="Программист, Архитектор, …" maxlength="50" />
+          <span id="specHebErr" style="display:none;color:#dc2626;font-size:12px;margin-top:4px">
+            Пожалуйста, введите профессию на русском или английском языке
+          </span>
         </div>
 
         <!-- Invited by: input OR badge from ?ref= -->
@@ -376,6 +382,8 @@
     const errorEl   = document.getElementById('errorMsg');
     const submitBtn = document.getElementById('submitBtn');
 
+    const hasHebrew = str => /[\u0590-\u05FF]/.test(str);
+
     form.addEventListener('submit', async e => {
       e.preventDefault();
       errorEl.style.display = 'none';
@@ -386,6 +394,22 @@
       const invitedBy = refParam
         ? resolvedRef
         : document.getElementById('invitedBy').value.trim();
+
+      // Hebrew validation
+      const nameHebErr = document.getElementById('nameHebErr');
+      const specHebErr = document.getElementById('specHebErr');
+      nameHebErr.style.display = 'none';
+      specHebErr.style.display = 'none';
+      let hebBlocked = false;
+      if (hasHebrew(name)) {
+        nameHebErr.style.display = 'block';
+        hebBlocked = true;
+      }
+      if (hasHebrew(specialty)) {
+        specHebErr.style.display = 'block';
+        hebBlocked = true;
+      }
+      if (hebBlocked) return;
 
       if (!name || !phone) {
         errorEl.textContent   = 'Пожалуйста, заполните все обязательные поля.';

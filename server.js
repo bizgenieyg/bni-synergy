@@ -207,6 +207,9 @@ app.post('/api/register', async (req, res) => {
   if (!name || !phone) {
     return res.status(400).json({ error: 'Имя и телефон обязательны' });
   }
+  if (/[\u0590-\u05FF]/.test(name) || /[\u0590-\u05FF]/.test(specialty)) {
+    return res.status(400).json({ error: 'Hebrew characters not allowed in name or specialty' });
+  }
   if (specialty && specialty.length > 50) {
     return res.status(400).json({ error: 'Профессия не может быть длиннее 50 символов' });
   }
