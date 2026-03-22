@@ -323,17 +323,21 @@
       document.getElementById('phone').value = displayPhone;
     }
 
+    // ── Resolve ref — numeric ids are resolved server-side via window.__REF_NAME__ ──
+    const resolvedRef = (typeof window.__REF_NAME__ !== 'undefined' && window.__REF_NAME__)
+      ? window.__REF_NAME__
+      : (refParam ? decodeURIComponent(refParam) : '');
+
     // ── Handle ?ref= ──────────────────────────────────────────────────────────
     if (refParam) {
-      const name = decodeURIComponent(refParam);
       document.getElementById('invitedByGroup').style.display = 'none';
       document.getElementById('refBadgeGroup').style.display  = 'block';
-      document.getElementById('refBadgeText').textContent     = name;
+      document.getElementById('refBadgeText').textContent     = resolvedRef;
     }
 
     // ── Handle type=sub ───────────────────────────────────────────────────────
     if (isSub) {
-      const memberName = refParam ? decodeURIComponent(refParam) : '';
+      const memberName = resolvedRef;
       const banner     = document.getElementById('subBanner');
       banner.style.display = 'block';
       banner.textContent   = `🎉 Вы приходите как замена${memberName ? ' за ' + memberName : ''}. Оплата не требуется!`;
@@ -380,7 +384,7 @@
       const phone     = document.getElementById('phone').value.trim();
       const specialty = document.getElementById('specialty').value.trim();
       const invitedBy = refParam
-        ? decodeURIComponent(refParam)
+        ? resolvedRef
         : document.getElementById('invitedBy').value.trim();
 
       if (!name || !phone) {

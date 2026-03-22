@@ -158,7 +158,17 @@ function adminAuth(req, res, next) {
 
 // ─── HTML pages ───────────────────────────────────────────────────────────────
 
-app.get('/guest',           (req, res) => res.sendFile(path.join(__dirname, 'public', 'guest.html')));
+app.get('/guest', (req, res) => {
+  const ref = req.query.ref || '';
+  let invitedByName = ref;
+  if (/^\d+$/.test(ref)) {
+    const m = db.db.prepare('SELECT name FROM members WHERE id = ?').get(Number(ref));
+    if (m) invitedByName = m.name;
+  }
+  const html = fs.readFileSync(path.join(__dirname, 'public', 'guest.html'), 'utf8');
+  const injected = html.replace('<script>', `<script>window.__REF_NAME__=${JSON.stringify(invitedByName)};\n`);
+  res.type('html').send(injected);
+});
 app.get('/admin',           (req, res) => {
   // Serve React SPA if built, otherwise fall back to admin.html
   const spa = path.join(__dirname, 'public', 'dist', 'index.html');
@@ -187,7 +197,12 @@ app.get('/api/test', (req, res) => {
 // ─── Guest registration ───────────────────────────────────────────────────────
 
 app.post('/api/register', async (req, res) => {
-  const { name, phone, specialty, invitedBy, type, meetingDate: bodyDate } = req.body;
+  const { name, phone, specialty, type, meetingDate: bodyDate } = req.body;
+  let invitedBy = req.body.invitedBy || '';
+  if (/^\d+$/.test(invitedBy)) {
+    const m = db.db.prepare('SELECT name FROM members WHERE id = ?').get(Number(invitedBy));
+    if (m) invitedBy = m.name;
+  }
 
   if (!name || !phone) {
     return res.status(400).json({ error: 'Имя и телефон обязательны' });

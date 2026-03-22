@@ -663,7 +663,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   const [phone, setPhone] = useState('')
 
   const member = members.find(m => m.id === selectedId)
-  const encoded = member ? encodeURIComponent(member.name.split(' ')[0]) : ''
+  const encoded = member ? String(member.id) : ''
   const phoneDigits = phone.replace(/\D/g, '').replace(/^0/, '972')
   const link = member
     ? `https://bnisynergy.biz/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}${phoneDigits ? `&phone=${phoneDigits}` : ''}`
