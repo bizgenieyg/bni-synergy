@@ -1282,7 +1282,7 @@ function GuestsSection() {
               {filtered.map(g => (
                 <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
-                  <td className="px-4 py-3 text-gray-500">
+                  <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
                       className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{formatPhoneDisplay(g.phone)}</a>
                   </td>
@@ -1305,7 +1305,7 @@ function GuestsSection() {
                   <td className="px-4 py-3">
                     {g.paid
                       ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> {t('guests.paidLabel')}</span>
-                      : <button onClick={() => markPaid(g.id)} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium">{t('guests.markPaid')}</button>}
+                      : <button onClick={() => markPaid(g.id)} title={t('guests.markPaid')} className="text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium" style={{ padding: '4px 8px' }}>₪</button>}
                   </td>
                 </tr>
               ))}
