@@ -132,25 +132,27 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Admin auth ───────────────────────────────────────────────────────────────
 
 const crypto = require('crypto');
-const ADMIN_TOKENS = new Set(); // in-memory token store
+
+function makeStaticToken(password) {
+  return crypto.createHmac('sha256', password + 'bni-synergy-salt').digest('hex');
+}
 
 app.post('/api/admin/login', (req, res) => {
-  const { password } = req.body;
   const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bni2024';
+  const { password } = req.body;
   if (password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Неверный пароль' });
   }
-  const token = crypto.randomBytes(32).toString('hex');
-  ADMIN_TOKENS.add(token);
+  const token = makeStaticToken(ADMIN_PASSWORD);
   res.json({ token });
 });
 
 function adminAuth(req, res, next) {
-  // Allow unauthenticated access in dev / if no password set
   if (!process.env.ADMIN_PASSWORD) return next();
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bni2024';
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!ADMIN_TOKENS.has(token)) {
+  if (token !== makeStaticToken(ADMIN_PASSWORD)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
