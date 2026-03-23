@@ -318,7 +318,8 @@
     const params     = new URLSearchParams(location.search);
     const refParam   = params.get('ref');
     const typeParam  = params.get('type'); // 'guest' | 'sub'
-    const dateParam  = params.get('date'); // 'DD/MM'
+    const _rawDate   = params.get('date');
+    const dateParam  = (_rawDate && /^\d{2}\/\d{2}\/\d{2}$/.test(_rawDate)) ? _rawDate : null;
     const phoneParam = params.get('phone'); // '972XXXXXXXXX'
     const isSub      = typeParam === 'sub';
 

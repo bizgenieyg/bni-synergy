@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import './i18n'
 import { useTranslation } from 'react-i18next'
 import {
@@ -1617,7 +1617,6 @@ function VotingSection() {
 function GroupValueSection() {
   const { t } = useTranslation()
   const [period, setPeriod] = useState<Period>('all')
-  const [totals, setTotals] = useState<StatTotals | null>(null)
   const [history, setHistory] = useState<MeetingStatEntry[]>([])
 
   // Calculator state
@@ -1650,17 +1649,30 @@ function GroupValueSection() {
     deal_amount:   acc.deal_amount   + r.deal_amount,
   }), { meetings_1on1: 0, referrals: 0, closed_deals: 0, deal_amount: 0 })
 
-  const loadTotals = useCallback(async (p: Period) => {
-    const t = await api(`/api/meeting-stats/totals?period=${p}`).then(r => r.json())
-    setTotals(t)
-  }, [])
-
   const loadHistory = useCallback(async () => {
     setHistory(await api('/api/meeting-stats').then(r => r.json()))
   }, [])
 
-  useEffect(() => { loadHistory(); loadTotals(period) }, []) // eslint-disable-line
-  useEffect(() => { loadTotals(period) }, [period, loadTotals])
+  useEffect(() => { loadHistory() }, []) // eslint-disable-line
+
+  const filteredTotals = useMemo<StatTotals | null>(() => {
+    if (!history.length) return null
+    const now = Date.now()
+    const days = period === 'week' ? 7 : period === 'month' ? 30 : period === 'quarter' ? 90 : null
+    const cutoffMs = days ? days * 24 * 60 * 60 * 1000 : null
+    const filtered = cutoffMs
+      ? history.filter(e => {
+          const [dd, mm, yy] = e.meeting_date.split('/').map(Number)
+          return now - new Date(2000 + yy, mm - 1, dd).getTime() <= cutoffMs
+        })
+      : history
+    return {
+      total_1on1:      filtered.reduce((s, e) => s + (e.meetings_1on1 || 0), 0),
+      total_referrals: filtered.reduce((s, e) => s + (e.referrals     || 0), 0),
+      total_deals:     filtered.reduce((s, e) => s + (e.closed_deals  || 0), 0),
+      total_amount:    filtered.reduce((s, e) => s + (e.deal_amount   || 0), 0),
+    }
+  }, [history, period])
 
   const addRow = () => {
     if (!inp1on1 && !inpRef && !inpDeals && !inpAmount) return
@@ -1684,14 +1696,13 @@ function GroupValueSection() {
       const report = `📊 BNI Report ${meetingDate}:\n🤝 1-on-1: ${pt.meetings_1on1}\n📄 Referrals: ${pt.referrals}\n🔐 Deals: ${pt.closed_deals}\n💰 Total: ₪${pt.deal_amount.toLocaleString()}`
       try { await navigator.clipboard.writeText(report) } catch {}
       setPending([]); setShowModal(false)
-      loadHistory(); loadTotals(period)
+      loadHistory()
     } finally { setSaving(false) }
   }
 
   const deleteHistoryEntry = async (id: number) => {
     await api(`/api/meeting-stats/${id}`, { method: 'DELETE' })
     setHistory(h => h.filter(e => e.id !== id))
-    loadTotals(period)
   }
 
   const PERIODS: { id: Period; label: string }[] = [
@@ -1731,13 +1742,13 @@ function GroupValueSection() {
       </div>
 
       {/* KPI Totals */}
-      {totals && (
+      {filteredTotals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {([
-            { label: t('groupValue.oneOnOne'),    value: totals.total_1on1,                                 icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
-            { label: t('groupValue.referrals'),   value: totals.total_referrals,                            icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
-            { label: t('groupValue.closedDeals'), value: totals.total_deals,                                icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
-            { label: t('groupValue.totalAmount'), value: `₪${(totals.total_amount||0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+            { label: t('groupValue.oneOnOne'),    value: filteredTotals.total_1on1,                                 icon: <Handshake size={18} />,  color: 'bg-blue-50 text-blue-600' },
+            { label: t('groupValue.referrals'),   value: filteredTotals.total_referrals,                            icon: <Users size={18} />,      color: 'bg-purple-50 text-purple-600' },
+            { label: t('groupValue.closedDeals'), value: filteredTotals.total_deals,                                icon: <Trophy size={18} />,     color: 'bg-amber-50 text-amber-600' },
+            { label: t('groupValue.totalAmount'), value: `₪${(filteredTotals.total_amount||0).toLocaleString()}`,   icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           ] as { label: string; value: string|number; icon: React.ReactNode; color: string }[]).map(c => (
             <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
               <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
@@ -1761,11 +1772,11 @@ function GroupValueSection() {
         {/* Input row — 4 equal columns */}
         <div className="grid grid-cols-4 gap-3 mb-4">
           {[
-            { label: t('groupValue.oneOnOne'),  node: <Counter value={inp1on1} onChange={setInp1on1} /> },
-            { label: t('groupValue.referrals'), node: <Counter value={inpRef}   onChange={setInpRef} /> },
-            { label: t('groupValue.deals'),     node: <Counter value={inpDeals} onChange={setInpDeals} /> },
+            { label: t('groupValue.oneOnOne'),  node: <input type="number" min={0} value={inp1on1 || ''} onChange={e => setInp1on1(Math.max(0, parseInt(e.target.value) || 0))} onKeyDown={e => e.key === 'Enter' && addRow()} className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" /> },
+            { label: t('groupValue.referrals'), node: <input type="number" min={0} value={inpRef || ''} onChange={e => setInpRef(Math.max(0, parseInt(e.target.value) || 0))} onKeyDown={e => e.key === 'Enter' && addRow()} className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" /> },
+            { label: t('groupValue.deals'),     node: <input type="number" min={0} value={inpDeals || ''} onChange={e => setInpDeals(Math.max(0, parseInt(e.target.value) || 0))} onKeyDown={e => e.key === 'Enter' && addRow()} className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" /> },
             { label: t('groupValue.amountLabel'), node:
-              <input value={inpAmounts} onChange={e => { const v = e.target.value; setInpAmounts(v); const parsed = v.split(',').map(s => Number(s.trim())).filter(n => n > 0 && !isNaN(n)); setInpDeals(parsed.length) }}
+              <input value={inpAmounts} onChange={e => setInpAmounts(e.target.value)}
                 placeholder={t('groupValue.amountsPlaceholder')} onKeyDown={e => e.key === 'Enter' && addRow()}
                 className="w-full h-9 border border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-red-400" />
             },

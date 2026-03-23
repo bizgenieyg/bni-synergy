@@ -214,7 +214,7 @@ app.post('/api/register', async (req, res) => {
     return res.status(400).json({ error: 'Профессия не может быть длиннее 50 символов' });
   }
 
-  const meetingDate = (bodyDate && bodyDate.trim()) || NEXT_MEETING_DATE;
+  const meetingDate = (bodyDate && /^\d{2}\/\d{2}\/\d{2}$/.test(bodyDate.trim()) ? bodyDate.trim() : null) || NEXT_MEETING_DATE;
   const isSub       = type === 'sub';
   const firstName   = name.split(' ')[0]; // for WA greeting
 
@@ -622,10 +622,18 @@ app.post('/api/voting/open', (req, res) => {
   db.deleteVotesByDate(meetingDate);
   res.json({ success: true });
 
+  const votingMsg = `🗳️ Голосование открыто!\n\nВыберите лучшую презентацию встречи BNI SYNERGY:\nhttps://bnisynergy.biz/voting`;
+
+  const guestsForVoting = db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled === 1 && g.waSent === 1);
+  if (guestsForVoting.length) {
+    whatsapp.sendWithDelay(guestsForVoting, () => votingMsg)
+      .catch(err => console.error('[Voting/open] individual notify failed:', err.message));
+  }
+
   const groupId = process.env.WAHA_GROUP_ID || '';
   if (groupId) {
     whatsapp.sendGroupMessage(groupId,
-      `🗳 *Голосование открыто!*\nПроголосуйте за лучшего члена встречи:\nhttps://bnisynergy.biz/voting`
+      `🗳️ *Голосование открыто!*\n\nВыберите лучшую презентацию встречи BNI SYNERGY:\nhttps://bnisynergy.biz/voting`
     ).catch(err => console.error('[Voting/open] group notify failed:', err.message));
   }
 });
