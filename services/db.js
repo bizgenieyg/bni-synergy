@@ -673,6 +673,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_meeting_stats_date ON meeting_stats(meeting_date);
 `);
 
+// Migrate existing DD/MM records to DD/MM/YY (assume year 26)
+db.exec(`UPDATE meeting_stats SET meeting_date = meeting_date || '/26' WHERE meeting_date NOT LIKE '%/%/%';`);
+
 // ─── Meeting Stats CRUD ───────────────────────────────────────────────────────
 
 function getAllMeetingStats() {

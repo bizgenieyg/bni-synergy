@@ -344,15 +344,15 @@ function SocialIcons({ socials }: { socials: MemberSocial[] }) {
 const MONTH_NAMES = ['January','February','March','April','May','June',
                      'July','August','September','October','November','December']
 
-function DatePickerInput({ value, onChange, placeholder = 'DD/MM' }:
+function DatePickerInput({ value, onChange, placeholder = 'DD/MM/YY' }:
   { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false)
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
   const ref = useRef<HTMLDivElement>(null)
 
-  // Parse "DD/MM" → { day, month0 } (month is 0-based)
-  const parsed = value.match(/^(\d{1,2})\/(\d{1,2})$/)
+  // Parse "DD/MM" or "DD/MM/YY" → { day, month0 } (month is 0-based)
+  const parsed = value.match(/^(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?$/)
   const selDay   = parsed ? +parsed[1] : null
   const selMonth = parsed ? +parsed[2] - 1 : null
 
@@ -377,7 +377,7 @@ function DatePickerInput({ value, onChange, placeholder = 'DD/MM' }:
   const offset = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7 // Monday=0
 
   const selectDay = (day: number) => {
-    onChange(`${String(day).padStart(2,'0')}/${String(viewMonth+1).padStart(2,'0')}`)
+    onChange(`${String(day).padStart(2,'0')}/${String(viewMonth+1).padStart(2,'0')}/${String(viewYear).slice(2)}`)
     setOpen(false)
   }
 
@@ -1622,7 +1622,7 @@ function GroupValueSection() {
   // Calculator state
   const today = new Date()
   const [meetingDate, setMeetingDate] = useState(
-    `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}`
+    `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getFullYear()).slice(2)}`
   )
   const [pending, setPending] = useState<PendingRow[]>([])
   const [nextLocalId, setNextLocalId] = useState(1)
