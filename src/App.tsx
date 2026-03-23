@@ -298,9 +298,10 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout }:
 function Avatar({ member, size = 40 }: { member: Member; size?: number }) {
   if (member.photo) {
     return (
-      <img src={`/uploads/${member.photo}`} alt={member.name}
-        className="rounded-full object-cover flex-shrink-0"
-        style={{ width: size, height: size }} />
+      <div className="rounded-full overflow-hidden flex-shrink-0" style={{ width: size, height: size }}>
+        <img src={`/uploads/${member.photo}`} alt={member.name}
+          className="w-full h-full object-cover block" />
+      </div>
     )
   }
   return (
@@ -546,7 +547,7 @@ function MemberModal({ member, onClose, onSaved }:
           <div className="flex items-center gap-4 mb-5">
             <div className="relative">
               {photoPreview
-                ? <img src={photoPreview} alt="" className="w-16 h-16 rounded-full object-cover" />
+                ? <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0"><img src={photoPreview} alt="" className="w-full h-full object-cover block" /></div>
                 : <div className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl" style={{ background: RED }}>
                     {form.name.charAt(0) || '?'}
                   </div>
