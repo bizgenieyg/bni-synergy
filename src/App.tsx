@@ -804,6 +804,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
   const [birthdays, setBirthdays] = useState<(Member & { daysUntil: number })[]>([])
   const [memberCount, setMemberCount] = useState(0)
   const [gvTotal, setGvTotal] = useState(0)
+  const [gv1on1, setGv1on1] = useState(0)
   const [loading, setLoading] = useState(false)
   const [savingMeeting, setSavingMeeting] = useState(false)
   const [meetingType, setMeetingType] = useState<'offline' | 'zoom'>('offline')
@@ -844,6 +845,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       setBirthdays(b)
       setMemberCount(m.length)
       setGvTotal(gv?.total_amount || 0)
+      setGv1on1(gv?.total_1on1 || 0)
       if (cfg.meeting_type) setMeetingType(cfg.meeting_type as 'offline' | 'zoom')
       if (cfg.meeting_location) setMeetingLocation(cfg.meeting_location)
       if (cfg.meeting_zoom_url) setMeetingZoomUrl(cfg.meeting_zoom_url)
@@ -966,7 +968,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
           { label: t('dashboard.members'),    value: memberCount,                         icon: <UserCheck size={18} />,    color: 'bg-blue-50 text-blue-600' },
           { label: t('dashboard.guests'),     value: guestCount.count,                    icon: <Users size={18} />,        color: 'bg-purple-50 text-purple-600' },
           { label: 'Group Value',             value: `₪${gvTotal.toLocaleString()}`,      icon: <DollarSign size={18} />,   color: 'bg-green-50 text-green-600' },
-          { label: t('dashboard.attendance'), value: '94%',                               icon: <CheckCircle2 size={18} />, color: 'bg-amber-50 text-amber-600' },
+          { label: '1-на-1',                  value: gv1on1.toLocaleString(),             icon: <Handshake size={18} />,    color: 'bg-amber-50 text-amber-600' },
         ] as { label: string; value: string | number; icon: React.ReactNode; color: string }[]).map(c => (
           <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
             <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
