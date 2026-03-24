@@ -1439,9 +1439,13 @@ function MembersSection() {
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
               ⠿ Упорядочить
             </button>
+            <a href="/members-catalog" target="_blank"
+              className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
+              🌐 Каталог
+            </a>
             <a href="/api/pdf/members" target="_blank"
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-              <Download size={13} /> {t('members.pdfCatalog')}
+              <Download size={13} />
             </a>
             <button onClick={() => setEditingMember(null)}
               className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5" style={{ background: RED }}>
@@ -1474,8 +1478,11 @@ function MembersSection() {
                 onDrop={e => e.preventDefault()}
                 className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-grab active:cursor-grabbing select-none hover:border-gray-300 hover:shadow-sm transition-all">
                 <span className="text-gray-300 text-lg leading-none flex-shrink-0">⠿</span>
-                <Avatar member={m} size={28} />
-                <span className="text-xs font-medium text-gray-700 truncate">{m.name.split(' ')[0]}</span>
+                <Avatar member={m} size={40} />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-gray-700 leading-tight">{m.name}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{m.profession}</p>
+                </div>
               </div>
             ))}
           </div>
