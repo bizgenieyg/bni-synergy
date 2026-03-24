@@ -696,9 +696,12 @@ app.post('/api/whatsapp/send-catalog', async (req, res) => {
 
   whatsapp.sendWithDelay(guests, g =>
     `Здравствуйте, ${whatsapp.getFirstName(g.name)}! 👋\n\n` +
-    `Добро пожаловать в BNI Synergy!\n` +
-    `Вот каталог наших участников:\nhttps://bnisynergy.biz/members-catalog\n\n` +
-    `Ждём вас на встрече! 🤝\nBNI Synergy`
+    `Рады были видеть вас сегодня на встрече BNI SYNERGY! 🤝\n\n` +
+    `Надеемся, что помимо приятного общения вы нашли для себя деловой интерес и новые возможности для сотрудничества.\n\n` +
+    `Для вашего удобства — каталог участников группы с профессиями и контактами:\n` +
+    `https://bnisynergy.biz/members-catalog\n\n` +
+    `Будем рады видеть вас снова! 😊\n` +
+    `Команда BNI SYNERGY`
   ).catch(err => console.error('[Broadcast] send-catalog error:', err.message));
 });
 
