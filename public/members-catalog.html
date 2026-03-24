@@ -4,334 +4,426 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BNI SYNERGY — Каталог участников</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --red:    #C41230;
-      --red-d:  #9e0e26;
-      --border: #e5e7eb;
+      --red-dk: #9e0e26;
+      --text:   #1a1a1a;
       --muted:  #6b7280;
-      --radius: 14px;
+      --border: #e5e7eb;
+      --bg:     #f4f5f7;
+      --card:   #ffffff;
+      --radius: 16px;
     }
 
+    html { font-size: 16px; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f3f4f6;
-      color: #111827;
-      min-height: 100vh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
     }
 
-    /* ── Header ── */
-    .header {
-      background: var(--red);
-      color: #fff;
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #b01028 0%, var(--red) 50%, #d41838 100%);
+      padding: 48px 20px 52px;
       text-align: center;
-      padding: 22px 16px 18px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-content { position: relative; z-index: 1; }
+    .hero-logo {
+      font-size: clamp(32px, 7vw, 52px);
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+    .hero-logo span { font-weight: 400; opacity: .85; }
+    .hero-sub {
+      font-size: clamp(14px, 3vw, 17px);
+      color: rgba(255,255,255,.82);
+      font-weight: 500;
+      margin-bottom: 24px;
+      letter-spacing: .3px;
+    }
+    .hero-pills {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .pill {
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      backdrop-filter: blur(8px);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 16px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .logo-title {
-      font-family: Arial Black, Arial, sans-serif;
-      font-size: 26px;
-      font-weight: 900;
-      letter-spacing: -0.5px;
+    /* ── Content wrapper ── */
+    .content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 36px 16px 60px;
     }
 
-    .logo-title span {
-      font-size: 14px;
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+    .section-title span {
+      color: var(--muted);
       font-weight: 400;
-      opacity: 0.85;
-      display: block;
-      margin-top: 4px;
-      letter-spacing: 0.5px;
+      font-size: 15px;
+      margin-left: 8px;
     }
 
     /* ── Grid ── */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-      padding: 20px 16px 40px;
-      max-width: 1100px;
-      margin: 0 auto;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
     }
+    @media (max-width: 1024px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px)  { .grid { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
+    @media (max-width: 360px)  { .grid { grid-template-columns: 1fr; } }
 
-    @media (max-width: 560px) {
-      .grid { grid-template-columns: 1fr; gap: 12px; }
-    }
-
-    /* ── Member card ── */
-    .member-card {
-      background: #fff;
+    /* ── Card ── */
+    .card {
+      background: var(--card);
       border-radius: var(--radius);
-      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      transition: transform 0.15s, box-shadow 0.15s;
-    }
-
-    .member-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-    }
-
-    /* ── Card top (red strip with photo) ── */
-    .card-top {
-      background: var(--red);
-      display: flex;
-      justify-content: center;
-      padding: 24px 16px 0;
-      position: relative;
-    }
-
-    .card-top::after {
-      content: '';
-      display: block;
-      height: 32px;
-      background: linear-gradient(to bottom, var(--red) 50%, #fff 50%);
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-    }
-
-    .avatar-wrap {
-      position: relative;
-      z-index: 1;
-    }
-
-    .avatar {
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 4px solid #fff;
-      display: block;
-    }
-
-    .avatar-initials {
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      background: #d1d5db;
-      border: 4px solid #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      font-weight: 800;
-      color: #6b7280;
-    }
-
-    /* ── Card body ── */
-    .card-body {
-      padding: 8px 18px 18px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      padding: 24px 16px 20px;
       text-align: center;
+      border: 1px solid var(--border);
+      transition: transform .18s ease, box-shadow .18s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0,0,0,.10);
     }
 
-    .member-name {
+    /* ── Avatar ── */
+    .avatar-wrap {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      margin-bottom: 14px;
+      border: 3px solid var(--border);
+      background: #e5e7eb;
+    }
+    @media (max-width: 640px) { .avatar-wrap { width: 76px; height: 76px; } }
+    .avatar-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .avatar-initials {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    @media (max-width: 640px) { .avatar-initials { font-size: 20px; } }
+
+    /* ── Card text ── */
+    .card-name {
       font-size: 15px;
-      font-weight: 800;
-      color: #111827;
-      margin-bottom: 4px;
+      font-weight: 700;
+      color: var(--text);
       line-height: 1.3;
+      margin-bottom: 4px;
     }
+    @media (max-width: 640px) { .card-name { font-size: 13px; } }
 
-    .member-prof {
+    .card-prof {
       font-size: 12px;
       color: var(--muted);
-      margin-bottom: 10px;
+      font-weight: 500;
       line-height: 1.4;
-      min-height: 16px;
-    }
-
-    .member-phone {
-      font-size: 13px;
-      font-weight: 600;
-      color: #111827;
-      text-decoration: none;
-      margin-bottom: 12px;
-      display: block;
-    }
-
-    .member-phone:hover { color: var(--red); }
-    .member-phone:empty { display: none; }
-
-    /* ── Social icons ── */
-    .socials {
+      min-height: 34px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      justify-content: center;
-    }
-
-    .social-badge {
-      display: inline-flex;
       align-items: center;
       justify-content: center;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    /* ── Socials ── */
+    .socials {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: auto;
+    }
+    .soc-btn {
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      font-size: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       text-decoration: none;
-      transition: opacity 0.15s, transform 0.12s;
+      transition: transform .15s, opacity .15s;
       flex-shrink: 0;
     }
+    .soc-btn:hover { transform: scale(1.15); opacity: .85; }
+    .soc-btn svg { width: 16px; height: 16px; display: block; }
 
-    .social-badge:hover { opacity: 0.85; transform: scale(1.1); }
+    .soc-wa  { background: #25D366; }
+    .soc-ig  { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+    .soc-fb  { background: #1877F2; }
+    .soc-li  { background: #0A66C2; }
+    .soc-tg  { background: #229ED9; }
+    .soc-web { background: #6b7280; }
 
-    .social-badge svg {
-      width: 16px;
-      height: 16px;
-      fill: #fff;
-    }
-
-    .social-badge.s-instagram { background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); }
-    .social-badge.s-facebook  { background: #1877f2; }
-    .social-badge.s-tiktok    { background: #010101; }
-    .social-badge.s-telegram  { background: #0088cc; }
-    .social-badge.s-linkedin  { background: #0077b5; }
-    .social-badge.s-youtube   { background: #ff0000; }
-    .social-badge.s-website   { background: #16a34a; }
-    .social-badge.s-other     { background: #6b7280; }
-
-    /* ── Loading / empty ── */
-    .loading-msg {
-      grid-column: 1/-1;
+    /* ── Loading ── */
+    .loading {
       text-align: center;
+      padding: 80px 0;
       color: var(--muted);
-      padding: 60px 20px;
-      font-size: 15px;
     }
-
-    /* ── Print button ── */
-    .top-bar {
-      max-width: 1100px;
-      margin: 16px auto 0;
-      padding: 0 16px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .btn-pdf {
-      padding: 9px 18px;
-      background: var(--red);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 32px 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
       font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: opacity 0.15s;
+      background: var(--card);
     }
-
-    .btn-pdf:hover { opacity: 0.88; }
+    footer a {
+      color: var(--red);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="logo-title">BNI <span>SYNERGY — Каталог участников</span></div>
-</div>
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-logo">BNI <span>SYNERGY</span></div>
+    <div class="hero-sub">Бизнес-группа в Ришон ле-Ционе</div>
+    <div class="hero-pills">
+      <div class="pill"><span>📅</span> Понедельники</div>
+      <div class="pill"><span>⏰</span> 7:30</div>
+      <div class="pill"><span>📍</span> Семилански 43</div>
+    </div>
+  </div>
+</section>
 
-<div class="top-bar">
-  <a class="btn-pdf" href="/api/pdf/members" target="_blank">📋 Скачать PDF</a>
-</div>
+<!-- ── Members grid ── -->
+<main class="content">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <div>Загружаем участников…</div>
+  </div>
+  <div id="titleRow" style="display:none">
+    <p class="section-title">Участники группы <span id="memberCount"></span></p>
+  </div>
+  <div class="grid" id="grid"></div>
+</main>
 
-<div class="grid" id="grid">
-  <div class="loading-msg">Загружаем каталог…</div>
-</div>
+<!-- ── Footer ── -->
+<footer>
+  © BNI SYNERGY <span id="year"></span> &nbsp;·&nbsp;
+  <a href="/guest">Зарегистрироваться на встречу →</a>
+</footer>
 
 <script>
-  // ── Platform icon SVGs ──────────────────────────────────────────────────────
-  const ICONS = {
-    instagram: `<svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>`,
-    facebook:  `<svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`,
-    tiktok:    `<svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>`,
-    telegram:  `<svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>`,
-    linkedin:  `<svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
-    youtube:   `<svg viewBox="0 0 24 24"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>`,
-    website:   `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`,
-    other:     `<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>`,
-  };
+  document.getElementById('year').textContent = new Date().getFullYear();
 
-  function socialBadge(platform, url) {
-    const cls = `social-badge s-${platform}`;
-    const icon = ICONS[platform] || ICONS.other;
-    const href = url.startsWith('http') ? url : `https://${url}`;
-    return `<a href="${esc(href)}" target="_blank" rel="noopener" class="${cls}" title="${esc(platform)}">${icon}</a>`;
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  const AVATAR_COLORS = [
+    '#C41230','#1d4ed8','#0891b2','#7c3aed',
+    '#b45309','#065f46','#9d174d','#1e3a5f',
+  ];
+
+  function nameColor(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
   }
 
   function initials(name) {
     const parts = (name || '').trim().split(/\s+/);
-    return parts.length >= 2
-      ? (parts[0][0] + parts[1][0]).toUpperCase()
-      : (parts[0]?.[0] || '?').toUpperCase();
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return (parts[0] || '?').slice(0, 2).toUpperCase();
   }
 
-  function memberCard(m) {
-    const avatar = m.photo
-      ? `<img class="avatar" src="/uploads/${esc(m.photo)}" alt="${esc(m.name)}" loading="lazy" />`
-      : `<div class="avatar-initials">${initials(m.name)}</div>`;
+  // ── Social icon SVGs ─────────────────────────────────────────────────────
 
-    const socials = (m.socials || [])
-      .filter(s => s.url)
-      .map(s => socialBadge(s.platform, s.url))
-      .join('');
+  const ICONS = {
+    whatsapp: `<svg viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>`,
+    instagram: `<svg viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>`,
+    facebook:  `<svg viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`,
+    linkedin:  `<svg viewBox="0 0 24 24" fill="white"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`,
+    telegram:  `<svg viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>`,
+    website:   `<svg viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`,
+  };
 
-    const phone = m.phone
-      ? `<a class="member-phone" href="tel:${esc(m.phone)}">${esc(m.phone)}</a>`
-      : '';
+  const SOC_CLASS = {
+    whatsapp:  'soc-wa',
+    instagram: 'soc-ig',
+    facebook:  'soc-fb',
+    linkedin:  'soc-li',
+    telegram:  'soc-tg',
+    website:   'soc-web',
+  };
 
-    return `
-      <div class="member-card">
-        <div class="card-top">
-          <div class="avatar-wrap">${avatar}</div>
-        </div>
-        <div class="card-body">
-          <div class="member-name">${esc(m.name)}</div>
-          <div class="member-prof">${esc(m.profession || '')}</div>
-          ${phone}
-          ${socials ? `<div class="socials">${socials}</div>` : ''}
-        </div>
-      </div>
-    `;
+  function waHref(phone) {
+    const digits = phone.replace(/\D/g, '');
+    const normalized = digits.startsWith('972') ? digits
+      : digits.startsWith('0') ? '972' + digits.slice(1)
+      : '972' + digits;
+    return `https://wa.me/${normalized}`;
   }
 
-  async function loadCatalog() {
-    try {
-      const members = await fetch('/api/catalog').then(r => r.json());
-      const grid    = document.getElementById('grid');
+  // ── Render card ──────────────────────────────────────────────────────────
 
-      if (!members.length) {
-        grid.innerHTML = '<div class="loading-msg">Нет активных участников</div>';
-        return;
+  function renderCard(m) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    // Avatar
+    const wrap = document.createElement('div');
+    wrap.className = 'avatar-wrap';
+    if (m.photo) {
+      const img = document.createElement('img');
+      img.src = `/uploads/${m.photo}`;
+      img.alt = m.name;
+      img.onerror = () => { wrap.innerHTML = ''; wrap.appendChild(makeInitials(m.name)); };
+      wrap.appendChild(img);
+    } else {
+      wrap.appendChild(makeInitials(m.name));
+    }
+    card.appendChild(wrap);
+
+    // Name
+    const nameEl = document.createElement('div');
+    nameEl.className = 'card-name';
+    nameEl.textContent = m.name;
+    card.appendChild(nameEl);
+
+    // Profession
+    const profEl = document.createElement('div');
+    profEl.className = 'card-prof';
+    profEl.textContent = m.profession || '';
+    card.appendChild(profEl);
+
+    // Socials row
+    const socials = m.socials || [];
+    if (m.phone || socials.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'socials';
+
+      // WhatsApp from phone field (always first)
+      if (m.phone) {
+        row.appendChild(makeSocBtn('whatsapp', waHref(m.phone)));
       }
 
-      grid.innerHTML = members.map(memberCard).join('');
-    } catch {
-      document.getElementById('grid').innerHTML =
-        '<div class="loading-msg">Ошибка загрузки данных</div>';
+      socials.forEach(s => {
+        const key = (s.platform || '').toLowerCase();
+        // Skip WA if already added via phone
+        if (key === 'whatsapp' && m.phone) return;
+        if (key === 'whatsapp') {
+          row.appendChild(makeSocBtn('whatsapp', s.url.startsWith('http') ? s.url : waHref(s.url)));
+          return;
+        }
+        if (ICONS[key]) row.appendChild(makeSocBtn(key, s.url));
+      });
+
+      card.appendChild(row);
     }
+
+    return card;
   }
 
-  function esc(str) {
-    return String(str ?? '')
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  function makeInitials(name) {
+    const div = document.createElement('div');
+    div.className = 'avatar-initials';
+    div.style.background = nameColor(name);
+    const parts = (name || '').trim().split(/\s+/);
+    div.textContent = parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : (parts[0] || '?').slice(0, 2).toUpperCase();
+    return div;
   }
 
-  loadCatalog();
+  function makeSocBtn(platform, url) {
+    const a = document.createElement('a');
+    a.className = `soc-btn ${SOC_CLASS[platform] || 'soc-web'}`;
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = platform;
+    a.innerHTML = ICONS[platform] || ICONS.website;
+    return a;
+  }
+
+  // ── Fetch & render ───────────────────────────────────────────────────────
+
+  fetch('/api/catalog')
+    .then(r => r.json())
+    .then(members => {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('titleRow').style.display = 'block';
+      document.getElementById('memberCount').textContent = `· ${members.length} участников`;
+      const grid = document.getElementById('grid');
+      members.forEach(m => grid.appendChild(renderCard(m)));
+    })
+    .catch(() => {
+      document.getElementById('loading').innerHTML =
+        '<p style="color:#ef4444;font-size:14px">Не удалось загрузить данные. Попробуйте обновить страницу.</p>';
+    });
 </script>
 </body>
 </html>
