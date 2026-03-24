@@ -599,7 +599,7 @@ function getGroupValueTotals() {
            SUM(referrals)     as total_referrals,
            SUM(closed_deals)  as total_deals,
            SUM(deal_amount)   as total_amount
-    FROM group_value
+    FROM meeting_stats
   `).get();
 }
 
@@ -609,7 +609,7 @@ function getGroupValueTotalsByPeriod(days) {
            SUM(referrals)     as total_referrals,
            SUM(closed_deals)  as total_deals,
            SUM(deal_amount)   as total_amount
-    FROM group_value
+    FROM meeting_stats
     WHERE created_at >= datetime('now', ? || ' days')
   `).get(`-${days}`);
 }
