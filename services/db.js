@@ -273,7 +273,12 @@ function getAllMembers() {
 }
 
 function getActiveMembers() {
-  return db.prepare('SELECT * FROM members WHERE active = 1 ORDER BY name ASC').all();
+  return db.prepare('SELECT * FROM members WHERE active = 1 ORDER BY sort_order ASC, id ASC').all();
+}
+
+function reorderMembers(ids) {
+  const stmt = db.prepare('UPDATE members SET sort_order = ? WHERE id = ?');
+  db.transaction(list => list.forEach((id, idx) => stmt.run(idx + 1, id)))(ids);
 }
 
 function getMemberById(id) {
@@ -348,6 +353,8 @@ function getMembersBirthday(ddmm) {
 try { db.exec("ALTER TABLE members ADD COLUMN photo TEXT"); } catch {}
 // Migrate: add Hebrew profession
 try { db.exec("ALTER TABLE members ADD COLUMN profession_he TEXT NOT NULL DEFAULT ''"); } catch {}
+// Migrate: add sort_order
+try { db.exec("ALTER TABLE members ADD COLUMN sort_order INTEGER DEFAULT 999"); } catch {}
 
 // ─── Schema: settings ─────────────────────────────────────────────────────────
 
@@ -749,6 +756,7 @@ module.exports = {
   // members
   getAllMembers,
   getActiveMembers,
+  reorderMembers,
   getMemberById,
   insertMember,
   updateMember,

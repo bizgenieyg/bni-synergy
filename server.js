@@ -390,6 +390,13 @@ app.post('/api/members', (req, res) => {
   }
 });
 
+app.put('/api/members/reorder', adminAuth, (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array' });
+  db.reorderMembers(order.map(Number));
+  res.json({ success: true });
+});
+
 app.put('/api/members/:id', (req, res) => {
   const member = db.updateMember(Number(req.params.id), req.body);
   if (!member) return res.status(404).json({ error: 'Член не найден' });

@@ -1337,6 +1337,11 @@ function MembersSection() {
   const [nextMeeting, setNextMeeting] = useState('')
   const [loading, setLoading] = useState(true)
   const [birthdays, setBirthdays] = useState<(Member & { daysUntil: number })[]>([])
+  const [reordering, setReordering] = useState(false)
+  const [reorderList, setReorderList] = useState<Member[]>([])
+  const [savingOrder, setSavingOrder] = useState(false)
+  const [orderToast, setOrderToast] = useState('')
+  const dragIdx = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     const [m, s, b] = await Promise.all([
@@ -1376,12 +1381,48 @@ function MembersSection() {
     setMembers(ms => ms.map(x => x.id === m.id ? { ...x, active: m.active ? 0 : 1 } : x))
   }
 
+  const enterReorder = () => {
+    setReorderList(members.filter(m => m.active))
+    setReordering(true)
+  }
+  const exitReorder = () => setReordering(false)
+
+  const onDragStart = (idx: number) => { dragIdx.current = idx }
+  const onDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault()
+    const from = dragIdx.current
+    if (from === null || from === idx) return
+    setReorderList(list => {
+      const next = [...list]
+      const [item] = next.splice(from, 1)
+      next.splice(idx, 0, item)
+      dragIdx.current = idx
+      return next
+    })
+  }
+
+  const saveOrder = async () => {
+    setSavingOrder(true)
+    await api('/api/members/reorder', { method: 'PUT', body: JSON.stringify({ order: reorderList.map(m => m.id) }) })
+    setSavingOrder(false)
+    setReordering(false)
+    setOrderToast('Порядок сохранён')
+    setTimeout(() => setOrderToast(''), 3000)
+    load()
+  }
+
   const displayed = members
     .filter(m => showInactive || m.active)
     .filter(m => `${m.name} ${m.profession}`.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div className="space-y-5">
+      {orderToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl text-sm shadow-lg z-50 whitespace-nowrap">
+          {orderToast}
+        </div>
+      )}
+
       {/* Birthdays block */}
       {birthdays.length > 0 && (
         <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -1393,17 +1434,54 @@ function MembersSection() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('members.title')}</h1>
         <div className="flex gap-2">
-          <a href="/api/pdf/members" target="_blank"
-            className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-            <Download size={13} /> {t('members.pdfCatalog')}
-          </a>
-          <button onClick={() => setEditingMember(null)}
-            className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5" style={{ background: RED }}>
-            <Plus size={14} /> {t('members.addMember')}
-          </button>
+          {!reordering && <>
+            <button onClick={enterReorder}
+              className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
+              ⠿ Упорядочить
+            </button>
+            <a href="/api/pdf/members" target="_blank"
+              className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
+              <Download size={13} /> {t('members.pdfCatalog')}
+            </a>
+            <button onClick={() => setEditingMember(null)}
+              className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5" style={{ background: RED }}>
+              <Plus size={14} /> {t('members.addMember')}
+            </button>
+          </>}
+          {reordering && <>
+            <button onClick={exitReorder}
+              className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-gray-300">
+              Отмена
+            </button>
+            <button onClick={saveOrder} disabled={savingOrder}
+              className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5 disabled:opacity-50" style={{ background: RED }}>
+              {savingOrder ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Сохранить порядок
+            </button>
+          </>}
         </div>
       </div>
 
+      {reordering ? (
+        <div className="bg-white rounded-2xl shadow-sm p-4">
+          <p className="text-xs text-gray-400 mb-3">Перетащите карточки, чтобы изменить порядок отображения</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {reorderList.map((m, idx) => (
+              <div key={m.id}
+                draggable
+                onDragStart={() => onDragStart(idx)}
+                onDragOver={e => onDragOver(e, idx)}
+                onDrop={e => e.preventDefault()}
+                className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-grab active:cursor-grabbing select-none hover:border-gray-300 hover:shadow-sm transition-all">
+                <span className="text-gray-300 text-lg leading-none flex-shrink-0">⠿</span>
+                <Avatar member={m} size={28} />
+                <span className="text-xs font-medium text-gray-700 truncate">{m.name.split(' ')[0]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="flex gap-3 items-center">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1483,6 +1561,8 @@ function MembersSection() {
             <div className="text-center py-10 text-gray-400 text-sm">{t('members.noMembers')}</div>
           )}
         </div>
+      )}
+        </>
       )}
 
       <AnimatePresence>
