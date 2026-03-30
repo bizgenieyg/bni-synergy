@@ -1729,6 +1729,7 @@ function GroupValueSection() {
   // Save modal
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveToast, setSaveToast] = useState('')
 
   // Derived from amount text
   const parsedAmts = inpAmounts.split(',').map(s => Number(s.trim())).filter(n => n > 0 && !isNaN(n))
@@ -1785,11 +1786,16 @@ function GroupValueSection() {
   const confirmSave = async () => {
     setSaving(true)
     try {
-      await api('/api/meeting-stats', { method: 'POST', body: JSON.stringify({ meeting_date: meetingDate, ...pt }) })
+      const resp = await api('/api/meeting-stats', { method: 'POST', body: JSON.stringify({ meeting_date: meetingDate, ...pt }) })
+      const data = await resp.json()
       const report = `📊 BNI Report ${meetingDate}:\n🤝 1-on-1: ${pt.meetings_1on1}\n📄 Referrals: ${pt.referrals}\n🔐 Deals: ${pt.closed_deals}\n💰 Total: ₪${pt.deal_amount.toLocaleString()}`
       try { await navigator.clipboard.writeText(report) } catch {}
       setPending([]); setShowModal(false)
       loadHistory()
+      if (data.updated) {
+        setSaveToast(`Данные добавлены к записи за ${meetingDate}`)
+        setTimeout(() => setSaveToast(''), 4000)
+      }
     } finally { setSaving(false) }
   }
 
@@ -1819,8 +1825,12 @@ function GroupValueSection() {
 
   return (
     <div className="space-y-5">
+      {saveToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl text-sm shadow-lg z-50 whitespace-nowrap">
+          {saveToast}
+        </div>
+      )}
       <h1 className="text-2xl font-bold text-gray-900">Group Value</h1>
-
 
       {/* Period filter */}
       <div className="flex gap-1.5">

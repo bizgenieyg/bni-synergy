@@ -836,13 +836,13 @@ app.get('/api/meeting-stats', adminAuth, (req, res) => {
 app.post('/api/meeting-stats', adminAuth, (req, res) => {
   const { meeting_date, meetings_1on1, referrals, closed_deals, deal_amount } = req.body;
   if (!meeting_date) return res.status(400).json({ error: 'meeting_date required' });
-  db.upsertMeetingStats(meeting_date, {
+  const updated = db.upsertMeetingStats(meeting_date, {
     meetings_1on1: Number(meetings_1on1) || 0,
     referrals:     Number(referrals)     || 0,
     closed_deals:  Number(closed_deals)  || 0,
     deal_amount:   Number(deal_amount)   || 0,
   });
-  res.json({ ok: true });
+  res.json({ ok: true, updated });
 });
 
 app.delete('/api/meeting-stats/:id', adminAuth, (req, res) => {

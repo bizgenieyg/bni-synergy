@@ -700,15 +700,27 @@ function getAllMeetingStats() {
 }
 
 function upsertMeetingStats(meeting_date, { meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 } = {}) {
-  db.prepare(`
-    INSERT INTO meeting_stats (meeting_date, meetings_1on1, referrals, closed_deals, deal_amount)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(meeting_date) DO UPDATE SET
-      meetings_1on1 = excluded.meetings_1on1,
-      referrals     = excluded.referrals,
-      closed_deals  = excluded.closed_deals,
-      deal_amount   = excluded.deal_amount
-  `).run(meeting_date, meetings_1on1, referrals, closed_deals, deal_amount);
+  const existing = db.prepare(
+    'SELECT id FROM meeting_stats WHERE meeting_date = ?'
+  ).get(meeting_date);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE meeting_stats SET
+        meetings_1on1 = meetings_1on1 + ?,
+        referrals     = referrals     + ?,
+        closed_deals  = closed_deals  + ?,
+        deal_amount   = deal_amount   + ?
+      WHERE meeting_date = ?
+    `).run(meetings_1on1, referrals, closed_deals, deal_amount, meeting_date);
+    return true; // accumulated into existing record
+  } else {
+    db.prepare(`
+      INSERT INTO meeting_stats (meeting_date, meetings_1on1, referrals, closed_deals, deal_amount)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(meeting_date, meetings_1on1, referrals, closed_deals, deal_amount);
+    return false; // new record created
+  }
 }
 
 function getMeetingStatsTotals(days) {
