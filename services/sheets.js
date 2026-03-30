@@ -6,10 +6,10 @@ const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 // Column order — DO NOT change headers
 // A = ВСТРЕЧА | B = Способ оплаты | C = № | D = Имя и Фамилия
-// E = Профессия/вид деятельности | F = Телефон | G = Кто пригласил | H = Заметки
+// E = Профессия/вид деятельности | F = Телефон | G = Кто пригласил | H = Заметки | I = Email
 const FALLBACK_HEADERS = [
   'ВСТРЕЧА', 'Способ оплаты', '№', 'Имя и Фамилия',
-  'Профессия/вид деятельности', 'Телефон', 'Кто пригласил', 'Заметки',
+  'Профессия/вид деятельности', 'Телефон', 'Кто пригласил', 'Заметки', 'Email',
 ];
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -88,10 +88,12 @@ async function createTab(sheets, tabTitle) {
     try {
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: `'${recent.properties.title}'!A1:H1`,
+        range: `'${recent.properties.title}'!A1:I1`,
       });
       if (res.data.values?.[0]?.length) {
         headers = res.data.values[0];
+        // Ensure Email column is always present
+        if (!headers.includes('Email')) headers = [...headers, 'Email'];
       }
     } catch (e) {
       console.warn(`[Sheets] Could not copy headers from "${recent.properties.title}":`, e.message);
@@ -101,7 +103,7 @@ async function createTab(sheets, tabTitle) {
   // 3. Write headers
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `'${tabTitle}'!A1:H1`,
+    range: `'${tabTitle}'!A1:I1`,
     valueInputOption: 'RAW',
     requestBody: { values: [headers] },
   });
@@ -140,7 +142,7 @@ async function getNextRowNumber(sheets, tabTitle) {
  * Creates the tab if it doesn't exist.
  * Returns the 1-based sheet row index that was written.
  */
-async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн' }) {
+async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн', email = '' }) {
   const sheets = await getSheetsClient();
 
   // Tab name is always DD/MM (strip year if present in meetingDate DD/MM/YY)
@@ -155,12 +157,12 @@ async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, pay
   const rowNum   = await getNextRowNumber(sheets, tabTitle);
   const fullName = name;
 
-  // A=ВСТРЕЧА(empty) B=Способ оплаты C=№ D=Имя и Фамилия E=Профессия F=Телефон G=Кто пригласил H=Заметки(empty)
-  const row = ['', paymentMethod, rowNum, fullName, specialty || '', phone, invitedBy || '', ''];
+  // A=ВСТРЕЧА(empty) B=Способ оплаты C=№ D=Имя и Фамилия E=Профессия F=Телефон G=Кто пригласил H=Заметки(empty) I=Email
+  const row = ['', paymentMethod, rowNum, fullName, specialty || '', phone, invitedBy || '', '', email || ''];
 
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${tabTitle}'!A:H`,
+    range: `'${tabTitle}'!A:I`,
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },

@@ -23,6 +23,7 @@ interface Guest {
   id: string
   name: string
   phone: string
+  email: string
   specialty: string
   invitedBy: string
   meetingDate: string
@@ -1276,6 +1277,7 @@ function GuestsSection() {
                 <th className="px-4 py-3 font-medium">{t('guests.colPhone')}</th>
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
                 <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('guests.colInvitedBy')}</th>
+                <th className="px-4 py-3 font-medium hidden lg:table-cell">Email</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
                 <th className="px-4 py-3 font-medium">Подтверждение</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
@@ -1291,6 +1293,7 @@ function GuestsSection() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{g.specialty}</td>
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.invitedBy}</td>
+                  <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.email}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => toggleWa(g.id)}
                       className={cn('px-2 py-1 rounded-full text-xs font-medium', g.wa_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>

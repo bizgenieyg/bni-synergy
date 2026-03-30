@@ -94,7 +94,8 @@
     label .req { color: var(--red); margin-left: 2px; }
 
     input[type="text"],
-    input[type="tel"] {
+    input[type="tel"],
+    input[type="email"] {
       width: 100%;
       padding: 14px 16px;
       font-size: 16px;
@@ -250,6 +251,12 @@
         </div>
 
         <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email"
+                 placeholder="example@mail.com" autocomplete="email" />
+        </div>
+
+        <div class="form-group">
           <label for="specialty">Профессия / вид деятельности</label>
           <input type="text" id="specialty" name="specialty"
                  placeholder="Программист, Архитектор, …" maxlength="50" />
@@ -391,6 +398,7 @@
 
       const name      = document.getElementById('guestName').value.trim();
       const phone     = document.getElementById('phone').value.trim();
+      const email     = document.getElementById('email').value.trim();
       const specialty = document.getElementById('specialty').value.trim();
       const invitedBy = refParam
         ? resolvedRef
@@ -418,6 +426,12 @@
         return;
       }
 
+      if (name.split(/\s+/).filter(Boolean).length < 2) {
+        errorEl.textContent   = 'Пожалуйста, введите имя и фамилию';
+        errorEl.style.display = 'block';
+        return;
+      }
+
       if (!document.getElementById('waConsent').checked) {
         errorEl.textContent   = 'Пожалуйста, дайте согласие на получение сообщений в WhatsApp.';
         errorEl.style.display = 'block';
@@ -432,7 +446,7 @@
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
-            name, phone, specialty, invitedBy,
+            name, phone, email, specialty, invitedBy,
             type: typeParam || 'guest',
             meetingDate: dateParam || '',
           }),
@@ -452,6 +466,22 @@
 
         document.getElementById('formView').style.display    = 'none';
         document.getElementById('successView').style.display = 'block';
+
+        // Zoom hint: show if meeting type is zoom
+        fetch('/api/settings')
+          .then(r => r.json())
+          .then(cfg => {
+            if (cfg.meeting_type === 'zoom') {
+              const hint = document.createElement('div');
+              hint.style.cssText =
+                'background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;' +
+                'padding:12px 14px;font-size:14px;color:#1e40af;margin-bottom:20px;' +
+                'line-height:1.5;text-align:center';
+              hint.textContent = '🔗 Ссылка на Zoom будет отправлена вам в WhatsApp перед встречей';
+              document.getElementById('successSub').insertAdjacentElement('afterend', hint);
+            }
+          })
+          .catch(() => {});
 
       } catch (err) {
         errorEl.textContent   = `Ошибка: ${err.message}`;

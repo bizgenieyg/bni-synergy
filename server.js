@@ -199,7 +199,7 @@ app.get('/api/test', (req, res) => {
 // ─── Guest registration ───────────────────────────────────────────────────────
 
 app.post('/api/register', async (req, res) => {
-  const { name, phone, specialty, type, meetingDate: bodyDate } = req.body;
+  const { name, phone, specialty, type, meetingDate: bodyDate, email } = req.body;
   let invitedBy = req.body.invitedBy || '';
   if (/^\d+$/.test(invitedBy)) {
     const m = db.db.prepare('SELECT name FROM members WHERE id = ?').get(Number(invitedBy));
@@ -215,21 +215,29 @@ app.post('/api/register', async (req, res) => {
   if (specialty && specialty.length > 50) {
     return res.status(400).json({ error: 'Профессия не может быть длиннее 50 символов' });
   }
+  if (name.trim().split(/\s+/).filter(Boolean).length < 2) {
+    return res.status(400).json({ error: 'Пожалуйста, введите имя и фамилию' });
+  }
 
   const meetingDate = (bodyDate && /^\d{2}\/\d{2}\/\d{2}$/.test(bodyDate.trim()) ? bodyDate.trim() : null) || NEXT_MEETING_DATE;
+
+  // Deduplication: silently succeed if same name or phone already registered for this meeting
+  const duplicate = db.findDuplicateGuest(meetingDate, phone, name);
+  if (duplicate) return res.json({ success: true, duplicate: true, id: duplicate.id });
+
   const isSub       = type === 'sub';
   const firstName   = name.split(' ')[0]; // for WA greeting
 
   // 1. Save to SQLite — substitutions are pre-marked as paid
   const id = db.insertGuest({
-    name, phone, specialty, invitedBy, meetingDate,
+    name, phone, specialty, invitedBy, meetingDate, email: email || '',
     paid:   isSub ? 1 : 0,
     paidAt: isSub ? new Date().toISOString() : null,
   });
 
   // 2. Google Sheets — non-blocking
   const paymentMethod = isSub ? `замена за ${invitedBy || '—'}` : 'онлайн';
-  sheets.appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod })
+  sheets.appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod, email: email || '' })
     .then(sheetRow => { if (sheetRow) db.updateSheetRow(id, sheetRow); })
     .catch(err => console.error('[Sheets] appendGuest failed:', err.message));
 

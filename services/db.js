@@ -55,6 +55,9 @@ try { db.exec('ALTER TABLE guests ADD COLUMN confirmed_at TEXT'); } catch {}
 // Auto-confirm all guests registered before 2026-03-20
 db.exec("UPDATE guests SET confirmed = 1 WHERE createdAt < '2026-03-20T00:00:00.000Z' AND confirmed = 0");
 
+// Migrate: add email column
+try { db.exec("ALTER TABLE guests ADD COLUMN email TEXT NOT NULL DEFAULT ''"); } catch {}
+
 // ─── Schema: members ──────────────────────────────────────────────────────────
 
 db.exec(`
@@ -158,20 +161,27 @@ function normalizePhone(phone) {
 
 // ─── Guests CRUD ──────────────────────────────────────────────────────────────
 
-function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null }) {
+function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null, email = '' }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
     INSERT INTO guests
-      (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled)
-    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 1)
+      (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled, email)
+    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 1, ?)
   `).run(
     id,
     name.trim(), normalizePhone(phone),
     (specialty || '').trim(), (invitedBy || '').trim(),
-    meetingDate, paid, paidAt, createdAt,
+    meetingDate, paid, paidAt, createdAt, (email || '').trim(),
   );
   return id;
+}
+
+function findDuplicateGuest(meetingDate, phone, name) {
+  const normalizedPhone = normalizePhone(phone);
+  return db.prepare(
+    'SELECT id FROM guests WHERE meetingDate = ? AND (phone = ? OR name = ?) LIMIT 1'
+  ).get(meetingDate, normalizedPhone, name.trim()) || null;
 }
 
 function updateSheetRow(id, sheetRow) {
@@ -751,6 +761,7 @@ module.exports = {
   getMeetingDates,
   getGuestById,
   findGuestByPhone,
+  findDuplicateGuest,
   getTotalCount,
   normalizePhone,
   // members
