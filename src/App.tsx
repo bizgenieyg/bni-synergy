@@ -1264,7 +1264,7 @@ function GuestsSection() {
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 bg-white" />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
         {loading ? (
           <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
         ) : filtered.length === 0 ? (
@@ -1507,7 +1507,7 @@ function MembersSection() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
@@ -1899,7 +1899,7 @@ function GroupValueSection() {
 
       {/* Pending table */}
       {pending.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
@@ -1949,7 +1949,7 @@ function GroupValueSection() {
 
       {/* History table */}
       {history.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-800">{t('groupValue.history')}</h2>
           </div>
