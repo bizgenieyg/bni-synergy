@@ -1093,6 +1093,8 @@ function GuestsSection() {
   const [toastMsg, setToastMsg] = useState('')
   const [showAddDate, setShowAddDate] = useState(false)
   const [addDateVal, setAddDateVal] = useState('')
+  const [editingSpecialty, setEditingSpecialty] = useState<string | null>(null)
+  const [specialtyDraft, setSpecialtyDraft] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -1126,6 +1128,12 @@ function GuestsSection() {
     const r = await api(`/api/guests/${id}/wa-toggle`, { method: 'PATCH' })
     const { wa_enabled } = await r.json()
     setGuests(gs => gs.map(g => g.id === id ? { ...g, wa_enabled } : g))
+  }
+
+  const saveSpecialty = async (id: string) => {
+    await api(`/api/guests/${id}`, { method: 'PATCH', body: JSON.stringify({ specialty: specialtyDraft }) })
+    setGuests(gs => gs.map(g => g.id === id ? { ...g, specialty: specialtyDraft } : g))
+    setEditingSpecialty(null)
   }
 
   const paid      = guests.filter(g => g.paid).length
@@ -1291,7 +1299,29 @@ function GuestsSection() {
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
                       className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{formatPhoneDisplay(g.phone)}</a>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{g.specialty}</td>
+                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
+                    {editingSpecialty === g.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          value={specialtyDraft}
+                          onChange={e => setSpecialtyDraft(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveSpecialty(g.id); if (e.key === 'Escape') setEditingSpecialty(null) }}
+                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-40 focus:outline-none focus:border-blue-400"
+                        />
+                        <button onClick={() => saveSpecialty(g.id)} className="text-green-600 hover:text-green-700 text-xs font-medium">✓</button>
+                        <button onClick={() => setEditingSpecialty(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                      </div>
+                    ) : (
+                      <span
+                        onClick={() => { setEditingSpecialty(g.id); setSpecialtyDraft(g.specialty || '') }}
+                        className="cursor-pointer hover:text-blue-600 hover:underline"
+                        title="Нажмите чтобы изменить"
+                      >
+                        {g.specialty || <span className="text-gray-300 italic">—</span>}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.invitedBy}</td>
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.email}</td>
                   <td className="px-4 py-3">
@@ -1744,7 +1774,12 @@ function GroupValueSection() {
   }), { meetings_1on1: 0, referrals: 0, closed_deals: 0, deal_amount: 0 })
 
   const loadHistory = useCallback(async () => {
-    setHistory(await api('/api/meeting-stats').then(r => r.json()))
+    const data: MeetingStatEntry[] = await api('/api/meeting-stats').then(r => r.json())
+    data.sort((a, b) => {
+      const parse = (s: string) => { const [dd, mm, yy] = s.split('/').map(Number); return new Date(2000 + yy, mm - 1, dd).getTime() }
+      return parse(b.meeting_date) - parse(a.meeting_date)
+    })
+    setHistory(data)
   }, [])
 
   useEffect(() => { loadHistory() }, []) // eslint-disable-line

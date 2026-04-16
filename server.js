@@ -189,10 +189,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── Health / test ────────────────────────────────────────────────────────────
 
 app.get('/api/test', (req, res) => {
+  const s = db.getAllSettings();
   res.json({
-    status:      'ok',
-    nextMeeting: NEXT_MEETING_DATE,
-    totalGuests: db.getTotalCount(),
+    status:           'ok',
+    nextMeeting:      NEXT_MEETING_DATE,
+    totalGuests:      db.getTotalCount(),
+    meeting_location: s.meeting_location || WAZE_ADDRESS,
+    meeting_type:     s.meeting_type     || 'offline',
+    meeting_zoom_url: s.meeting_zoom_url || '',
   });
 });
 
@@ -242,13 +246,15 @@ app.post('/api/register', async (req, res) => {
     .catch(err => console.error('[Sheets] appendGuest failed:', err.message));
 
   // 3. WhatsApp — different message for substitutions
+  const settings = db.getAllSettings();
+  const regLocation = settings.meeting_location || WAZE_ADDRESS;
   let waText;
   if (isSub) {
     waText =
       `Шалом, ${firstName}! 👋\n\n` +
       `Вы зарегистрированы как замена на встречу BNI SYNERGY 🤝\n` +
       `📅 ${meetingDate} в 7:30\n` +
-      `📍 ${WAZE_ADDRESS}\n\n` +
+      `📍 ${regLocation}\n\n` +
       `🗺️ Навигатор:\n${WAZE_LINK}\n\n` +
       `Спасибо, что поддерживаете группу! 🙌`;
   } else {
@@ -256,7 +262,7 @@ app.post('/api/register', async (req, res) => {
       `Шалом, ${firstName}! 👋\n\n` +
       `Вы зарегистрированы на встречу BNI SYNERGY 🤝\n` +
       `📅 ${meetingDate} в 7:30\n` +
-      `📍 ${WAZE_ADDRESS}\n\n` +
+      `📍 ${regLocation}\n\n` +
       `💳 Оплата участия (80₪):\n${PAYBOX_LINK}\n\n` +
       `🗺️ Навигатор:\n${WAZE_LINK}\n\n` +
       `До встречи! 🙌`;
@@ -267,7 +273,6 @@ app.post('/api/register', async (req, res) => {
     .catch(err => console.error('[WhatsApp] sendMessage failed:', err.message));
 
   // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
-  const settings = db.getAllSettings();
   if (settings.confirmation_sent_for === meetingDate) {
     const confirmMsg = buildConfirmationMessage({ id, name, phone, specialty, invitedBy }, settings);
     setTimeout(() => {
@@ -345,6 +350,14 @@ app.patch('/api/guests/:id/wa-toggle', (req, res) => {
   const next = db.toggleWaEnabled(req.params.id);
   if (next === null) return res.status(404).json({ error: 'Гость не найден' });
   res.json({ success: true, wa_enabled: next });
+});
+
+app.patch('/api/guests/:id', (req, res) => {
+  const { specialty } = req.body;
+  const guest = db.getGuestById(req.params.id);
+  if (!guest) return res.status(404).json({ error: 'Гость не найден' });
+  db.updateGuestSpecialty(req.params.id, specialty || '');
+  res.json({ success: true });
 });
 
 // Public endpoint — no auth required

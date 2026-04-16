@@ -362,25 +362,19 @@
     }
 
     // ── Meeting info ──────────────────────────────────────────────────────────
-    // Show immediately from URL param if available
-    if (dateParam) {
-      const el = document.getElementById('meetingInfo');
-      el.style.display = 'block';
-      el.innerHTML =
-        `📅 Следующая встреча: <strong>${dateParam}</strong> в 7:30<br/>` +
-        `📍 סמילנסקי 43 ראשון לציון`;
-    }
-
-    // Fallback: fetch from server (only update if no dateParam)
+    // Fetch from server to get location and next meeting date
     fetch('/api/test')
       .then(r => r.json())
       .then(data => {
-        if (data.nextMeeting && !dateParam) {
+        const dateToShow = dateParam || data.nextMeeting;
+        const location   = data.meeting_location || '';
+        if (dateToShow || location) {
           const el = document.getElementById('meetingInfo');
           el.style.display = 'block';
-          el.innerHTML =
-            `📅 Следующая встреча: <strong>${data.nextMeeting}</strong> в 7:30<br/>` +
-            `📍 סמילנסקי 43 ראשון לציון`;
+          let html = '';
+          if (dateToShow) html += `📅 Следующая встреча: <strong>${dateToShow}</strong> в 7:30<br/>`;
+          if (location)   html += `📍 ${location}`;
+          el.innerHTML = html;
         }
       })
       .catch(() => {});

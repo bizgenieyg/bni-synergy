@@ -188,6 +188,10 @@ function updateSheetRow(id, sheetRow) {
   db.prepare('UPDATE guests SET sheetRow = ? WHERE id = ?').run(sheetRow, id);
 }
 
+function updateGuestSpecialty(id, specialty) {
+  db.prepare('UPDATE guests SET specialty = ? WHERE id = ?').run((specialty || '').trim(), id);
+}
+
 function markWaSent(id) {
   db.prepare('UPDATE guests SET waSent = 1 WHERE id = ?').run(id);
 }
@@ -763,6 +767,7 @@ module.exports = {
   // guests
   insertGuest,
   updateSheetRow,
+  updateGuestSpecialty,
   markWaSent,
   markPaid,
   markConfirmed,
