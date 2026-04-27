@@ -105,10 +105,13 @@ interface GuestStat {
 interface Presentation {
   id: number
   meeting_date: string
+  member_id?: number | null
   member_name: string
-  change_description: string
+  member_profession?: string
+  member_photo?: string
+  change_description?: string
   notes: string
-  status: string
+  status?: string
 }
 
 type Section = 'dashboard' | 'guests' | 'members' | 'voting' | 'group-value' | 'presentations'
@@ -663,6 +666,16 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   const [date, setDate] = useState(nextMeeting)
   const [type, setType] = useState<'guest' | 'substitute'>('guest')
   const [phone, setPhone] = useState('')
+  const [presenter, setPresenter] = useState<Presentation | null>(null)
+
+  useEffect(() => {
+    if (!date) { setPresenter(null); return }
+    const encoded = date.replace(/\//g, '-')
+    api(`/api/presentations/${encoded}`)
+      .then(r => r.json())
+      .then(p => setPresenter(p?.member_name ? p : null))
+      .catch(() => setPresenter(null))
+  }, [date])
 
   const member = members.find(m => m.id === selectedId)
   const encoded = member ? String(member.id) : ''
@@ -718,7 +731,12 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
             </button>
           ))}
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-4">{link || '—'}</div>
+        <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-3">{link || '—'}</div>
+        {presenter?.member_name && (
+          <div className="text-xs text-gray-600 mb-3 bg-red-50 rounded-lg px-3 py-2">
+            🎤 Презентор: <span className="font-semibold text-gray-800">{presenter.member_name}</span>
+          </div>
+        )}
         <div className="flex gap-2">
           <button onClick={copy} disabled={!link} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium disabled:opacity-40">{t('invite.copy')}</button>
           <button onClick={wa} disabled={!link} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40" style={{ background: '#25D366' }}>{t('invite.whatsapp')}</button>
@@ -2067,15 +2085,92 @@ function GroupValueSection() {
 
 // ─── Presentations Section ───────────────────────────────────────────────────
 
+const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
+const DAYS_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
+
+function presDateStr(d: Date): string {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(2)}`
+}
+
+function parsePresentationDate(str: string): Date | null {
+  if (!str) return null
+  const p = str.split('/')
+  if (p.length < 3) return null
+  return new Date(2000 + parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]))
+}
+
+interface PresEditModalProps {
+  date: string
+  members: Member[]
+  item: Presentation | null
+  onSave: (date: string, data: { member_id: number | null; member_name: string; notes: string }) => Promise<void>
+  onClose: () => void
+}
+
+function PresEditModal({ date, members, item, onSave, onClose }: PresEditModalProps) {
+  const [memberId, setMemberId] = useState<string>(item?.member_id != null ? String(item.member_id) : '')
+  const [notes, setNotes] = useState(item?.notes ?? '')
+  const [saving, setSaving] = useState(false)
+
+  const selectedMember = members.find(m => m.id === Number(memberId))
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await onSave(date, {
+        member_id: memberId !== '' ? Number(memberId) : null,
+        member_name: selectedMember?.name ?? '',
+        notes,
+      })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">📅 {date}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+        </div>
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Презентор</label>
+            <select value={memberId} onChange={e => setMemberId(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
+              <option value="">— не назначен —</option>
+              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Заметки</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="Тема, ссылки и т.д."
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving}
+            className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-50" style={{ background: RED }}>
+            {saving ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Сохранить'}
+          </button>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
+            Отмена
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 function PresentationsSection() {
-  const { t } = useTranslation()
   const [items, setItems] = useState<Presentation[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<Presentation | null>(null)
-  const [form, setForm] = useState({ meeting_date: '', member_name: '', change_description: '', notes: '' })
-  const [saving, setSaving] = useState(false)
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
+  const [editingDate, setEditingDate] = useState<string | null>(null)
   const [nextMeeting, setNextMeeting] = useState('')
 
   useEffect(() => {
@@ -2083,121 +2178,171 @@ function PresentationsSection() {
       api('/api/presentations').then(r => r.json()),
       api('/api/members?active=true').then(r => r.json()),
       api('/api/settings/next-meeting').then(r => r.json()),
-    ]).then(([p, m, s]) => { setItems(p); setMembers(m); setNextMeeting(s.date || ''); setLoading(false) })
+    ]).then(([p, m, s]) => {
+      setItems(p); setMembers(m); setNextMeeting(s.date || ''); setLoading(false)
+    })
   }, [])
 
-  const save = async () => {
-    setSaving(true)
-    if (editing) {
-      await api(`/api/presentations/${editing.id}`, { method: 'PUT', body: JSON.stringify(form) })
-      setItems(ps => ps.map(p => p.id === editing.id ? { ...p, ...form } : p))
-      setEditing(null)
-    } else {
-      const r = await api('/api/presentations', { method: 'POST', body: JSON.stringify(form) })
-      const { id } = await r.json()
-      setItems(ps => [{ id, ...form, status: 'pending' }, ...ps])
-      setAdding(false)
-    }
-    setSaving(false)
+  const presMap = useMemo(() => {
+    const map: Record<string, Presentation> = {}
+    for (const p of items) map[p.meeting_date] = p
+    return map
+  }, [items])
+
+  const memberMap = useMemo(() => {
+    const map: Record<number, Member> = {}
+    for (const m of members) map[m.id] = m
+    return map
+  }, [members])
+
+  const calendarCells = useMemo(() => {
+    const firstDay = new Date(viewYear, viewMonth, 1)
+    let dow = firstDay.getDay() // 0=Sun
+    dow = (dow + 6) % 7 // Mon=0..Sun=6
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+    const cells: (Date | null)[] = []
+    for (let i = 0; i < dow; i++) cells.push(null)
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(viewYear, viewMonth, d))
+    while (cells.length % 7 !== 0) cells.push(null)
+    return cells
+  }, [viewYear, viewMonth])
+
+  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
+  const nextMeetingDate = useMemo(() => parsePresentationDate(nextMeeting), [nextMeeting])
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonthFn = () => {
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
+    else setViewMonth(m => m + 1)
   }
 
-  const toggle = async (id: number) => {
-    const r = await api(`/api/presentations/${id}/toggle`, { method: 'PATCH' })
-    const { status } = await r.json()
-    setItems(ps => ps.map(p => p.id === id ? { ...p, status } : p))
+  const editingItem = editingDate ? (presMap[editingDate] ?? null) : null
+
+  const handleSave = async (date: string, data: { member_id: number | null; member_name: string; notes: string }) => {
+    const encoded = date.replace(/\//g, '-')
+    const r = await api(`/api/presentations/${encoded}`, { method: 'PUT', body: JSON.stringify(data) })
+    const { item } = await r.json()
+    setItems(prev => {
+      const idx = prev.findIndex(p => p.meeting_date === date)
+      if (idx >= 0) { const next = [...prev]; next[idx] = item; return next }
+      return [...prev, item]
+    })
+    setEditingDate(null)
   }
 
-  const del = async (id: number) => {
-    await api(`/api/presentations/${id}`, { method: 'DELETE' })
-    setItems(ps => ps.filter(p => p.id !== id))
-  }
-
-  const startAdd = () => { setAdding(true); setEditing(null); setForm({ meeting_date: nextMeeting, member_name: '', change_description: '', notes: '' }) }
-  const startEdit = (p: Presentation) => { setEditing(p); setAdding(false); setForm({ meeting_date: p.meeting_date, member_name: p.member_name, change_description: p.change_description, notes: p.notes }) }
-
-  const grouped = items.reduce<Record<string, Presentation[]>>((acc, p) => {
-    ;(acc[p.meeting_date] = acc[p.meeting_date] || []).push(p); return acc
-  }, {})
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={24} className="animate-spin text-gray-300" /></div>
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{t('presentations.title')}</h1>
-        <button onClick={startAdd} className="text-sm px-4 py-2 rounded-xl text-white flex items-center gap-2" style={{ background: RED }}>
-          <Plus size={14} /> {t('presentations.add')}
-        </button>
+      <h1 className="text-2xl font-bold text-gray-900">Презентации</h1>
+
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+            <ChevronLeft size={18} />
+          </button>
+          <span className="font-semibold text-gray-800">{MONTHS_RU[viewMonth]} {viewYear}</span>
+          <button onClick={nextMonthFn} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-7 border-b border-gray-100">
+          {DAYS_SHORT.map(d => (
+            <div key={d} className={cn('text-center text-xs font-semibold py-2', d === 'Пн' ? 'text-red-500' : 'text-gray-400')}>
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7">
+          {calendarCells.map((day, idx) => {
+            if (!day) {
+              return <div key={idx} className="h-20 border-b border-r border-gray-50 bg-gray-50/40 last:border-r-0" />
+            }
+
+            const isMonday = day.getDay() === 1
+            const dateStr = presDateStr(day)
+            const pres = presMap[dateStr]
+            const member = pres?.member_id != null ? memberMap[pres.member_id] : null
+            const isNextMeeting = nextMeetingDate != null && day.getTime() === nextMeetingDate.getTime()
+            const isToday = day.getTime() === today.getTime()
+            const isPast = day.getTime() < today.getTime()
+            const isLastCol = (idx % 7) === 6
+
+            if (!isMonday) {
+              return (
+                <div key={idx} className={cn(
+                  'h-20 border-b border-r border-gray-50 p-1.5',
+                  isLastCol && 'border-r-0',
+                  isPast ? 'bg-gray-50/30' : 'bg-white',
+                )}>
+                  <span className="text-xs text-gray-200">{day.getDate()}</span>
+                </div>
+              )
+            }
+
+            // Monday — meeting day cell
+            return (
+              <div key={idx} onClick={() => setEditingDate(dateStr)}
+                className={cn(
+                  'h-20 border-b border-r border-gray-100 p-1.5 cursor-pointer transition-colors select-none',
+                  isLastCol && 'border-r-0',
+                  isNextMeeting
+                    ? 'ring-2 ring-inset ring-red-500 bg-red-50/60'
+                    : isPast ? 'bg-gray-50 hover:bg-gray-100' : 'bg-white hover:bg-blue-50/40',
+                )}>
+                {/* Date number */}
+                <div className="flex items-center justify-end mb-1">
+                  <span className={cn(
+                    'text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full',
+                    isToday ? 'bg-red-500 text-white' : isNextMeeting ? 'text-red-600' : 'text-gray-500',
+                  )}>{day.getDate()}</span>
+                </div>
+
+                {/* Presenter */}
+                {pres?.member_name ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    {member
+                      ? <Avatar member={member} size={28} />
+                      : (
+                        <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-[11px] font-bold text-gray-600">
+                          {pres.member_name.charAt(0)}
+                        </div>
+                      )
+                    }
+                    <span className="text-[10px] text-gray-600 font-medium truncate w-full text-center leading-tight px-0.5">
+                      {pres.member_name.split(' ')[0]}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center mt-1">
+                    <span className="text-gray-300 text-base">—</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <AnimatePresence>
-        {(adding || editing !== null) && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
-            <h3 className="font-semibold text-gray-800 mb-4">{editing ? t('presentations.editPresentation') : t('presentations.newPresentation')}</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.meetingDateLabel')}</label>
-                <DatePickerInput value={form.meeting_date} onChange={v => setForm(f => ({ ...f, meeting_date: v }))} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.memberLabel')}</label>
-                <select value={form.member_name} onChange={e => setForm(f => ({ ...f, member_name: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
-                  <option value="">{t('presentations.selectMember')}</option>
-                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.descriptionLabel')}</label>
-                <input value={form.change_description} onChange={e => setForm(f => ({ ...f, change_description: e.target.value }))}
-                  placeholder={t('presentations.descriptionPlaceholder')} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs font-medium text-gray-500 block mb-1">{t('presentations.notesLabel')}</label>
-                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={save} disabled={saving || !form.member_name || !form.change_description}
-                className="px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50" style={{ background: RED }}>
-                {saving ? t('presentations.saving') : t('presentations.save')}
-              </button>
-              <button onClick={() => { setAdding(false); setEditing(null) }}
-                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">{t('presentations.cancel')}</button>
-            </div>
-          </motion.div>
+        {editingDate && (
+          <PresEditModal
+            date={editingDate}
+            members={members}
+            item={editingItem}
+            onSave={handleSave}
+            onClose={() => setEditingDate(null)}
+          />
         )}
       </AnimatePresence>
-
-      {loading ? (
-        <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
-      ) : (
-        Object.entries(grouped).map(([date, pItems]) => (
-          <div key={date} className="space-y-2">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{date}</h2>
-            {pItems.map(p => (
-              <div key={p.id} className={cn('bg-white rounded-xl p-4 shadow-sm flex items-start gap-3', p.status === 'done' && 'opacity-60')}>
-                <button onClick={() => toggle(p.id)}
-                  className={cn('mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-                    p.status === 'done' ? 'border-green-500 bg-green-500' : 'border-gray-300')}>
-                  {p.status === 'done' && <Check size={11} className="text-white" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-gray-900 text-sm">{p.member_name}</span>
-                    <span className="text-xs text-gray-500">· {p.change_description}</span>
-                  </div>
-                  {p.notes && <p className="text-xs text-gray-400 mt-0.5">{p.notes}</p>}
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={() => startEdit(p)} className="p-1 rounded hover:bg-gray-100 text-gray-400"><Edit2 size={13} /></button>
-                  <button onClick={() => del(p.id)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ))
-      )}
     </div>
   )
 }

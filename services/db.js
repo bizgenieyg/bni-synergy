@@ -574,6 +574,83 @@ function deletePresentation(id) {
   db.prepare('DELETE FROM presentations WHERE id = ?').run(id);
 }
 
+// ─── Presentations: calendar migration ───────────────────────────────────────
+
+// Add member_id column if not present
+try { db.exec('ALTER TABLE presentations ADD COLUMN member_id INTEGER REFERENCES members(id)'); } catch {}
+
+// Deduplicate: keep only the lowest-id row per meeting_date (needed before UNIQUE index)
+db.exec(`
+  DELETE FROM presentations
+  WHERE id NOT IN (
+    SELECT MIN(id) FROM presentations GROUP BY meeting_date
+  )
+`);
+
+// Create UNIQUE index on meeting_date (idempotent)
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pres_date_unique ON presentations(meeting_date)'); } catch {}
+
+// Seed upcoming schedule — INSERT OR IGNORE skips existing dates
+;(function seedPresentations() {
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO presentations (meeting_date, member_name, change_description, notes) VALUES (?, ?, '', '')"
+  );
+  db.transaction(() => {
+    [
+      ['27/04/26', ''],
+      ['04/05/26', 'Диана Шаривкер'],
+      ['11/05/26', 'Ирина Кроль'],
+      ['18/05/26', 'Натали Жук'],
+      ['25/05/26', 'Марина Кондратьев'],
+      ['01/06/26', 'Даниэль Белинсон'],
+      ['08/06/26', 'Людмила Губарев'],
+      ['15/06/26', 'Сергей Фишбах'],
+      ['22/06/26', 'Лора Блантер'],
+      ['29/06/26', 'Рита Хазанович'],
+      ['06/07/26', 'Ольга Грановская'],
+      ['13/07/26', 'Таня Вайс'],
+      ['20/07/26', 'Дарья Глушкова'],
+      ['27/07/26', 'Александр Кудинов'],
+      ['03/08/26', 'Сабина Эренштейн'],
+      ['10/08/26', 'Юлия Тронза'],
+      ['17/08/26', 'Шарон Соколовски'],
+      ['24/08/26', 'Андрей Скиба'],
+    ].forEach(([date, name]) => stmt.run(date, name));
+  })();
+}());
+
+// Match member_id from members table by name (idempotent, runs every startup)
+db.exec(`
+  UPDATE presentations SET member_id = (
+    SELECT id FROM members WHERE name LIKE '%' || member_name || '%' LIMIT 1
+  ) WHERE member_id IS NULL AND member_name IS NOT NULL AND member_name != ''
+`);
+
+// ─── Presentations: calendar CRUD ────────────────────────────────────────────
+
+function getPresentationByDate(date) {
+  return db.prepare(`
+    SELECT p.*, m.profession AS member_profession, m.photo AS member_photo
+    FROM presentations p
+    LEFT JOIN members m ON p.member_id = m.id
+    WHERE p.meeting_date = ?
+  `).get(date) || null;
+}
+
+function upsertPresentationByDate(date, { member_id, member_name, notes }) {
+  const existing = db.prepare('SELECT id FROM presentations WHERE meeting_date = ?').get(date);
+  if (existing) {
+    db.prepare(
+      'UPDATE presentations SET member_id = ?, member_name = ?, notes = ? WHERE meeting_date = ?'
+    ).run(member_id ?? null, (member_name || '').trim(), (notes || '').trim(), date);
+  } else {
+    db.prepare(
+      "INSERT INTO presentations (meeting_date, member_id, member_name, notes, change_description) VALUES (?, ?, ?, ?, '')"
+    ).run(date, member_id ?? null, (member_name || '').trim(), (notes || '').trim());
+  }
+  return getPresentationByDate(date);
+}
+
 // ─── Schema: group_value ──────────────────────────────────────────────────────
 
 db.exec(`
@@ -814,6 +891,8 @@ module.exports = {
   updatePresentation,
   togglePresentationStatus,
   deletePresentation,
+  getPresentationByDate,
+  upsertPresentationByDate,
   // group_value
   getGroupValue,
   getGroupValueSummary,

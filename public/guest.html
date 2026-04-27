@@ -376,6 +376,27 @@
           if (location)   html += `📍 ${location}`;
           el.innerHTML = html;
         }
+
+        // Fetch presenter for this meeting date
+        if (dateToShow) {
+          const encodedDate = dateToShow.replace(/\//g, '-');
+          fetch(`/api/presentations/${encodedDate}`)
+            .then(r => r.json())
+            .then(pres => {
+              if (pres && pres.member_name) {
+                const presEl = document.createElement('div');
+                presEl.style.cssText =
+                  'background:#fff5f5;border:1.5px solid #fecaca;border-radius:8px;' +
+                  'padding:10px 14px;font-size:14px;color:#991b1b;margin-top:8px;' +
+                  'text-align:center;line-height:1.5;';
+                const profession = pres.member_profession ? ' — ' + pres.member_profession : '';
+                presEl.textContent = '🎤 На встрече выступит: ' + pres.member_name + profession;
+                const meetingEl = document.getElementById('meetingInfo');
+                if (meetingEl) meetingEl.insertAdjacentElement('afterend', presEl);
+              }
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {});
 

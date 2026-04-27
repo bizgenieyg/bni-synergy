@@ -753,8 +753,13 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
 // ─── Presentations ────────────────────────────────────────────────────────────
 
 app.get('/api/presentations', (req, res) => {
-  const { date } = req.query;
-  res.json(db.getPresentations(date || null));
+  res.json(db.getPresentations(null));
+});
+
+// GET by date: path param uses dashes (DD-MM-YY) to avoid URL slash ambiguity
+app.get('/api/presentations/:date', (req, res) => {
+  const date = req.params.date.replace(/-/g, '/');
+  res.json(db.getPresentationByDate(date));
 });
 
 app.post('/api/presentations', (req, res) => {
@@ -766,9 +771,18 @@ app.post('/api/presentations', (req, res) => {
   res.json({ success: true, id });
 });
 
-app.put('/api/presentations/:id', (req, res) => {
-  const item = db.updatePresentation(Number(req.params.id), req.body);
-  if (!item) return res.status(404).json({ error: 'Запись не найдена' });
+app.put('/api/presentations/:dateOrId', (req, res) => {
+  const param = req.params.dateOrId;
+  if (/^\d+$/.test(param)) {
+    // Legacy: update by numeric id
+    const item = db.updatePresentation(Number(param), req.body);
+    if (!item) return res.status(404).json({ error: 'Запись не найдена' });
+    return res.json({ success: true, item });
+  }
+  // Calendar: upsert by date (DD-MM-YY in URL → DD/MM/YY in DB)
+  const date = param.replace(/-/g, '/');
+  const { member_id, member_name, notes } = req.body;
+  const item = db.upsertPresentationByDate(date, { member_id, member_name, notes });
   res.json({ success: true, item });
 });
 
