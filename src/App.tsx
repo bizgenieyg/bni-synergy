@@ -2358,6 +2358,86 @@ function PresentationsSection() {
   )
 }
 
+// ─── WAHA QR Modal ───────────────────────────────────────────────────────────
+
+function WahaQrModal({ logs, onClose, onConnected }: {
+  logs: string
+  onClose: () => void
+  onConnected: () => void
+}) {
+  const [success, setSuccess] = useState(false)
+  const [checking, setChecking] = useState(false)
+
+  // Auto-poll status every 3 s
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetch('/api/waha/status')
+        .then(r => r.json())
+        .then(d => {
+          if (d.ok) {
+            setSuccess(true)
+            onConnected()
+            clearInterval(id)
+            setTimeout(onClose, 2000)
+          }
+        })
+        .catch(() => {})
+    }, 3000)
+    return () => clearInterval(id)
+  }, [])
+
+  const manualCheck = async () => {
+    setChecking(true)
+    try {
+      const d = await fetch('/api/waha/status').then(r => r.json())
+      if (d.ok) { setSuccess(true); onConnected(); setTimeout(onClose, 2000) }
+    } finally { setChecking(false) }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+        {success ? (
+          <div className="flex flex-col items-center justify-center py-12 px-6">
+            <div className="text-5xl mb-4">✅</div>
+            <p className="text-xl font-bold text-green-600">WhatsApp подключён!</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">Отсканируйте QR код в WhatsApp</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  WhatsApp → Связанные устройства → Привязать устройство
+                </p>
+              </div>
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 ml-4 flex-shrink-0">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 min-h-0">
+              <pre className="bg-gray-950 text-green-400 text-[8px] leading-[1.15] font-mono p-4 rounded-xl whitespace-pre overflow-auto">
+                {logs || 'Ожидание логов WAHA…'}
+              </pre>
+            </div>
+            <div className="p-4 border-t border-gray-100">
+              <button onClick={manualCheck} disabled={checking}
+                className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2">
+                {checking
+                  ? <><Loader2 size={14} className="animate-spin" /> Проверяем…</>
+                  : 'Проверить подключение'}
+              </button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -2371,6 +2451,9 @@ export default function App() {
   const [allMembers, setAllMembers] = useState<Member[]>([])
   const [wahaOk, setWahaOk] = useState<boolean | null>(null)
   const [wahaBannerDismissed, setWahaBannerDismissed] = useState(false)
+  const [wahaRestarting, setWahaRestarting] = useState(false)
+  const [wahaQrOpen, setWahaQrOpen] = useState(false)
+  const [wahaQrLogs, setWahaQrLogs] = useState('')
 
   useEffect(() => {
     if (!authed) return
@@ -2401,6 +2484,19 @@ export default function App() {
 
   const logout = () => { localStorage.removeItem('admin_token'); setAuthed(false) }
 
+  const handleWahaRestart = async () => {
+    setWahaRestarting(true)
+    try {
+      await fetch('/api/waha/restart', { method: 'POST' })
+      await new Promise(resolve => setTimeout(resolve, 4000))
+      const { logs } = await fetch('/api/waha/logs').then(r => r.json()).catch(() => ({ logs: '' }))
+      setWahaQrLogs(logs)
+      setWahaQrOpen(true)
+    } catch { /* ignore */ } finally {
+      setWahaRestarting(false)
+    }
+  }
+
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
 
   const sidebarW = collapsed ? 64 : 240
@@ -2428,8 +2524,14 @@ export default function App() {
               transition={{ duration: 0.2 }}
               className="flex items-center gap-3 bg-red-600 text-white px-5 py-3">
               <span className="text-sm font-medium flex-1">
-                ⚠️ WhatsApp отключён — сообщения не отправляются. Зайдите в настройки для переподключения.
+                ⚠️ WhatsApp отключён — сообщения не отправляются.
               </span>
+              <button onClick={handleWahaRestart} disabled={wahaRestarting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-sm font-semibold disabled:opacity-50 flex-shrink-0 transition-colors">
+                {wahaRestarting
+                  ? <><Loader2 size={13} className="animate-spin" /> Подключение…</>
+                  : <>🔄 Переподключить</>}
+              </button>
               <button onClick={() => setWahaBannerDismissed(true)}
                 className="p-1 rounded hover:bg-red-700 flex-shrink-0">
                 <X size={16} />
@@ -2450,6 +2552,16 @@ export default function App() {
       <AnimatePresence>
         {inviteForDashboard && allMembers.length > 0 && (
           <InviteModal members={allMembers} nextMeeting={nextMeeting} onClose={() => setInviteForDashboard(false)} />
+        )}
+      </AnimatePresence>
+      {/* WAHA QR reconnect modal */}
+      <AnimatePresence>
+        {wahaQrOpen && (
+          <WahaQrModal
+            logs={wahaQrLogs}
+            onClose={() => setWahaQrOpen(false)}
+            onConnected={() => setWahaOk(true)}
+          />
         )}
       </AnimatePresence>
     </div>

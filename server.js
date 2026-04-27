@@ -2,12 +2,13 @@
 
 require('dotenv').config();
 
-const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
-const fs      = require('fs');
-const multer  = require('multer');
-const cron    = require('node-cron');
+const express              = require('express');
+const cors                 = require('cors');
+const path                 = require('path');
+const fs                   = require('fs');
+const multer               = require('multer');
+const cron                 = require('node-cron');
+const { execSync }         = require('child_process');
 
 const db       = require('./services/db');
 const sheets   = require('./services/sheets');
@@ -783,7 +784,39 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
     .catch(err => console.error('[Broadcast] send-confirmations error:', err.message));
 });
 
-// ─── WAHA status ─────────────────────────────────────────────────────────────
+// ─── WAHA status / reconnect ─────────────────────────────────────────────────
+
+app.post('/api/waha/restart', async (req, res) => {
+  const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
+  const wahaSession = process.env.WAHA_SESSION  || 'default';
+  const wahaApiKey  = process.env.WAHA_API_KEY  || 'bni123';
+  const headers     = { 'X-Api-Key': wahaApiKey, 'Content-Type': 'application/json' };
+  try {
+    // Stop existing session (ignore errors — may already be stopped)
+    await fetch(`${wahaUrl}/api/sessions/${wahaSession}`,
+      { method: 'DELETE', headers, signal: AbortSignal.timeout(5000) }).catch(() => {});
+    // Start fresh session
+    await fetch(`${wahaUrl}/api/sessions/start`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ name: wahaSession }),
+      signal: AbortSignal.timeout(8000),
+    });
+    res.json({ status: 'STARTING' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/waha/logs', (req, res) => {
+  try {
+    const logs = execSync('docker logs waha --tail 80 2>&1', { timeout: 5000 }).toString();
+    res.json({ logs });
+  } catch (err) {
+    // execSync throws when exit code != 0; stdout/stderr may still have content
+    const logs = (err.stdout || err.stderr || Buffer.alloc(0)).toString() || err.message || '';
+    res.json({ logs });
+  }
+});
 
 app.get('/api/waha/status', async (req, res) => {
   const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
