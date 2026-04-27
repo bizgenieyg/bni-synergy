@@ -383,17 +383,45 @@
           fetch(`/api/presentations/${encodedDate}`)
             .then(r => r.json())
             .then(pres => {
-              if (pres && pres.member_name) {
-                const presEl = document.createElement('div');
-                presEl.style.cssText =
-                  'background:#fff5f5;border:1.5px solid #fecaca;border-radius:8px;' +
-                  'padding:10px 14px;font-size:14px;color:#991b1b;margin-top:8px;' +
-                  'text-align:center;line-height:1.5;';
-                const profession = pres.member_profession ? ' — ' + pres.member_profession : '';
-                presEl.textContent = '🎤 На встрече выступит: ' + pres.member_name + profession;
-                const meetingEl = document.getElementById('meetingInfo');
-                if (meetingEl) meetingEl.insertAdjacentElement('afterend', presEl);
-              }
+              if (!pres || !pres.member_name) return;
+
+              const initial   = pres.member_name.charAt(0).toUpperCase();
+              const photoFile = pres.member_photo || (pres.member_id ? 'member_' + pres.member_id + '.jpg' : null);
+              const photoUrl  = photoFile ? '/uploads/' + photoFile : null;
+
+              // Avatar: photo with initials fallback
+              const avatarHtml = photoUrl
+                ? '<div style="flex-shrink:0;width:56px;height:56px;position:relative;">' +
+                    '<img src="' + photoUrl + '"' +
+                      ' style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;"' +
+                      ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';" />' +
+                    '<div style="display:none;position:absolute;inset:0;width:56px;height:56px;' +
+                      'border-radius:50%;background:#C41230;color:#fff;font-size:22px;font-weight:700;' +
+                      'align-items:center;justify-content:center;">' + initial + '</div>' +
+                  '</div>'
+                : '<div style="flex-shrink:0;width:56px;height:56px;border-radius:50%;' +
+                    'background:#C41230;color:#fff;font-size:22px;font-weight:700;' +
+                    'display:flex;align-items:center;justify-content:center;">' + initial + '</div>';
+
+              const professionHtml = pres.member_profession
+                ? '<div style="font-size:13px;color:#6b7280;margin-top:2px;">' + pres.member_profession + '</div>'
+                : '';
+
+              const presEl = document.createElement('div');
+              presEl.style.cssText =
+                'background:#fff;border-left:4px solid #C41230;border-radius:10px;' +
+                'box-shadow:0 1px 8px rgba(0,0,0,0.08);padding:14px 16px;margin-top:10px;' +
+                'display:flex;align-items:center;gap:14px;';
+              presEl.innerHTML =
+                avatarHtml +
+                '<div>' +
+                  '<div style="font-size:11px;color:#9b1c1c;font-weight:600;margin-bottom:4px;">🎤 На встрече выступит:</div>' +
+                  '<div style="font-size:15px;font-weight:700;color:#1a1a1a;line-height:1.3;">' + pres.member_name + '</div>' +
+                  professionHtml +
+                '</div>';
+
+              const meetingEl = document.getElementById('meetingInfo');
+              if (meetingEl) meetingEl.insertAdjacentElement('afterend', presEl);
             })
             .catch(() => {});
         }
