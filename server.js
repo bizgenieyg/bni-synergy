@@ -783,6 +783,22 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
     .catch(err => console.error('[Broadcast] send-confirmations error:', err.message));
 });
 
+// ─── WAHA status ─────────────────────────────────────────────────────────────
+
+app.get('/api/waha/status', async (req, res) => {
+  const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
+  const wahaSession = process.env.WAHA_SESSION  || 'default';
+  const wahaApiKey  = process.env.WAHA_API_KEY  || 'bni123';
+  try {
+    const response = await fetch(`${wahaUrl}/api/sessions/${wahaSession}`,
+      { headers: { 'X-Api-Key': wahaApiKey }, signal: AbortSignal.timeout(5000) });
+    const data = await response.json();
+    res.json({ status: data.status, ok: data.status === 'WORKING' });
+  } catch (err) {
+    res.json({ status: 'UNAVAILABLE', ok: false });
+  }
+});
+
 // ─── Presentations ────────────────────────────────────────────────────────────
 
 app.get('/api/presentations', (req, res) => {

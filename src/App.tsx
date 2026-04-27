@@ -238,8 +238,8 @@ function LangSwitcher() {
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
-function Sidebar({ section, collapsed, onNav, onCollapse, onLogout }:
-  { section: Section; collapsed: boolean; onNav: (s: Section) => void; onCollapse: () => void; onLogout: () => void }) {
+function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk }:
+  { section: Section; collapsed: boolean; onNav: (s: Section) => void; onCollapse: () => void; onLogout: () => void; wahaOk?: boolean | null }) {
   const { t, i18n } = useTranslation()
   const isRtl = i18n.language === 'he'
 
@@ -284,6 +284,17 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout }:
         ))}
       </nav>
       <div className="flex-shrink-0 p-3 border-t border-white/10 space-y-1">
+        {/* WAHA status indicator */}
+        {wahaOk !== null && wahaOk !== undefined && (
+          <div className={cn('flex items-center px-3 py-2 rounded-lg', collapsed ? 'justify-center' : 'gap-2')}>
+            <span className={cn('w-2 h-2 rounded-full flex-shrink-0', wahaOk ? 'bg-green-400' : 'bg-red-500 animate-pulse')} />
+            {!collapsed && (
+              <span className={cn('text-xs font-medium truncate', wahaOk ? 'text-green-400' : 'text-red-400')}>
+                {wahaOk ? 'WhatsApp подключён' : 'WhatsApp отключён'}
+              </span>
+            )}
+          </div>
+        )}
         <div className={cn('flex items-center px-3 py-2', collapsed ? 'justify-center' : 'gap-3')}>
           <LangSwitcher />
         </div>
@@ -2358,6 +2369,8 @@ export default function App() {
   const [inviteForDashboard, setInviteForDashboard] = useState(false)
   const [nextMeeting, setNextMeeting] = useState('')
   const [allMembers, setAllMembers] = useState<Member[]>([])
+  const [wahaOk, setWahaOk] = useState<boolean | null>(null)
+  const [wahaBannerDismissed, setWahaBannerDismissed] = useState(false)
 
   useEffect(() => {
     if (!authed) return
@@ -2370,11 +2383,28 @@ export default function App() {
     })
   }, [authed])
 
+  // WAHA status polling — every 60 s
+  useEffect(() => {
+    if (!authed) return
+    const check = () =>
+      fetch('/api/waha/status')
+        .then(r => r.json())
+        .then(d => setWahaOk(!!d.ok))
+        .catch(() => setWahaOk(false))
+    check()
+    const id = setInterval(check, 60_000)
+    return () => clearInterval(id)
+  }, [authed])
+
+  // Reset banner dismiss when WhatsApp reconnects
+  useEffect(() => { if (wahaOk === true) setWahaBannerDismissed(false) }, [wahaOk])
+
   const logout = () => { localStorage.removeItem('admin_token'); setAuthed(false) }
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
 
   const sidebarW = collapsed ? 64 : 240
+  const showBanner = wahaOk === false && !wahaBannerDismissed
 
   const SECTIONS: Record<Section, React.ReactNode> = {
     dashboard:     <Dashboard onInvite={() => setInviteForDashboard(true)} nextMeeting={nextMeeting} onNextMeetingChange={setNextMeeting} />,
@@ -2388,9 +2418,25 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-100">
       <Sidebar section={section} collapsed={collapsed} onNav={setSection}
-        onCollapse={() => setCollapsed(c => !c)} onLogout={logout} />
+        onCollapse={() => setCollapsed(c => !c)} onLogout={logout} wahaOk={wahaOk} />
       <main className="transition-all duration-300 min-h-screen"
         style={isRtl ? { paddingRight: sidebarW } : { paddingLeft: sidebarW }}>
+        {/* WhatsApp disconnection banner */}
+        <AnimatePresence>
+          {showBanner && (
+            <motion.div initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -40 }}
+              transition={{ duration: 0.2 }}
+              className="flex items-center gap-3 bg-red-600 text-white px-5 py-3">
+              <span className="text-sm font-medium flex-1">
+                ⚠️ WhatsApp отключён — сообщения не отправляются. Зайдите в настройки для переподключения.
+              </span>
+              <button onClick={() => setWahaBannerDismissed(true)}
+                className="p-1 rounded hover:bg-red-700 flex-shrink-0">
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="p-6 max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div key={section} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
