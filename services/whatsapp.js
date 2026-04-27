@@ -1,6 +1,8 @@
 'use strict';
 
 const axios = require('axios');
+const fs    = require('fs');
+const path  = require('path');
 
 const WAHA_URL     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
 const WAHA_SESSION = process.env.WAHA_SESSION  || 'bni-synergy';
@@ -125,4 +127,30 @@ function getFirstName(fullName) {
   return fullName.trim().split(' ')[0];
 }
 
-module.exports = { sendMessage, sendGroupMessage, broadcast, sendWithDelay, getFirstName, toChatId };
+async function sendImage(phone, filePath, caption) {
+  const chatId  = toChatId(phone);
+  const data    = fs.readFileSync(filePath);
+  const base64  = data.toString('base64');
+  const ext     = path.extname(filePath).toLowerCase();
+  const mimetype = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  const filename = path.basename(filePath);
+  try {
+    const res = await axios.post(
+      `${WAHA_URL}/api/sendImage`,
+      {
+        session: WAHA_SESSION,
+        chatId,
+        file: { mimetype, filename, data: base64 },
+        caption: caption || '',
+      },
+      { headers: WAHA_HEADERS, timeout: 30_000 },
+    );
+    return res.data;
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    console.error(`[WhatsApp] sendImage to ${chatId} failed:`, detail);
+    throw err;
+  }
+}
+
+module.exports = { sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId };

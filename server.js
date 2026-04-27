@@ -80,7 +80,7 @@ function getTodayStr() {
          String(d.getFullYear()).slice(2);
 }
 
-function buildConfirmationMessage(guest, settings) {
+function buildConfirmationMessage(guest, settings, presenter = null) {
   const meetingType = settings.meeting_type || 'offline';
   const location    = settings.meeting_location || WAZE_ADDRESS;
   const zoomUrl     = settings.meeting_zoom_url || '';
@@ -89,10 +89,13 @@ function buildConfirmationMessage(guest, settings) {
   const locationLine = meetingType === 'zoom'
     ? `💻 Встреча пройдёт онлайн в Zoom\n🔗 ${zoomUrl}`
     : `📍 ${location}`;
+  const presenterLine = (presenter && presenter.member_name)
+    ? `\n\n🎤 На встрече выступит:\n${presenter.member_name}${presenter.member_profession ? ' — ' + presenter.member_profession : ''}`
+    : '';
   return `Здравствуйте, ${firstName}! 👋\n\n` +
     `Напоминаем о встрече BNI Synergy:\n` +
     `📅 Понедельник, ${dateStr} в 7:30\n\n` +
-    `${locationLine}\n\n` +
+    `${locationLine}${presenterLine}\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
     `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
     `BNI Synergy`;
@@ -246,15 +249,22 @@ app.post('/api/register', async (req, res) => {
     .catch(err => console.error('[Sheets] appendGuest failed:', err.message));
 
   // 3. WhatsApp — different message for substitutions
-  const settings = db.getAllSettings();
+  const settings  = db.getAllSettings();
   const regLocation = settings.meeting_location || WAZE_ADDRESS;
+
+  // Lookup presenter for this meeting date
+  const presenter = db.getPresentationByDate(meetingDate);
+  const presenterLine = (presenter && presenter.member_name)
+    ? `\n\n🎤 На встрече выступит:\n${presenter.member_name}${presenter.member_profession ? ' — ' + presenter.member_profession : ''}`
+    : '';
+
   let waText;
   if (isSub) {
     waText =
       `Шалом, ${firstName}! 👋\n\n` +
       `Вы зарегистрированы как замена на встречу BNI SYNERGY 🤝\n` +
       `📅 ${meetingDate} в 7:30\n` +
-      `📍 ${regLocation}\n\n` +
+      `📍 ${regLocation}${presenterLine}\n\n` +
       `🗺️ Навигатор:\n${WAZE_LINK}\n\n` +
       `Спасибо, что поддерживаете группу! 🙌`;
   } else {
@@ -262,22 +272,45 @@ app.post('/api/register', async (req, res) => {
       `Шалом, ${firstName}! 👋\n\n` +
       `Вы зарегистрированы на встречу BNI SYNERGY 🤝\n` +
       `📅 ${meetingDate} в 7:30\n` +
-      `📍 ${regLocation}\n\n` +
+      `📍 ${regLocation}${presenterLine}\n\n` +
       `💳 Оплата участия (80₪):\n${PAYBOX_LINK}\n\n` +
       `🗺️ Навигатор:\n${WAZE_LINK}\n\n` +
       `До встречи! 🙌`;
   }
 
+  // Helper: resolve presenter photo path
+  function presenterPhotoPath(p) {
+    if (!p || !p.member_photo) return null;
+    const fp = path.join(__dirname, 'public', 'uploads', p.member_photo);
+    return fs.existsSync(fp) ? fp : null;
+  }
+
   whatsapp.sendMessage(phone, waText)
-    .then(() => db.markWaSent(id))
+    .then(async () => {
+      db.markWaSent(id);
+      const photoPath = presenterPhotoPath(presenter);
+      if (photoPath) {
+        const caption = `${presenter.member_name}${presenter.member_profession ? '\n' + presenter.member_profession : ''}`;
+        await whatsapp.sendImage(phone, photoPath, caption)
+          .catch(err => console.error('[WhatsApp] sendImage (presenter) failed:', err.message));
+      }
+    })
     .catch(err => console.error('[WhatsApp] sendMessage failed:', err.message));
 
   // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
   if (settings.confirmation_sent_for === meetingDate) {
-    const confirmMsg = buildConfirmationMessage({ id, name, phone, specialty, invitedBy }, settings);
+    const confirmMsg = buildConfirmationMessage({ id, name, meetingDate, phone, specialty, invitedBy }, settings, presenter);
     setTimeout(() => {
       whatsapp.sendMessage(phone, confirmMsg)
-        .then(() => db.markWaSent(id))
+        .then(async () => {
+          db.markWaSent(id);
+          const photoPath = presenterPhotoPath(presenter);
+          if (photoPath) {
+            const caption = `${presenter.member_name}${presenter.member_profession ? '\n' + presenter.member_profession : ''}`;
+            await whatsapp.sendImage(phone, photoPath, caption)
+              .catch(err => console.error('[WhatsApp] sendImage (late-reg presenter) failed:', err.message));
+          }
+        })
         .catch(err => console.error('[WhatsApp] late-reg confirm failed:', err.message));
     }, 30000); // 30s delay so registration WA goes first
   }
