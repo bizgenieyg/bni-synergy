@@ -2360,13 +2360,16 @@ function PresentationsSection() {
 
 // ─── WAHA QR Modal ───────────────────────────────────────────────────────────
 
-function WahaQrModal({ logs, onClose, onConnected }: {
-  logs: string
+function WahaQrModal({ qr, found, onClose, onConnected }: {
+  qr: string
+  found: boolean
   onClose: () => void
   onConnected: () => void
 }) {
   const [success, setSuccess] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [qrData, setQrData] = useState({ qr, found })
+  const [refreshing, setRefreshing] = useState(false)
 
   // Auto-poll status every 3 s
   useEffect(() => {
@@ -2394,6 +2397,14 @@ function WahaQrModal({ logs, onClose, onConnected }: {
     } finally { setChecking(false) }
   }
 
+  const refreshQr = async () => {
+    setRefreshing(true)
+    try {
+      const d = await fetch('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
+      setQrData({ qr: d.qr || '', found: !!d.found })
+    } finally { setRefreshing(false) }
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -2413,19 +2424,41 @@ function WahaQrModal({ logs, onClose, onConnected }: {
                 <p className="text-xs text-gray-500 mt-0.5">
                   WhatsApp → Связанные устройства → Привязать устройство
                 </p>
+                <p className="text-xs text-amber-600 font-medium mt-1">
+                  Максимизируйте окно браузера перед сканированием
+                </p>
               </div>
               <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 ml-4 flex-shrink-0">
                 <X size={16} />
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4 min-h-0">
-              <pre className="bg-gray-950 text-green-400 text-[8px] leading-[1.15] font-mono p-4 rounded-xl whitespace-pre overflow-auto">
-                {logs || 'Ожидание логов WAHA…'}
-              </pre>
+              {qrData.found ? (
+                <pre style={{ fontSize: '6px', lineHeight: '7px', letterSpacing: '0px', backgroundColor: '#000', color: '#fff' }}
+                  className="font-mono p-3 rounded-xl whitespace-pre overflow-auto">
+                  {qrData.qr}
+                </pre>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <p className="text-sm text-gray-500 text-center">
+                    QR не найден. Подождите 5 секунд и нажмите «Обновить QR»
+                  </p>
+                  <button onClick={refreshQr} disabled={refreshing}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
+                    {refreshing ? <><Loader2 size={13} className="animate-spin" /> Загрузка…</> : '🔄 Обновить QR'}
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 border-t border-gray-100 flex gap-2">
+              {qrData.found && (
+                <button onClick={refreshQr} disabled={refreshing}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+                  {refreshing ? <Loader2 size={13} className="animate-spin" /> : '🔄 Обновить QR'}
+                </button>
+              )}
               <button onClick={manualCheck} disabled={checking}
-                className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2">
+                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2">
                 {checking
                   ? <><Loader2 size={14} className="animate-spin" /> Проверяем…</>
                   : 'Проверить подключение'}
@@ -2453,7 +2486,7 @@ export default function App() {
   const [wahaBannerDismissed, setWahaBannerDismissed] = useState(false)
   const [wahaRestarting, setWahaRestarting] = useState(false)
   const [wahaQrOpen, setWahaQrOpen] = useState(false)
-  const [wahaQrLogs, setWahaQrLogs] = useState('')
+  const [wahaQrData, setWahaQrData] = useState<{ qr: string; found: boolean }>({ qr: '', found: false })
 
   useEffect(() => {
     if (!authed) return
@@ -2489,8 +2522,8 @@ export default function App() {
     try {
       await fetch('/api/waha/restart', { method: 'POST' })
       await new Promise(resolve => setTimeout(resolve, 4000))
-      const { logs } = await fetch('/api/waha/logs').then(r => r.json()).catch(() => ({ logs: '' }))
-      setWahaQrLogs(logs)
+      const d = await fetch('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
+      setWahaQrData({ qr: d.qr || '', found: !!d.found })
       setWahaQrOpen(true)
     } catch { /* ignore */ } finally {
       setWahaRestarting(false)
@@ -2558,7 +2591,8 @@ export default function App() {
       <AnimatePresence>
         {wahaQrOpen && (
           <WahaQrModal
-            logs={wahaQrLogs}
+            qr={wahaQrData.qr}
+            found={wahaQrData.found}
             onClose={() => setWahaQrOpen(false)}
             onConnected={() => setWahaOk(true)}
           />
