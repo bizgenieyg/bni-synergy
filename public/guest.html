@@ -312,7 +312,7 @@
            class="btn-action btn-pay" id="payBtn">
           💳 Оплатить 80₪
         </a>
-        <a href="https://waze.com/ul/hsv8tzcptn"
+        <a href="#" id="navBtn"
            target="_blank" rel="noopener"
            class="btn-action btn-nav">
           🗺️ Навигатор
@@ -322,6 +322,11 @@
   </div>
 
   <script>
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(cfg => { if (cfg.meeting_waze_url) document.getElementById('navBtn').href = cfg.meeting_waze_url; })
+      .catch(() => {});
+
     const params     = new URLSearchParams(location.search);
     const refParam   = params.get('ref');
     const typeParam  = params.get('type'); // 'guest' | 'sub'

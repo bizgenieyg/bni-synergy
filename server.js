@@ -39,9 +39,9 @@ if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
   db.setSetting('next_meeting_date', NEXT_MEETING_DATE);
 }
 
+if (db.getSetting('meeting_waze_url') === null) db.setSetting('meeting_waze_url', '');
+
 const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
-const WAZE_LINK         = 'https://waze.com/ul/hsv8tzcptn';
-const WAZE_ADDRESS      = 'סמילנסקי 43 ראשון לציון';
 
 // ─── Multer (photo uploads) ───────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ function getTodayStr() {
 
 function buildConfirmationMessage(guest, settings, presenter = null) {
   const meetingType = settings.meeting_type || 'offline';
-  const location    = settings.meeting_location || WAZE_ADDRESS;
+  const location    = settings.meeting_location || '';
   const zoomUrl     = settings.meeting_zoom_url || '';
   const dateStr     = formatMeetingDate(guest.meetingDate);
   const firstName   = whatsapp.getFirstName(guest.name);
@@ -198,7 +198,7 @@ app.get('/api/test', (req, res) => {
     status:           'ok',
     nextMeeting:      NEXT_MEETING_DATE,
     totalGuests:      db.getTotalCount(),
-    meeting_location: s.meeting_location || WAZE_ADDRESS,
+    meeting_location: s.meeting_location || '',
     meeting_type:     s.meeting_type     || 'offline',
     meeting_zoom_url: s.meeting_zoom_url || '',
   });
@@ -251,7 +251,7 @@ app.post('/api/register', async (req, res) => {
 
   // 3. WhatsApp — different message for substitutions
   const settings  = db.getAllSettings();
-  const regLocation = settings.meeting_location || WAZE_ADDRESS;
+  const regLocation = settings.meeting_location || '';
 
   // Lookup presenter for this meeting date
   const presenter = db.getPresentationByDate(meetingDate);
@@ -266,7 +266,7 @@ app.post('/api/register', async (req, res) => {
       `Вы зарегистрированы как замена на встречу BNI SYNERGY 🤝\n` +
       `📅 ${meetingDate} в 7:30\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
-      `🗺️ Навигатор:\n${WAZE_LINK}\n\n` +
+      `🗺️ Навигатор:\n${settings.meeting_waze_url || ''}\n\n` +
       `Спасибо, что поддерживаете группу! 🙌`;
   } else {
     waText =
@@ -275,7 +275,7 @@ app.post('/api/register', async (req, res) => {
       `📅 ${meetingDate} в 7:30\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
       `💳 Оплата участия (80₪):\n${PAYBOX_LINK}\n\n` +
-      `🗺️ Навигатор:\n${WAZE_LINK}\n\n` +
+      `🗺️ Навигатор:\n${settings.meeting_waze_url || ''}\n\n` +
       `До встречи! 🙌`;
   }
 
@@ -404,7 +404,7 @@ app.get('/api/guests/:id/public', (req, res) => {
     meetingDate: guest.meetingDate,
     confirmed:   guest.confirmed || 0,
     meetingType: settings.meeting_type || 'offline',
-    location:    settings.meeting_location || WAZE_ADDRESS,
+    location:    settings.meeting_location || '',
     zoomUrl:     settings.meeting_zoom_url || '',
   });
 });
@@ -807,14 +807,35 @@ app.post('/api/waha/restart', async (req, res) => {
   }
 });
 
-app.get('/api/waha/logs', (req, res) => {
+app.get('/api/waha/qr', adminAuth, (req, res) => {
   try {
-    const logs = execSync('docker logs waha --tail 80 2>&1', { timeout: 5000 }).toString();
-    res.json({ logs });
+    const raw   = execSync('docker logs waha --tail 100 2>&1', { timeout: 5000 }).toString();
+    // Strip ALL ANSI escape codes
+    const clean = raw
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+
+    // Extract QR block — lines that consist entirely of block-drawing chars + spaces
+    const lines   = clean.split('\n');
+    const qrLines = [];
+    let inQR      = false;
+
+    for (const line of lines) {
+      const stripped = line.replace(/\s/g, '');
+      const isQRLine = stripped.length > 10 && /^[█▀▄\s]+$/.test(line);
+      if (isQRLine) {
+        inQR = true;
+        qrLines.push(line);
+      } else if (inQR && stripped.length === 0) {
+        qrLines.push('');
+      } else if (inQR && !isQRLine && qrLines.length > 5) {
+        break;
+      }
+    }
+
+    res.json({ qr: qrLines.join('\n'), found: qrLines.length > 5 });
   } catch (err) {
-    // execSync throws when exit code != 0; stdout/stderr may still have content
-    const logs = (err.stdout || err.stderr || Buffer.alloc(0)).toString() || err.message || '';
-    res.json({ logs });
+    res.json({ qr: '', found: false, error: err.message });
   }
 });
 

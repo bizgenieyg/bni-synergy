@@ -840,6 +840,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
   const [savingMeeting, setSavingMeeting] = useState(false)
   const [meetingType, setMeetingType] = useState<'offline' | 'zoom'>('offline')
   const [meetingLocation, setMeetingLocation] = useState('')
+  const [meetingWazeUrl, setMeetingWazeUrl] = useState('')
   const [meetingZoomUrl, setMeetingZoomUrl] = useState('')
   const [savingMeetingField, setSavingMeetingField] = useState<string | null>(null)
 
@@ -879,6 +880,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       setGv1on1(gv?.total_1on1 || 0)
       if (cfg.meeting_type) setMeetingType(cfg.meeting_type as 'offline' | 'zoom')
       if (cfg.meeting_location) setMeetingLocation(cfg.meeting_location)
+      if (cfg.meeting_waze_url) setMeetingWazeUrl(cfg.meeting_waze_url)
       if (cfg.meeting_zoom_url) setMeetingZoomUrl(cfg.meeting_zoom_url)
       if (gc.date) api(`/api/guests?date=${gc.date}`).then(r => r.json()).then(g => setRecentGuests(g.slice(0, 5)))
     })
@@ -969,15 +971,27 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
           ))}
         </div>
         {meetingType === 'offline' ? (
-          <div className="flex gap-2">
-            <input value={meetingLocation} onChange={e => setMeetingLocation(e.target.value)}
-              placeholder="Адрес встречи…"
-              className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
-            <button onClick={() => saveMeetingField('meeting_location', meetingLocation)}
-              disabled={savingMeetingField === 'meeting_location'}
-              className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
-              {savingMeetingField === 'meeting_location' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input value={meetingLocation} onChange={e => setMeetingLocation(e.target.value)}
+                placeholder="Адрес встречи…"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+              <button onClick={() => saveMeetingField('meeting_location', meetingLocation)}
+                disabled={savingMeetingField === 'meeting_location'}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
+                {savingMeetingField === 'meeting_location' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input value={meetingWazeUrl} onChange={e => setMeetingWazeUrl(e.target.value)}
+                placeholder="https://waze.com/ul/…"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+              <button onClick={() => saveMeetingField('meeting_waze_url', meetingWazeUrl)}
+                disabled={savingMeetingField === 'meeting_waze_url'}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
+                {savingMeetingField === 'meeting_waze_url' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex gap-2">
