@@ -353,7 +353,7 @@
     <div class="hero-pills">
       <div class="pill"><span>📅</span> Понедельники</div>
       <div class="pill"><span>⏰</span> 7:30</div>
-      <div class="pill"><span>📍</span> Семилански 43</div>
+      <div class="pill"><span>📍</span> <span id="address-pill"></span></div>
     </div>
   </div>
 </section>
@@ -510,6 +510,9 @@
   }
 
   // ── Fetch & render ───────────────────────────────────────────────────────
+
+  fetch('/api/settings').then(r => r.json()).catch(() => ({}))
+    .then(cfg => { document.getElementById('address-pill').textContent = cfg.meeting_location || ''; });
 
   fetch('/api/catalog')
     .then(r => r.json())
