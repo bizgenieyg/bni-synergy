@@ -842,6 +842,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
   const [meetingLocation, setMeetingLocation] = useState('')
   const [meetingWazeUrl, setMeetingWazeUrl] = useState('')
   const [meetingZoomUrl, setMeetingZoomUrl] = useState('')
+  const [unconfirmedNotifyPhone, setUnconfirmedNotifyPhone] = useState('')
   const [savingMeetingField, setSavingMeetingField] = useState<string | null>(null)
 
   const saveMeetingField = async (key: string, value: string) => {
@@ -882,6 +883,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       if (cfg.meeting_location) setMeetingLocation(cfg.meeting_location)
       if (cfg.meeting_waze_url) setMeetingWazeUrl(cfg.meeting_waze_url)
       if (cfg.meeting_zoom_url) setMeetingZoomUrl(cfg.meeting_zoom_url)
+      if (cfg.unconfirmed_notify_phone) setUnconfirmedNotifyPhone(cfg.unconfirmed_notify_phone)
       if (gc.date) api(`/api/guests?date=${gc.date}`).then(r => r.json()).then(g => setRecentGuests(g.slice(0, 5)))
     })
   }, [])
@@ -1005,6 +1007,22 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Notifications Settings */}
+      <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🔔 Уведомления</p>
+        <div className="flex gap-2">
+          <input value={unconfirmedNotifyPhone} onChange={e => setUnconfirmedNotifyPhone(e.target.value)}
+            placeholder="972501234567"
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+          <button onClick={() => saveMeetingField('unconfirmed_notify_phone', unconfirmedNotifyPhone)}
+            disabled={savingMeetingField === 'unconfirmed_notify_phone'}
+            className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
+            {savingMeetingField === 'unconfirmed_notify_phone' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">Уведомления о неподтверждённых (телефон)</p>
       </div>
 
       {/* KPI Cards */}
@@ -1138,6 +1156,7 @@ function GuestsSection() {
   const [addDateVal, setAddDateVal] = useState('')
   const [editingSpecialty, setEditingSpecialty] = useState<string | null>(null)
   const [specialtyDraft, setSpecialtyDraft] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<Guest | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -1179,6 +1198,12 @@ function GuestsSection() {
     setEditingSpecialty(null)
   }
 
+  const deleteGuest = async (id: string) => {
+    await api(`/api/guests/${id}`, { method: 'DELETE' })
+    setGuests(gs => gs.filter(g => g.id !== id))
+    setDeleteConfirm(null)
+  }
+
   const paid      = guests.filter(g => g.paid).length
   const confirmed = guests.filter(g => g.confirmed).length
 
@@ -1212,6 +1237,19 @@ function GuestsSection() {
       {toastMsg && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl text-sm shadow-lg z-50 whitespace-nowrap">
           {toastMsg}
+        </div>
+      )}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
+            <p className="text-sm text-gray-800 mb-4">Удалить гостя <span className="font-semibold">{deleteConfirm.name}</span>? Это действие нельзя отменить.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 rounded-xl text-sm bg-gray-100 text-gray-700 hover:bg-gray-200">Отмена</button>
+              <button onClick={() => deleteGuest(deleteConfirm.id)}
+                className="px-4 py-2 rounded-xl text-sm bg-red-600 text-white hover:bg-red-700 font-medium">Удалить</button>
+            </div>
+          </div>
         </div>
       )}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1332,6 +1370,7 @@ function GuestsSection() {
                 <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
                 <th className="px-4 py-3 font-medium">Подтверждение</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
+                <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -1389,6 +1428,12 @@ function GuestsSection() {
                     {g.paid
                       ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> {t('guests.paidLabel')}</span>
                       : <button onClick={() => markPaid(g.id)} title={t('guests.markPaid')} className="text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium" style={{ padding: '4px 8px' }}>₪</button>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => setDeleteConfirm(g)} title="Удалить гостя"
+                      className="text-gray-300 hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -40,6 +40,7 @@ if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
 }
 
 if (db.getSetting('meeting_waze_url') === null) db.setSetting('meeting_waze_url', '');
+if (db.getSetting('unconfirmed_notify_phone') === null) db.setSetting('unconfirmed_notify_phone', '');
 
 const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
 
@@ -377,6 +378,11 @@ app.put('/api/guests/:id/paid', (req, res) => {
       .catch(err => console.error('[Sheets] markPaid failed:', err.message));
   }
 
+  res.json({ success: true });
+});
+
+app.delete('/api/guests/:id', (req, res) => {
+  db.db.prepare('DELETE FROM guests WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
@@ -1041,15 +1047,20 @@ cron.schedule('0 18 * * 0', async () => {
   console.log(`[Cron] Готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
 }, { timezone: 'Asia/Jerusalem' });
 
-// ─── Cron: Sunday 19:00 — send unconfirmed list to Irina Zamanskaya ──────────
+// ─── Cron: Sunday 19:00 — send unconfirmed list to configured recipient ───────
 
 cron.schedule('0 19 * * 0', async () => {
-  console.log('[Cron] Воскресенье 19:00 — отправка списка неподтверждённых Ирине');
+  console.log('[Cron] Воскресенье 19:00 — отправка списка неподтверждённых');
   const settings = db.getAllSettings();
   const today    = getTodayStr();
   // Only run if confirmations were sent today
   if (settings.confirmation_sent_date !== today) {
     console.log('[Cron] Подтверждения сегодня не отправлялись, пропускаем');
+    return;
+  }
+  const phone = db.getSetting('unconfirmed_notify_phone');
+  if (!phone) {
+    console.log('[Cron] unconfirmed_notify_phone не настроен, пропускаем');
     return;
   }
   const nextMeeting = settings.next_meeting_date || NEXT_MEETING_DATE;
@@ -1063,23 +1074,15 @@ cron.schedule('0 19 * * 0', async () => {
     return;
   }
 
-  const irina = db.db.prepare(
-    "SELECT phone FROM members WHERE name LIKE '%Заманская%' AND active=1"
-  ).get();
-  if (!irina?.phone) {
-    console.log('[Cron] Ирина Заманская не найдена в базе, пропускаем');
-    return;
-  }
-
   const dateStr = formatMeetingDate(nextMeeting);
   const list    = unconfirmed.map((g, i) => `${i + 1}. ${g.name} — ${g.phone}`).join('\n');
-  const text    = `Ирина, добрый вечер! 👋\n\nСписок гостей на встречу ${dateStr}, которые ещё не подтвердили участие (${unconfirmed.length} чел.):\n\n${list}\n\nBNI Synergy`;
+  const text    = `Добрый вечер! 👋\n\nСписок гостей на встречу ${dateStr}, которые ещё не подтвердили участие (${unconfirmed.length} чел.):\n\n${list}\n\nBNI Synergy`;
 
   try {
-    await whatsapp.sendMessage(irina.phone, text);
-    console.log(`[Cron] Отправлен список ${unconfirmed.length} неподтверждённых Ирине Заманской`);
+    await whatsapp.sendMessage(phone, text);
+    console.log(`[Cron] Отправлен список ${unconfirmed.length} неподтверждённых на ${phone}`);
   } catch (e) {
-    console.error('[Cron] Не удалось отправить Ирине:', e.message);
+    console.error('[Cron] Не удалось отправить список неподтверждённых:', e.message);
   }
 }, { timezone: 'Asia/Jerusalem' });
 
