@@ -774,8 +774,8 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
       <Avatar member={member} size={36} />
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{member.name}</p>
-        <p className="text-xs text-gray-400">{member.birthday} · <span className={cn(member.daysUntil === 0 ? 'text-amber-500 font-medium' : 'text-gray-400')}>
-          {member.daysUntil === 0 ? t('dashboard.today') : t('dashboard.inDays', { n: member.daysUntil })}
+        <p className="text-xs text-gray-400">{member.birthday} · <span className={cn(member.daysUntil === 0 ? 'text-amber-500 font-medium' : member.daysUntil < 0 ? 'text-gray-400' : 'text-gray-400')}>
+          {member.daysUntil === 0 ? t('dashboard.today') : member.daysUntil < 0 ? `${Math.abs(member.daysUntil)} дн. назад` : t('dashboard.inDays', { n: member.daysUntil })}
         </span></p>
       </div>
       {phone && (
@@ -1745,8 +1745,8 @@ function VotingSection() {
     await load(); setLoading(false)
   }
 
-  const currentResults = allResults.find(x => x.date === status?.meetingDate)?.results ?? allResults[0]?.results ?? []
-  const history = allResults.filter(x => x.date !== status?.meetingDate)
+  const currentResults = allResults[0]?.results ?? []
+  const history = allResults.slice(1)
   const maxVotes = currentResults[0]?.votes || 1
   const medals = ['🥇', '🥈', '🥉']
 
@@ -1794,23 +1794,7 @@ function VotingSection() {
         </div>
       </div>
 
-      {/* Current meeting results */}
-      {currentResults.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-0.5">{t('voting.currentResults')}</h2>
-          <p className="text-xs text-gray-400 mb-4">
-            {status?.open
-              ? t('voting.updatesEveryWithLast', { time: lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—' })
-              : t('voting.lastUpdated', { time: lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—' })
-            }
-          </p>
-          <div className="space-y-3">
-            {currentResults.map((r, i) => <ResultBar key={r.candidateId} r={r} i={i} max={maxVotes} />)}
-          </div>
-        </div>
-      )}
-
-      {/* History: previous meetings */}
+      {/* History: previous meetings — shown directly below controls */}
       {history.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">История голосований</h2>
@@ -1839,6 +1823,22 @@ function VotingSection() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Current meeting results */}
+      {currentResults.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-0.5">{t('voting.currentResults')}</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            {status?.open
+              ? t('voting.updatesEveryWithLast', { time: lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—' })
+              : t('voting.lastUpdated', { time: lastUpdated?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '—' })
+            }
+          </p>
+          <div className="space-y-3">
+            {currentResults.map((r, i) => <ResultBar key={r.candidateId} r={r} i={i} max={maxVotes} />)}
           </div>
         </div>
       )}
