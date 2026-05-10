@@ -599,13 +599,52 @@ app.put('/api/settings', (req, res) => {
 // ─── Birthdays ────────────────────────────────────────────────────────────────
 
 app.get('/api/birthdays/upcoming', (req, res) => {
-  const days    = Math.min(parseInt(req.query.days || '14', 10), 365);
-  const today   = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const members = db.getActiveMembers();
   const result  = [];
+  const today   = new Date(); today.setHours(0, 0, 0, 0);
 
+  // ±7 day window around a meeting date
+  if (req.query.around) {
+    let center = null;
+    if (req.query.around === 'auto') {
+      // Last meeting = next_meeting_date - 7 days
+      const nextStr = db.getSetting('next_meeting_date') || NEXT_MEETING_DATE;
+      if (nextStr) {
+        const [dd, mm, yy] = nextStr.split('/').map(Number);
+        center = new Date(yy < 100 ? 2000 + yy : yy, mm - 1, dd);
+        center.setDate(center.getDate() - 7);
+        center.setHours(0, 0, 0, 0);
+      }
+    } else {
+      const [dd, mm, yy] = req.query.around.split('/').map(Number);
+      center = new Date(yy < 100 ? 2000 + yy : yy, mm - 1, dd);
+      center.setHours(0, 0, 0, 0);
+    }
+    if (center) {
+      const from = new Date(center); from.setDate(from.getDate() - 7);
+      const to   = new Date(center); to.setDate(to.getDate() + 7);
+      for (const member of members) {
+        if (!member.birthday) continue;
+        const parts = member.birthday.split('/');
+        if (parts.length < 2) continue;
+        const day = parseInt(parts[0], 10), month = parseInt(parts[1], 10);
+        if (isNaN(day) || isNaN(month)) continue;
+        for (const yo of [-1, 0, 1]) {
+          const bday = new Date(center.getFullYear() + yo, month - 1, day);
+          bday.setHours(0, 0, 0, 0);
+          if (bday >= from && bday <= to) {
+            result.push({ ...member, daysUntil: Math.round((bday - today) / 86_400_000) });
+            break;
+          }
+        }
+      }
+      result.sort((a, b) => a.daysUntil - b.daysUntil);
+      return res.json(result);
+    }
+  }
+
+  // Default: next N days from today
+  const days = Math.min(parseInt(req.query.days || '14', 10), 365);
   for (const member of members) {
     if (!member.birthday) continue;
     const parts = member.birthday.split('/');
@@ -613,8 +652,6 @@ app.get('/api/birthdays/upcoming', (req, res) => {
     const day   = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10);
     if (isNaN(day) || isNaN(month)) continue;
-
-    // Check this year, then next year (handles year-end wrap)
     for (const yearOffset of [0, 1]) {
       const bday = new Date(today.getFullYear() + yearOffset, month - 1, day);
       bday.setHours(0, 0, 0, 0);
@@ -625,7 +662,6 @@ app.get('/api/birthdays/upcoming', (req, res) => {
       }
     }
   }
-
   result.sort((a, b) => a.daysUntil - b.daysUntil);
   res.json(result);
 });
@@ -674,8 +710,13 @@ app.post('/api/voting', (req, res) => {
 });
 
 app.get('/api/voting/results', (req, res) => {
-  const date = req.query.date || NEXT_MEETING_DATE;
-  res.json(db.getVoteResults(date));
+  if (!req.query.date) {
+    const allDates = db.db.prepare(
+      'SELECT DISTINCT meetingDate FROM votes ORDER BY meetingDate DESC'
+    ).all().map(r => r.meetingDate);
+    return res.json(allDates.map(d => ({ date: d, results: db.getVoteResults(d) })));
+  }
+  res.json(db.getVoteResults(req.query.date));
 });
 
 app.get('/api/voting/status', (req, res) => {

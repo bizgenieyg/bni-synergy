@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import './i18n'
 import { useTranslation } from 'react-i18next'
 import {
-  LayoutDashboard, Users, Vote, ChevronRight, ChevronLeft, LogOut,
+  LayoutDashboard, Users, Vote, ChevronRight, ChevronLeft, ChevronDown, LogOut,
   Plus, Trash2, Edit2, Check, X, Search, Download, Send, Phone,
   RefreshCw, MessageCircle, UserCheck, Loader2, TrendingUp,
   DollarSign, Handshake, Trophy, CheckCircle2, Presentation,
@@ -866,14 +866,14 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       api('/api/voting/status').then(r => r.json()),
       api('/api/voting/results').then(r => r.json()),
       api('/api/guests/active-count').then(r => r.json()),
-      api('/api/birthdays/upcoming?days=14').then(r => r.json()),
+      api('/api/birthdays/upcoming?around=auto').then(r => r.json()),
       api('/api/members?active=true').then(r => r.json()),
       api('/api/group-value/totals?period=all').then(r => r.json()),
       api('/api/settings').then(r => r.json()),
     ]).then(([s, vs, vr, gc, b, m, gv, cfg]) => {
       setStats(s)
       setVotingStatus(vs)
-      setResults(vr)
+      setResults((vr as {date:string,results:VoteResult[]}[]).find(x => x.date === vs.meetingDate)?.results ?? vr[0]?.results ?? [])
       setGuestCount(gc)
       setBirthdays(b)
       setMemberCount(m.length)
@@ -895,7 +895,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       api('/api/voting/status').then(r => r.json()),
       api('/api/voting/results').then(r => r.json()),
     ])
-    setVotingStatus(vs); setResults(vr)
+    setVotingStatus(vs); setResults((vr as {date:string,results:VoteResult[]}[]).find(x => x.date === vs.meetingDate)?.results ?? vr[0]?.results ?? [])
     setLoading(false)
   }
 
@@ -907,7 +907,7 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       api('/api/voting/status').then(r => r.json()),
       api('/api/voting/results').then(r => r.json()),
     ])
-    setVotingStatus(vs); setResults(vr)
+    setVotingStatus(vs); setResults((vr as {date:string,results:VoteResult[]}[]).find(x => x.date === vs.meetingDate)?.results ?? vr[0]?.results ?? [])
     setLoading(false)
   }
 
@@ -1714,18 +1714,18 @@ function MembersSection() {
 function VotingSection() {
   const { t } = useTranslation()
   const [status, setStatus] = useState<VotingStatus | null>(null)
-  const [results, setResults] = useState<VoteResult[]>([])
-  const [winners, setWinners] = useState<VoteWinner[]>([])
+  const [allResults, setAllResults] = useState<{ date: string; results: VoteResult[] }[]>([])
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [openHistoryDate, setOpenHistoryDate] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [s, r, w] = await Promise.all([
+    const [s, r] = await Promise.all([
       api('/api/voting/status').then(x => x.json()),
       api('/api/voting/results').then(x => x.json()),
-      api('/api/voting/winners').then(x => x.json()),
     ])
-    setStatus(s); setResults(r); setWinners(w)
+    setStatus(s)
+    setAllResults(Array.isArray(r) ? r : [])
     setLastUpdated(new Date())
   }, [])
 
@@ -1740,15 +1740,39 @@ function VotingSection() {
   const openVoting = async () => { setLoading(true); await api('/api/voting/open', { method: 'POST' }); await load(); setLoading(false) }
   const closeVoting = async () => {
     setLoading(true); await api('/api/voting/close', { method: 'POST' })
-    if (results[0]) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
+    const cur = allResults.find(x => x.date === status?.meetingDate)?.results ?? []
+    if (cur[0]) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
     await load(); setLoading(false)
   }
 
-  const maxVotes = results[0]?.votes || 1
+  const currentResults = allResults.find(x => x.date === status?.meetingDate)?.results ?? allResults[0]?.results ?? []
+  const history = allResults.filter(x => x.date !== status?.meetingDate)
+  const maxVotes = currentResults[0]?.votes || 1
+  const medals = ['🥇', '🥈', '🥉']
+
+  const ResultBar = ({ r, i, max }: { r: VoteResult; i: number; max: number }) => (
+    <div className="flex items-center gap-3">
+      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+        style={i === 0 ? { background: '#FEF3C7', color: '#D97706' } : { background: '#F3F4F6', color: '#6B7280' }}>
+        {i < 3 ? medals[i] : i + 1}
+      </div>
+      <div className="flex-1">
+        <div className="flex justify-between text-sm mb-1">
+          <span className="font-medium text-gray-800">{r.candidateName}</span>
+          <span className="text-gray-500">{r.votes}</span>
+        </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${(r.votes / max) * 100}%`, background: i === 0 ? '#F59E0B' : RED }} />
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-gray-900">{t('voting.title')}</h1>
+
+      {/* Status + controls */}
       <div className="bg-white rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-4 flex-wrap">
           <div className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold',
@@ -1769,7 +1793,9 @@ function VotingSection() {
           </div>
         </div>
       </div>
-      {results.length > 0 && (
+
+      {/* Current meeting results */}
+      {currentResults.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-0.5">{t('voting.currentResults')}</h2>
           <p className="text-xs text-gray-400 mb-4">
@@ -1779,43 +1805,40 @@ function VotingSection() {
             }
           </p>
           <div className="space-y-3">
-            {results.map((r, i) => (
-              <div key={r.candidateId} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={i === 0 ? { background: '#FEF3C7', color: '#D97706' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                  {i === 0 ? '🏆' : i + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium text-gray-800">{r.candidateName}</span>
-                    <span className="text-gray-500">{r.votes}</span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(r.votes / maxVotes) * 100}%`, background: i === 0 ? '#F59E0B' : RED }} />
-                  </div>
-                </div>
-              </div>
-            ))}
+            {currentResults.map((r, i) => <ResultBar key={r.candidateId} r={r} i={i} max={maxVotes} />)}
           </div>
         </div>
       )}
 
-      {winners.length > 0 && (
+      {/* History: previous meetings */}
+      {history.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-4">{t('voting.recentWinners')}</h2>
-          <div className="space-y-3">
-            {winners.map((w, i) => (
-              <div key={w.date} className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
-                  style={{ background: i === 0 ? '#FEF3C7' : '#F3F4F6' }}>
-                  {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+          <h2 className="font-semibold text-gray-800 mb-4">История голосований</h2>
+          <div className="space-y-2">
+            {history.map(entry => {
+              const maxV = entry.results[0]?.votes || 1
+              const isOpen = openHistoryDate === entry.date
+              return (
+                <div key={entry.date} className="border border-gray-100 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setOpenHistoryDate(isOpen ? null : entry.date)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                    <span className="font-semibold text-gray-800 text-sm">{entry.date}</span>
+                    <div className="flex items-center gap-3">
+                      {entry.results[0] && (
+                        <span className="text-xs text-gray-400">🥇 {entry.results[0].candidateName} · {entry.results[0].votes} голосов</span>
+                      )}
+                      <ChevronDown size={14} className={cn('text-gray-400 transition-transform flex-shrink-0', isOpen && 'rotate-180')} />
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-1 space-y-3">
+                      {entry.results.map((r, i) => <ResultBar key={r.candidateId} r={r} i={i} max={maxV} />)}
+                    </div>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900 text-sm">{w.winner_name}</p>
-                  <p className="text-xs text-gray-400">{w.date} · {w.votes} votes</p>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
