@@ -446,6 +446,9 @@
       .stat-cards { grid-template-columns: 1fr 1fr; }
       .page-container { padding: 16px; }
       .app-header { padding: 0 16px; }
+      /* скрываем Профессию (3) и Встречу (6) — "Кто пригласил" становится видна без скролла */
+      #page-guests th:nth-child(3), #page-guests td:nth-child(3),
+      #page-guests th:nth-child(6), #page-guests td:nth-child(6) { display: none; }
     }
 
     /* ── Group Value inputs ── */
