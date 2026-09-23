@@ -805,6 +805,23 @@
           <div id="emptyGvHistory" class="empty-msg" style="display:none">Нет данных о встречах</div>
         </div>
       </div>
+
+      <!-- Block D: Yearly totals -->
+      <div class="dash-card" style="margin-top:16px">
+        <div class="dash-card-title">📅 Итоги по годам</div>
+        <div class="table-wrap" style="box-shadow:none">
+          <table>
+            <thead><tr>
+              <th>Показатель</th>
+              <th style="text-align:center">🤝 Встречи 1:1</th>
+              <th style="text-align:center">📄 Направления</th>
+              <th style="text-align:center">🔐 Закрытые сделки</th>
+              <th style="text-align:center">💰 Сумма сделок</th>
+            </tr></thead>
+            <tbody id="gvYearlyBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -1856,6 +1873,17 @@
     renderGvTable();
   }
 
+  function renderGvYearlyRow(label, t) {
+    t = t || {};
+    return `<tr>
+      <td>${label}</td>
+      <td style="text-align:center">${t.total_1on1 || 0}</td>
+      <td style="text-align:center">${t.total_referrals || 0}</td>
+      <td style="text-align:center">${t.total_deals || 0}</td>
+      <td style="text-align:center">₪${(t.total_amount || 0).toLocaleString('he-IL')}</td>
+    </tr>`;
+  }
+
   async function loadGvTotals() {
     try {
       const t = await api('/api/group-value/totals');
@@ -1863,6 +1891,15 @@
       document.getElementById('gvTotalRefs').textContent   = t.total_referrals   || 0;
       document.getElementById('gvTotalDeals').textContent  = t.total_deals       || 0;
       document.getElementById('gvTotalAmount').textContent = '₪' + ((t.total_amount || 0).toLocaleString('he-IL'));
+
+      const yearlyBody = document.getElementById('gvYearlyBody');
+      if (yearlyBody) {
+        yearlyBody.innerHTML =
+          renderGvYearlyRow(t.current_year && t.current_year.label, t.current_year) +
+          renderGvYearlyRow(t.prev_year && t.prev_year.label, t.prev_year) +
+          renderGvYearlyRow(t.prev_prev_year && t.prev_prev_year.label, t.prev_prev_year) +
+          renderGvYearlyRow('За всё время', t);
+      }
     } catch { /* ignore */ }
   }
 

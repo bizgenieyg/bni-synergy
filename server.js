@@ -935,12 +935,36 @@ app.delete('/api/presentations/:id', (req, res) => {
 // ─── Group Value ──────────────────────────────────────────────────────────────
 
 // Must come before /api/group-value/:id to avoid route conflicts
+function yearLabel(range) {
+  // "2025-10-01".."2026-09-30" → "2025-26"
+  return `${range.start.slice(0, 4)}-${range.end.slice(2, 4)}`;
+}
+
+function yearBucket(offset) {
+  const range = db.bniYearRange(offset);
+  const totals = db.getGroupValueTotalsByYear(range.start, range.end) || {};
+  return {
+    label: yearLabel(range),
+    start: range.start,
+    end: range.end,
+    total_1on1: totals.total_1on1 || 0,
+    total_referrals: totals.total_referrals || 0,
+    total_deals: totals.total_deals || 0,
+    total_amount: totals.total_amount || 0,
+  };
+}
+
 app.get('/api/group-value/totals', (req, res) => {
   const period = req.query.period || 'all';
   const periodDays = { week: 7, month: 30, quarter: 90 };
   const days = periodDays[period];
   const t = days ? db.getGroupValueTotalsByPeriod(days) : db.getGroupValueTotals();
-  res.json(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 });
+  res.json({
+    ...(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 }),
+    current_year: yearBucket(0),
+    prev_year: yearBucket(1),
+    prev_prev_year: yearBucket(2),
+  });
 });
 
 app.get('/api/group-value/summary', (req, res) => {

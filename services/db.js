@@ -712,6 +712,32 @@ function getGroupValueTotalsByPeriod(days) {
   `).get(`-${days}`);
 }
 
+// Отчётный год BNI: с 1 октября по 30 сентября. offset 0 = текущий год, 1 = прошлый, 2 = позапрошлый.
+function bniYearRange(offset = 0) {
+  const now = new Date();
+  const y = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+  const start = `${y - offset}-10-01`;
+  const end   = `${y - offset + 1}-09-30`;
+  return { start, end };
+}
+
+// meeting_date в meeting_stats хранится строкой DD/MM/YY (не ISO) — сравнение
+// напрямую с ISO-границами дало бы бессмысленный результат, поэтому конвертируем
+// обе стороны в сортируемый вид YYYYMMDD прямо в SQL.
+function getGroupValueTotalsByYear(startDate, endDate) {
+  const startKey = startDate.replace(/-/g, '');
+  const endKey = endDate.replace(/-/g, '');
+  return db.prepare(`
+    SELECT SUM(meetings_1on1) as total_1on1,
+           SUM(referrals)     as total_referrals,
+           SUM(closed_deals)  as total_deals,
+           SUM(deal_amount)   as total_amount
+    FROM meeting_stats
+    WHERE ('20' || substr(meeting_date, 7, 2) || substr(meeting_date, 4, 2) || substr(meeting_date, 1, 2)) >= ?
+      AND ('20' || substr(meeting_date, 7, 2) || substr(meeting_date, 4, 2) || substr(meeting_date, 1, 2)) <= ?
+  `).get(startKey, endKey);
+}
+
 function upsertGroupValue({ meeting_date, member_id, member_name, meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 }) {
   const existing = member_id
     ? db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_id = ?').get(meeting_date, member_id)
@@ -898,6 +924,8 @@ module.exports = {
   getGroupValueSummary,
   getGroupValueTotals,
   getGroupValueTotalsByPeriod,
+  bniYearRange,
+  getGroupValueTotalsByYear,
   upsertGroupValue,
   updateGroupValue,
   deleteGroupValue,
