@@ -121,7 +121,7 @@ interface Presentation {
 }
 
 type Section = 'dashboard' | 'guests' | 'members' | 'voting' | 'group-value' | 'presentations'
-type Period = 'week' | 'month' | 'quarter' | 'all'
+type Period = 'week' | 'month' | 'quarter' | 'year' | 'all'
 
 // ─── API helpers ────────────────────────────────────────────────────────────
 
@@ -1859,6 +1859,7 @@ function GroupValueSection() {
   const [period, setPeriod] = useState<Period>('all')
   const [history, setHistory] = useState<MeetingStatEntry[]>([])
   const [yearly, setYearly] = useState<{ current_year: YearBucket; prev_year: YearBucket; prev_prev_year: YearBucket } & StatTotals | null>(null)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
 
   // Calculator state
   const today = new Date()
@@ -1909,14 +1910,26 @@ function GroupValueSection() {
   const filteredTotals = useMemo<StatTotals | null>(() => {
     if (!history.length) return null
     const now = Date.now()
-    const days = period === 'week' ? 7 : period === 'month' ? 30 : period === 'quarter' ? 90 : null
-    const cutoffMs = days ? days * 24 * 60 * 60 * 1000 : null
-    const filtered = cutoffMs
-      ? history.filter(e => {
-          const [dd, mm, yy] = e.meeting_date.split('/').map(Number)
-          return now - new Date(2000 + yy, mm - 1, dd).getTime() <= cutoffMs
-        })
-      : history
+    let filtered = history
+    if (period === 'year') {
+      // Отчётный год BNI: 1 октября — 30 сентября (та же граница, что и bniYearRange(0) на сервере)
+      const todayD = new Date()
+      const y = todayD.getMonth() >= 9 ? todayD.getFullYear() : todayD.getFullYear() - 1
+      const yearStartMs = new Date(y, 9, 1).getTime()
+      filtered = history.filter(e => {
+        const [dd, mm, yy] = e.meeting_date.split('/').map(Number)
+        return new Date(2000 + yy, mm - 1, dd).getTime() >= yearStartMs
+      })
+    } else {
+      const days = period === 'week' ? 7 : period === 'month' ? 30 : period === 'quarter' ? 90 : null
+      const cutoffMs = days ? days * 24 * 60 * 60 * 1000 : null
+      filtered = cutoffMs
+        ? history.filter(e => {
+            const [dd, mm, yy] = e.meeting_date.split('/').map(Number)
+            return now - new Date(2000 + yy, mm - 1, dd).getTime() <= cutoffMs
+          })
+        : history
+    }
     return {
       total_1on1:      filtered.reduce((s, e) => s + (e.meetings_1on1 || 0), 0),
       total_referrals: filtered.reduce((s, e) => s + (e.referrals     || 0), 0),
@@ -1963,7 +1976,8 @@ function GroupValueSection() {
 
   const PERIODS: { id: Period; label: string }[] = [
     { id: 'week', label: t('groupValue.week') }, { id: 'month', label: t('groupValue.month') },
-    { id: 'quarter', label: t('groupValue.quarter') }, { id: 'all', label: t('groupValue.allTime') },
+    { id: 'quarter', label: t('groupValue.quarter') }, { id: 'year', label: t('groupValue.year') },
+    { id: 'all', label: t('groupValue.allTime') },
   ]
 
   const Counter = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
@@ -2104,11 +2118,56 @@ function GroupValueSection() {
         </div>
       )}
 
+      {/* Yearly totals table */}
+      {yearly && (() => {
+        const hasData = (t: StatTotals) => (t.total_1on1 || t.total_referrals || t.total_deals || t.total_amount) > 0
+        const rows = [
+          { label: yearly.current_year.label, t: yearly.current_year },
+          { label: yearly.prev_year.label, t: yearly.prev_year },
+          { label: yearly.prev_prev_year.label, t: yearly.prev_prev_year },
+        ].filter(row => hasData(row.t))
+        rows.push({ label: 'За всё время', t: yearly })
+        return (
+          <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-800">Итоги по годам</h2>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 font-medium text-left">Показатель</th>
+                  <th className="px-4 py-3 font-medium text-center">{t('groupValue.oneOnOne')}</th>
+                  <th className="px-4 py-3 font-medium text-center">{t('groupValue.referrals')}</th>
+                  <th className="px-4 py-3 font-medium text-center">{t('groupValue.deals')}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t('groupValue.amountLabel')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <tr key={row.label} className="border-b border-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">{row.label}</td>
+                    <td className="px-4 py-3 text-center text-gray-600">{row.t.total_1on1 || 0}</td>
+                    <td className="px-4 py-3 text-center text-gray-600">{row.t.total_referrals || 0}</td>
+                    <td className="px-4 py-3 text-center text-gray-600">{row.t.total_deals || 0}</td>
+                    <td className="px-4 py-3 text-right font-medium text-gray-700">₪{(row.t.total_amount || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
+
       {/* History table */}
       {history.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
-          <div className="px-5 py-4 border-b border-gray-100">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="font-semibold text-gray-800">{t('groupValue.history')}</h2>
+            {history.length > 4 && (
+              <button onClick={() => setHistoryExpanded(v => !v)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
+                {historyExpanded ? 'Свернуть' : `Показать все (${history.length})`}
+              </button>
+            )}
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -2122,7 +2181,7 @@ function GroupValueSection() {
               </tr>
             </thead>
             <tbody>
-              {history.map(e => (
+              {(historyExpanded ? history : history.slice(0, 4)).map(e => (
                 <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-gray-900">{e.meeting_date}</td>
                   <td className="px-4 py-3 text-center text-gray-600">{e.meetings_1on1}</td>
@@ -2134,42 +2193,6 @@ function GroupValueSection() {
                       <Trash2 size={13} />
                     </button>
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Yearly totals table */}
-      {yearly && (
-        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-gray-800">Итоги по годам</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                <th className="px-4 py-3 font-medium text-left">Показатель</th>
-                <th className="px-4 py-3 font-medium text-center">{t('groupValue.oneOnOne')}</th>
-                <th className="px-4 py-3 font-medium text-center">{t('groupValue.referrals')}</th>
-                <th className="px-4 py-3 font-medium text-center">{t('groupValue.deals')}</th>
-                <th className="px-4 py-3 font-medium text-right">{t('groupValue.amountLabel')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { label: yearly.current_year.label, t: yearly.current_year },
-                { label: yearly.prev_year.label, t: yearly.prev_year },
-                { label: yearly.prev_prev_year.label, t: yearly.prev_prev_year },
-                { label: 'За всё время', t: yearly },
-              ].map(row => (
-                <tr key={row.label} className="border-b border-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{row.label}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{row.t.total_1on1 || 0}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{row.t.total_referrals || 0}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{row.t.total_deals || 0}</td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-700">₪{(row.t.total_amount || 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
