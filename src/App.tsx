@@ -69,6 +69,12 @@ interface StatTotals {
   total_amount: number
 }
 
+interface YearBucket extends StatTotals {
+  label: string
+  start: string
+  end: string
+}
+
 interface PendingRow {
   localId: number
   meetings_1on1: number
@@ -1852,6 +1858,7 @@ function GroupValueSection() {
   const { t } = useTranslation()
   const [period, setPeriod] = useState<Period>('all')
   const [history, setHistory] = useState<MeetingStatEntry[]>([])
+  const [yearly, setYearly] = useState<{ current_year: YearBucket; prev_year: YearBucket; prev_prev_year: YearBucket } & StatTotals | null>(null)
 
   // Calculator state
   const today = new Date()
@@ -1894,6 +1901,10 @@ function GroupValueSection() {
   }, [])
 
   useEffect(() => { loadHistory() }, []) // eslint-disable-line
+
+  useEffect(() => {
+    api('/api/group-value/totals').then(r => r.json()).then(d => setYearly(d)).catch(() => {})
+  }, [])
 
   const filteredTotals = useMemo<StatTotals | null>(() => {
     if (!history.length) return null
@@ -2123,6 +2134,42 @@ function GroupValueSection() {
                       <Trash2 size={13} />
                     </button>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Yearly totals table */}
+      {yearly && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-gray-800">Итоги по годам</h2>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 font-medium text-left">Показатель</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.oneOnOne')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.referrals')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('groupValue.deals')}</th>
+                <th className="px-4 py-3 font-medium text-right">{t('groupValue.amountLabel')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: yearly.current_year.label, t: yearly.current_year },
+                { label: yearly.prev_year.label, t: yearly.prev_year },
+                { label: yearly.prev_prev_year.label, t: yearly.prev_prev_year },
+                { label: 'За всё время', t: yearly },
+              ].map(row => (
+                <tr key={row.label} className="border-b border-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{row.label}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{row.t.total_1on1 || 0}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{row.t.total_referrals || 0}</td>
+                  <td className="px-4 py-3 text-center text-gray-600">{row.t.total_deals || 0}</td>
+                  <td className="px-4 py-3 text-right font-medium text-gray-700">₪{(row.t.total_amount || 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
