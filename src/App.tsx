@@ -2121,7 +2121,7 @@ function GroupValueSection() {
       {/* Yearly totals table */}
       {yearly && (() => {
         const hasData = (t: StatTotals) => (t.total_1on1 || t.total_referrals || t.total_deals || t.total_amount) > 0
-        const rows = [
+        const rows: { label: string; t: StatTotals }[] = [
           { label: yearly.current_year.label, t: yearly.current_year },
           { label: yearly.prev_year.label, t: yearly.prev_year },
           { label: yearly.prev_prev_year.label, t: yearly.prev_prev_year },
