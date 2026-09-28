@@ -2541,6 +2541,17 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
     return () => clearInterval(id)
   }, [])
 
+  // Auto-refresh QR every 15 s until connected — WAHA QR codes expire quickly
+  useEffect(() => {
+    if (success) return
+    const id = setInterval(() => {
+      fetch('/api/waha/qr').then(r => r.json())
+        .then(d => setQrData({ qr: d.qr || '', found: !!d.found }))
+        .catch(() => {})
+    }, 15000)
+    return () => clearInterval(id)
+  }, [success])
+
   const manualCheck = async () => {
     setChecking(true)
     try {
@@ -2586,10 +2597,9 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
             </div>
             <div className="flex-1 overflow-auto p-4 min-h-0">
               {qrData.found ? (
-                <pre style={{ fontSize: '6px', lineHeight: '7px', letterSpacing: '0px', backgroundColor: '#000', color: '#fff' }}
-                  className="font-mono p-3 rounded-xl whitespace-pre overflow-auto">
-                  {qrData.qr}
-                </pre>
+                <div className="flex items-center justify-center p-3 rounded-xl bg-white">
+                  <img src={qrData.qr} alt="WhatsApp QR" className="w-full max-w-xs" />
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <p className="text-sm text-gray-500 text-center">

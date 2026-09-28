@@ -8,7 +8,6 @@ const path                 = require('path');
 const fs                   = require('fs');
 const multer               = require('multer');
 const cron                 = require('node-cron');
-const { execSync }         = require('child_process');
 
 const db       = require('./services/db');
 const sheets   = require('./services/sheets');
@@ -839,33 +838,19 @@ app.post('/api/waha/restart', async (req, res) => {
   }
 });
 
-app.get('/api/waha/qr', adminAuth, (req, res) => {
+app.get('/api/waha/qr', adminAuth, async (req, res) => {
+  const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
+  const wahaSession = process.env.WAHA_SESSION  || 'default';
+  const wahaApiKey  = process.env.WAHA_API_KEY  || 'bni123';
   try {
-    const raw   = execSync('docker logs waha --tail 100 2>&1', { timeout: 5000 }).toString();
-    // Strip ALL ANSI escape codes
-    const clean = raw
-      .replace(/\x1b\[[0-9;]*m/g, '')
-      .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-
-    // Extract QR block — lines that consist entirely of block-drawing chars + spaces
-    const lines   = clean.split('\n');
-    const qrLines = [];
-    let inQR      = false;
-
-    for (const line of lines) {
-      const stripped = line.replace(/\s/g, '');
-      const isQRLine = stripped.length > 10 && /^[█▀▄\s]+$/.test(line);
-      if (isQRLine) {
-        inQR = true;
-        qrLines.push(line);
-      } else if (inQR && stripped.length === 0) {
-        qrLines.push('');
-      } else if (inQR && !isQRLine && qrLines.length > 5) {
-        break;
-      }
-    }
-
-    res.json({ qr: qrLines.join('\n'), found: qrLines.length > 5 });
+    const response = await fetch(`${wahaUrl}/api/${wahaSession}/auth/qr`, {
+      headers: { 'X-Api-Key': wahaApiKey },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`WAHA ответил ${response.status}`);
+    const buffer  = Buffer.from(await response.arrayBuffer());
+    const dataUrl = `data:image/png;base64,${buffer.toString('base64')}`;
+    res.json({ qr: dataUrl, found: true });
   } catch (err) {
     res.json({ qr: '', found: false, error: err.message });
   }
