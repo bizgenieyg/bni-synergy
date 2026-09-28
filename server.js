@@ -42,7 +42,7 @@ if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
 if (db.getSetting('meeting_waze_url') === null) db.setSetting('meeting_waze_url', '');
 if (db.getSetting('unconfirmed_notify_phone') === null) db.setSetting('unconfirmed_notify_phone', '');
 
-const PAYBOX_LINK       = 'https://links.payboxapp.com/2vFKGJA1VVb';
+const PAYBOX_LINK       = 'https://links.payboxapp.com/7SB6P3stE6b';
 
 // ─── Multer (photo uploads) ───────────────────────────────────────────────────
 
