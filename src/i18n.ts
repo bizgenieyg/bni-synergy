@@ -194,7 +194,7 @@ const resources = {
     translation: {
       nav: {
         guests: 'Гости',
-        members: 'Члены',
+        members: 'Участники',
         voting: 'Голосование',
         groupValue: 'Group Value',
         presentations: 'Презентации',
@@ -268,11 +268,11 @@ const resources = {
         paidLabel: 'Оплачено',
       },
       members: {
-        title: 'Члены',
+        title: 'Участники',
         upcomingBirthdays: '🎂 Дни рождения (ближайшие 14 дней)',
         pdfCatalog: 'PDF каталог',
-        addMember: 'Добавить члена',
-        searchPlaceholder: 'Поиск членов…',
+        addMember: 'Добавить участника',
+        searchPlaceholder: 'Поиск участников…',
         showInactive: 'Показать неактивных',
         colName: 'Имя',
         colProfession: 'Профессия',
@@ -284,11 +284,11 @@ const resources = {
         inviteTitle: 'Пригласить гостя',
         deactivate: 'Деактивировать',
         activate: 'Активировать',
-        noMembers: 'Члены не найдены',
+        noMembers: 'Участники не найдены',
       },
       memberModal: {
-        newTitle: 'Новый член',
-        editTitle: 'Редактировать члена',
+        newTitle: 'Новый участник',
+        editTitle: 'Редактировать участника',
         profilePhoto: 'Фото профиля',
         changePhoto: 'Изменить фото',
         uploadPhoto: 'Загрузить фото',

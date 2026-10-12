@@ -700,12 +700,13 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   const link = member
     ? `https://bnisynergy.biz/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}${phoneDigits ? `&phone=${phoneDigits}` : ''}`
     : ''
-  const copy = () => link && navigator.clipboard.writeText(link)
+  const text = `Для регистрации перейдите, пожалуйста, по ссылке ниже и укажите имя и фамилию, а также название бизнеса, как вы хотели бы, чтобы вас представили на русском языке.\nПосле регистрации вы получите ссылку на оплату и ссылку для навигатора. Регистрация позволит заранее подготовить для вас бейдж, правильно представить вас на встрече, а после встречи — получить контакты всех участников группы.\n\n${link}\n\nБудем рады видеть вас на встрече!`
+  const copy = () => link && navigator.clipboard.writeText(text)
   const wa = () => {
     if (!link) return
     const url = phoneDigits
-      ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(link)}`
-      : `https://wa.me/?text=${encodeURIComponent(link)}`
+      ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`
     window.open(url, '_blank')
   }
 

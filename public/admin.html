@@ -490,7 +490,7 @@
     </a></li>
     <li><a href="#members" class="nav-item" data-page="members">
       <span class="nav-icon"><i data-lucide="user-check"></i></span>
-      <span class="nav-label">Члены группы</span>
+      <span class="nav-label">Участники группы</span>
     </a></li>
     <li><a href="#voting" class="nav-item" data-page="voting">
       <span class="nav-icon"><i data-lucide="bar-chart-2"></i></span>
@@ -567,7 +567,7 @@
       <div class="stat-cards">
         <div class="stat-card">
           <div class="stat-bg-icon color-red"><i data-lucide="users"></i></div>
-          <div class="stat-lbl">Членов группы</div>
+          <div class="stat-lbl">Участников группы</div>
           <div class="stat-num" id="dashMembers">—</div>
         </div>
         <div class="stat-card">
@@ -644,13 +644,13 @@
 
     <!-- ══ MEMBERS ══ -->
     <div id="page-members" class="page hidden">
-      <h1 class="page-title">Члены группы</h1>
+      <h1 class="page-title">Участники группы</h1>
       <div id="birthdaySection" class="bday-section" style="display:none">
         <div class="bday-title">🎂 Дни рождения — ближайшие 14 дней</div>
         <div id="birthdayList"></div>
       </div>
       <div class="toolbar">
-        <button class="btn btn-red btn-sm" onclick="openMemberModal()"><i data-lucide="plus"></i> Добавить члена</button>
+        <button class="btn btn-red btn-sm" onclick="openMemberModal()"><i data-lucide="plus"></i> Добавить участника</button>
         <a class="btn btn-gray btn-sm" href="/api/pdf/members" target="_blank"><i data-lucide="file-text"></i> Каталог PDF</a>
         <a class="btn btn-gray btn-sm" href="/members-catalog" target="_blank"><i data-lucide="globe"></i> Каталог</a>
         <label style="display:flex;align-items:center;gap:6px;margin-left:auto;cursor:pointer;font-weight:400">
@@ -665,7 +665,7 @@
           </tr></thead>
           <tbody id="membersBody"></tbody>
         </table>
-        <div id="emptyMembers" class="empty-msg" style="display:none">Нет членов группы</div>
+        <div id="emptyMembers" class="empty-msg" style="display:none">Нет участников группы</div>
       </div>
     </div>
 
@@ -862,7 +862,7 @@
     <div style="margin-bottom:12px">
       <label>Кто приглашает?</label>
       <select id="inviteMember" onchange="buildInviteLink()">
-        <option value="">— Выберите члена группы —</option>
+        <option value="">— Выберите участника группы —</option>
       </select>
     </div>
     <div style="margin-bottom:16px">
@@ -897,7 +897,7 @@
 <!-- Member add/edit -->
 <div class="modal-overlay" id="modalMember">
   <div class="modal" style="width:600px">
-    <h3 id="memberModalTitle">Добавить члена группы</h3>
+    <h3 id="memberModalTitle">Добавить участника группы</h3>
     <input type="hidden" id="memberEditId" />
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div id="mAvatarWrap"></div>
@@ -1428,7 +1428,7 @@
   }
 
   async function deactivateMember(id) {
-    if (!confirm('Деактивировать члена?')) return;
+    if (!confirm('Деактивировать участника?')) return;
     try {
       await api(`/api/members/${id}`, { method: 'DELETE' });
       await loadMembers(); renderMembers();
@@ -1448,7 +1448,7 @@
   async function openMemberModal(id) {
     document.getElementById('memberEditId').value = id || '';
     const isEdit = !!id;
-    document.getElementById('memberModalTitle').textContent = isEdit ? '✏️ Редактировать члена' : '+ Добавить члена';
+    document.getElementById('memberModalTitle').textContent = isEdit ? '✏️ Редактировать участника' : '+ Добавить участника';
     document.getElementById('mPhotoFile').value = '';
     mSocials = [];
     renderMSocials();
@@ -1762,7 +1762,7 @@
   // ── Invite Guest Modal ─────────────────────────────────────────────────────────
   function populateInviteModal() {
     const sel = document.getElementById('inviteMember');
-    sel.innerHTML = '<option value="">— Выберите члена группы —</option>' +
+    sel.innerHTML = '<option value="">— Выберите участника группы —</option>' +
       allMembers.filter(m => m.active).map(m => `<option value="${esc(m.name)}">${esc(m.name)}</option>`).join('');
     document.getElementById('inviteLinkWrap').style.display = 'none';
   }
@@ -1807,7 +1807,7 @@
       api('/api/members').then(members => {
         const active = members.filter(m => m.active && m.phone);
         document.getElementById('contactsText').value =
-          'Контакты членов группы BNI SYNERGY 🤝\n\n' +
+          'Контакты участников группы BNI SYNERGY 🤝\n\n' +
           active.map(m => `${m.name}\n${m.profession}\n📱 ${m.phone}`).join('\n\n');
       }).catch(() => {});
     }

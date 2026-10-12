@@ -309,7 +309,7 @@ function generateMembersCatalog(res, members, uploadsDir) {
   function drawPageHeader() {
     const hy = MY + 4;
     doc.font(F.bold).fontSize(22).fillColor('#111111')
-       .text('Члены группы', MX, hy, { lineBreak: false });
+       .text('Участники группы', MX, hy, { lineBreak: false });
     doc.font(F.bold).fontSize(22).fillColor(RED)
        .text('BNI SYNERGY', MX, hy, { width: CARD_W, align: 'right', lineBreak: false });
     // Thin underline

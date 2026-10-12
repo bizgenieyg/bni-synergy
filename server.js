@@ -102,6 +102,38 @@ function buildConfirmationMessage(guest, settings, presenter = null) {
     `BNI Synergy`;
 }
 
+function buildGuestGuideMessage(guest) {
+  return [
+    '📋 ПАМЯТКА ДЛЯ ГОСТЕЙ',
+    '',
+    'Вы у нас в гостях. Что будет на встрече?',
+    '',
+    'Мы рады видеть вас на встрече BNI. Вот короткий путеводитель, чтобы вы заранее знали, что будет происходить.',
+    '',
+    '1️⃣ До начала встречи',
+    'Будет время познакомиться и пообщаться с участниками и гостями. Если вы никого не знаете — не страшно. Наша команда гостеприимства подскажет, с кем вам может быть полезно познакомиться, и поможет представиться.',
+    '',
+    '2️⃣ Во время встречи',
+    'Каждый участник коротко расскажет о себе и своём бизнесе. Не пытайтесь запомнить всех: после встречи мы пришлём вам каталог участников с контактами. Просто отметьте тех, с кем вам хотелось бы поговорить подробнее.',
+    '',
+    '3️⃣ Ваши 30 секунд',
+    'Гостям тоже дадут слово. Заранее подготовьте короткое представление:',
+    '- Как вас зовут',
+    '- Чем вы занимаетесь',
+    '- Кому помогаете',
+    '- С каким запросом к вам обращаться',
+    '',
+    'Например: «Меня зовут Анна, я семейный фотограф. Я снимаю семьи, пары и детей — не постановочно, а так, чтобы на фотографиях оставались живые эмоции. Ко мне часто приходят люди, которые говорят: "Я вообще не умею позировать" — и моя задача сделать так, чтобы им было легко и комфортно перед камерой. Сейчас мне особенно интересны знакомства с семьями, которые планируют семейную съёмку, день рождения или другое важное событие. Если среди ваших знакомых есть такие люди, буду рада знакомству».',
+    '',
+    'Подсказка: можно записать текст в телефон и прочитать с экрана — это совершенно нормально. И главное — не волнуйтесь. Мы сделаем всё, чтобы вам было комфортно.',
+    '',
+    '4️⃣ После встречи',
+    'Подойдите к участникам, которые вас заинтересовали, познакомьтесь и обменяйтесь контактами. А если хочется поговорить подробнее — договоритесь о встрече 1:1, чтобы спокойно узнать больше о бизнесе друг друга.',
+    '',
+    'Команда BNI SYNERGY',
+  ].join('\n');
+}
+
 // ─── Message variants (anti-spam) ─────────────────────────────────────────────
 
 function pickVariant(arr) {
@@ -119,7 +151,7 @@ const VOTING_VARIANTS = [
 ];
 
 const CONTACTS_VARIANTS = [
-  (name, contacts) => `${name}, вот контакты членов группы BNI SYNERGY:\n\n${contacts}\n\nБудем рады видеть вас снова! 🤝`,
+  (name, contacts) => `${name}, вот контакты участников группы BNI SYNERGY:\n\n${contacts}\n\nБудем рады видеть вас снова! 🤝`,
   (name, contacts) => `Шалом, ${name}! 👋 Контакты наших специалистов BNI:\n\n${contacts}`,
   (name, contacts) => `${name}, спасибо за визит в BNI SYNERGY! 🙌\nПолезные контакты:\n\n${contacts}`,
   (name, contacts) => `Привет, ${name}! Держите контакты группы BNI 📇\n\n${contacts}`,
@@ -422,6 +454,11 @@ app.post('/api/guests/:id/confirm', (req, res) => {
     db.markDeclined(guest.id);
   } else {
     db.markConfirmed(guest.id);
+    if (guest.wa_enabled && !guest.guide_sent && guest.phone) {
+      whatsapp.sendMessage(guest.phone, buildGuestGuideMessage(guest))
+        .then(() => db.markGuideSent(guest.id))
+        .catch(err => console.error('[GuestGuide] send failed:', err.message));
+    }
   }
   res.json({ success: true, confirmed: status });
 });
@@ -444,7 +481,7 @@ app.post('/api/members', (req, res) => {
     res.json({ success: true, id });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
-      return res.status(409).json({ error: 'Член с таким именем уже существует' });
+      return res.status(409).json({ error: 'Участник с таким именем уже существует' });
     }
     throw err;
   }
@@ -459,13 +496,13 @@ app.put('/api/members/reorder', adminAuth, (req, res) => {
 
 app.put('/api/members/:id', (req, res) => {
   const member = db.updateMember(Number(req.params.id), req.body);
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   res.json({ success: true, member });
 });
 
 app.delete('/api/members/:id', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   db.setMemberActive(member.id, 0);
   res.json({ success: true });
 });
@@ -476,20 +513,20 @@ app.get('/api/members/count', (req, res) => {
 
 app.get('/api/members/:id', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   res.json(member);
 });
 
 app.get('/api/members/:id/photo', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   res.json({ url: member.photo ? `/uploads/${member.photo}` : null });
 });
 
 app.post('/api/members/:id/photo', upload.single('photo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
   const member = db.getMemberById(Number(req.params.id));
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
 
   // Delete old photo file if filename changed
   if (member.photo && member.photo !== req.file.filename) {
@@ -502,13 +539,13 @@ app.post('/api/members/:id/photo', upload.single('photo'), (req, res) => {
 
 app.patch('/api/members/:id/profile', (req, res) => {
   const member = db.updateMemberProfile(Number(req.params.id), req.body);
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   res.json({ success: true, member });
 });
 
 app.patch('/api/members/:id/activate', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   db.setMemberActive(member.id, 1);
   res.json({ success: true });
 });
@@ -520,7 +557,7 @@ app.get('/api/members/:id/socials', (req, res) => {
 
 app.put('/api/members/:id/socials', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
-  if (!member) return res.status(404).json({ error: 'Член не найден' });
+  if (!member) return res.status(404).json({ error: 'Участник не найден' });
   const { socials } = req.body;
   if (!Array.isArray(socials)) return res.status(400).json({ error: 'socials должен быть массивом' });
   db.setMemberSocials(member.id, socials.filter(s => s.platform && s.url));
@@ -650,7 +687,7 @@ app.get('/api/birthdays/upcoming', (req, res) => {
 
 app.post('/api/members/:id/wish-birthday', async (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
-  if (!member)        return res.status(404).json({ error: 'Член не найден' });
+  if (!member)        return res.status(404).json({ error: 'Участник не найден' });
   if (!member.phone)  return res.status(400).json({ error: 'Нет номера телефона' });
 
   const msg =
