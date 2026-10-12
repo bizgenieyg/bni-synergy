@@ -1168,6 +1168,34 @@ cron.schedule('0 19 * * 0', async () => {
   }
 }, { timezone: 'Asia/Jerusalem' });
 
+// ─── Cron: Monday 10:00 — send members catalog link to guests of today's meeting ─
+
+cron.schedule('0 10 * * 1', async () => {
+  console.log('[Cron] Понедельник 10:00 — рассылка каталога участников');
+  const settings    = db.getAllSettings();
+  const meetingDate = settings.next_meeting_date || NEXT_MEETING_DATE;
+  if (meetingDate !== getTodayStr()) {
+    console.log(`[Cron] Встреча ${meetingDate || '(не задана)'} не сегодня, пропускаем`);
+    return;
+  }
+  if (settings.catalog_sent_for === meetingDate) {
+    console.log('[Cron] Каталог на эту встречу уже отправлен, пропускаем');
+    return;
+  }
+  db.setSetting('catalog_sent_for', meetingDate);
+
+  const guests = db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled === 1);
+  console.log(`[Cron] Каталог: найдено ${guests.length} гостей`);
+
+  const results = await whatsapp.sendWithDelay(guests, g =>
+    `${whatsapp.getFirstName(g.name)}, спасибо, что были на встрече BNI SYNERGY! 🙏\n\n` +
+    `Как и обещали, делимся каталогом участников группы — здесь контакты всех, с кем вы познакомились:\n\n` +
+    `👉 https://bnisynergy.biz/members-catalog\n\n` +
+    `Будем рады видеть вас снова! 🤝`
+  );
+  console.log(`[Cron] Каталог готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
+}, { timezone: 'Asia/Jerusalem' });
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
