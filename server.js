@@ -81,7 +81,7 @@ function getTodayStr() {
          String(d.getFullYear()).slice(2);
 }
 
-function buildConfirmationMessage(guest, settings, presenter = null) {
+function buildConfirmationMessage(guest, settings, presenter = null, memberCount = 0) {
   const meetingType = settings.meeting_type || 'offline';
   const location    = settings.meeting_location || '';
   const zoomUrl     = settings.meeting_zoom_url || '';
@@ -91,12 +91,22 @@ function buildConfirmationMessage(guest, settings, presenter = null) {
     ? `💻 Встреча пройдёт онлайн в Zoom\n🔗 ${zoomUrl}`
     : `📍 ${location}`;
   const presenterLine = (presenter && presenter.member_name)
-    ? `\n\n🎤 На встрече выступит:\n${presenter.member_name}${presenter.member_profession ? ' — ' + presenter.member_profession : ''}`
+    ? `\n🎤 Спикер встречи: ${presenter.member_name}${presenter.member_profession ? ' — ' + presenter.member_profession : ''}`
+    : '';
+  const countText = memberCount >= 10 ? `более ${Math.floor(memberCount / 10) * 10}` : String(memberCount);
+  const attendeesLine = memberCount > 0
+    ? `На встрече примут участие ${countText} владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.\n\n`
     : '';
   return `Здравствуйте, ${firstName}! 👋\n\n` +
-    `Напоминаем о встрече BNI Synergy:\n` +
-    `📅 Понедельник, ${dateStr} в 7:30\n\n` +
-    `${locationLine}${presenterLine}\n\n` +
+    `Группа BNI SYNERGY приглашает вас на утреннюю бизнес-встречу!\n\n` +
+    attendeesLine +
+    `📅 Понедельник, ${dateStr} в 7:30\n` +
+    `${locationLine}\n\n` +
+    `Вас ждёт:\n` +
+    `✅ Личное представление\n` +
+    `✅ Бизнес-лекция от нашего спикера\n` +
+    `✅ Бизнес-завтрак\n` +
+    `✅ Стоимость участия 80₪${presenterLine}\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
     `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
     `BNI Synergy`;
@@ -332,7 +342,7 @@ app.post('/api/register', async (req, res) => {
 
   // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
   if (settings.confirmation_sent_for === meetingDate) {
-    const confirmMsg = buildConfirmationMessage({ id, name, meetingDate, phone, specialty, invitedBy }, settings, presenter);
+    const confirmMsg = buildConfirmationMessage({ id, name, meetingDate, phone, specialty, invitedBy }, settings, presenter, db.getActiveMembers().length);
     setTimeout(() => {
       whatsapp.sendMessage(phone, confirmMsg)
         .then(async () => {
@@ -844,7 +854,7 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
   db.setSetting('confirmation_sent_for', meeting_date);
   res.json({ sent: guests.length });
 
-  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings))
+  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings, null, db.getActiveMembers().length))
     .then(r => {
       db.setSetting('confirmation_sent_date', getTodayStr());
       console.log(`[Confirmations] Done: ${r.sent} sent, ${r.failed} failed`);
@@ -1113,7 +1123,7 @@ cron.schedule('0 18 * * 0', async () => {
   ).all(nextMeeting);
   console.log(`[Cron] Найдено ${guests.length} неподтверждённых гостей`);
 
-  const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings));
+  const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings, null, db.getActiveMembers().length));
   db.setSetting('confirmation_sent_date', today);
   db.setSetting('confirmation_sent_for', nextMeeting);
   console.log(`[Cron] Готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
