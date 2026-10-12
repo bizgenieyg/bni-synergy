@@ -1164,6 +1164,25 @@ function GuestsSection() {
   const [editingSpecialty, setEditingSpecialty] = useState<string | null>(null)
   const [specialtyDraft, setSpecialtyDraft] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Guest | null>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [allGuests, setAllGuests] = useState<Guest[] | null>(null)
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(id)
+  }, [search])
+
+  const searchMode = debouncedSearch.length >= 2
+
+  useEffect(() => {
+    if (!searchMode) { setAllGuests(null); return }
+    if (allGuests !== null) return
+    let cancelled = false
+    setLoading(true)
+    api('/api/guests').then(r => r.json()).then(g => { if (!cancelled) { setAllGuests(g); setLoading(false) } })
+      .catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [searchMode, allGuests])
 
   useEffect(() => {
     Promise.all([
@@ -1185,34 +1204,57 @@ function GuestsSection() {
     api(`/api/guests?date=${selectedDate}`).then(r => r.json()).then(g => { setGuests(g); setLoading(false) })
   }, [selectedDate])
 
-  const filtered = guests.filter(g =>
-    `${g.name} ${g.phone} ${g.specialty}`.toLowerCase().includes(search.toLowerCase()))
+  const normPhone = (v: string) => {
+    const d = (v || '').replace(/\D/g, '')
+    return d.startsWith('972') ? '0' + d.slice(3) : d
+  }
+  const matchesQuery = (g: Guest, q: string) => {
+    const ql = q.toLowerCase()
+    if (`${g.name} ${g.specialty} ${g.invitedBy} ${g.email} ${g.phone}`.toLowerCase().includes(ql)) return true
+    if (!/^[\d\s\-+()]+$/.test(q)) return false
+    const qd = normPhone(q)
+    return qd.length > 0 && normPhone(g.phone).includes(qd)
+  }
+
+  const query = search.trim()
+  const source = searchMode ? (allGuests ?? []) : guests
+  const filtered = (query ? source.filter(g => matchesQuery(g, searchMode ? debouncedSearch : query)) : source)
+  const shown = searchMode
+    ? [...filtered].sort((a, b) => parseDateStr(b.meetingDate) - parseDateStr(a.meetingDate))
+    : filtered
+
+  const mutateGuests = (fn: (gs: Guest[]) => Guest[]) => {
+    setGuests(fn)
+    setAllGuests(a => (a ? fn(a) : a))
+  }
 
   const markPaid = async (id: string) => {
     await api(`/api/guests/${id}/paid`, { method: 'PUT' })
-    setGuests(gs => gs.map(g => g.id === id ? { ...g, paid: 1 } : g))
+    mutateGuests(gs => gs.map(g => g.id === id ? { ...g, paid: 1 } : g))
   }
 
   const toggleWa = async (id: string) => {
     const r = await api(`/api/guests/${id}/wa-toggle`, { method: 'PATCH' })
     const { wa_enabled } = await r.json()
-    setGuests(gs => gs.map(g => g.id === id ? { ...g, wa_enabled } : g))
+    mutateGuests(gs => gs.map(g => g.id === id ? { ...g, wa_enabled } : g))
   }
 
   const saveSpecialty = async (id: string) => {
     await api(`/api/guests/${id}`, { method: 'PATCH', body: JSON.stringify({ specialty: specialtyDraft }) })
-    setGuests(gs => gs.map(g => g.id === id ? { ...g, specialty: specialtyDraft } : g))
+    mutateGuests(gs => gs.map(g => g.id === id ? { ...g, specialty: specialtyDraft } : g))
     setEditingSpecialty(null)
   }
 
   const deleteGuest = async (id: string) => {
     await api(`/api/guests/${id}`, { method: 'DELETE' })
-    setGuests(gs => gs.filter(g => g.id !== id))
+    mutateGuests(gs => gs.filter(g => g.id !== id))
+    setAllGuests(null)
     setDeleteConfirm(null)
   }
 
-  const paid      = guests.filter(g => g.paid).length
-  const confirmed = guests.filter(g => g.confirmed).length
+  const statGuests = searchMode ? shown : guests
+  const paid      = statGuests.filter(g => g.paid).length
+  const confirmed = statGuests.filter(g => g.confirmed).length
 
   const sendCatalog = async () => {
     if (!selectedDate || sendingCatalog) return
@@ -1262,12 +1304,12 @@ function GuestsSection() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('guests.title')}</h1>
         <div className="flex gap-2">
-          <button onClick={sendConfirmations} disabled={sendingConfirmations || !selectedDate}
+          <button onClick={sendConfirmations} disabled={sendingConfirmations || !selectedDate || searchMode}
             className="text-xs px-3 py-2 rounded-xl border border-blue-200 bg-white text-blue-600 hover:border-blue-300 flex items-center gap-1.5 disabled:opacity-50">
             {sendingConfirmations ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
             Разослать подтверждения
           </button>
-          <button onClick={sendCatalog} disabled={sendingCatalog || !selectedDate}
+          <button onClick={sendCatalog} disabled={sendingCatalog || !selectedDate || searchMode}
             className="text-xs px-3 py-2 rounded-xl border border-green-200 bg-white text-green-600 hover:border-green-300 flex items-center gap-1.5 disabled:opacity-50">
             {sendingCatalog ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             {t('guests.sendCatalog')}
@@ -1345,11 +1387,11 @@ function GuestsSection() {
         )}
       </div>
 
-      {selectedDate && (
+      {(selectedDate || searchMode) && (
         <div className="flex gap-3 text-sm text-gray-600">
-          <span className="font-semibold text-gray-900">{guests.length}</span> {t('guests.guests')} ·
+          <span className="font-semibold text-gray-900">{statGuests.length}</span> {t('guests.guests')} ·
           <span className="text-green-600 font-semibold">{paid}</span> {t('guests.paid')} ·
-          <span className="text-gray-400">{guests.length - paid}</span> {t('guests.unpaid')} ·
+          <span className="text-gray-400">{statGuests.length - paid}</span> {t('guests.unpaid')} ·
           <span className="text-blue-600 font-semibold">{confirmed}</span> подтвердили
         </div>
       )}
@@ -1360,16 +1402,23 @@ function GuestsSection() {
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 bg-white" />
       </div>
 
+      {searchMode && (
+        <div className="text-sm text-gray-600">
+          Поиск по всей базе: найдено <span className="font-semibold text-gray-900">{allGuests === null ? '…' : shown.length}</span>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
         {loading ? (
           <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
-        ) : filtered.length === 0 ? (
+        ) : shown.length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">{search ? t('guests.nothingFound') : t('guests.noGuests')}</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
                 <th className="px-4 py-3 font-medium">{t('guests.colName')}</th>
+                {searchMode && <th className="px-4 py-3 font-medium">Встреча</th>}
                 <th className="px-4 py-3 font-medium">{t('guests.colPhone')}</th>
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
                 <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('guests.colInvitedBy')}</th>
@@ -1381,9 +1430,10 @@ function GuestsSection() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(g => (
+              {shown.map(g => (
                 <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
+                  {searchMode && <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>{g.meetingDate}</td>}
                   <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
                       className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{formatPhoneDisplay(g.phone)}</a>
