@@ -484,10 +484,10 @@ app.get('/api/members', (req, res) => {
 });
 
 app.post('/api/members', (req, res) => {
-  const { name, profession, phone, birthday } = req.body;
+  const { name, profession, name_he, phone, birthday } = req.body;
   if (!name) return res.status(400).json({ error: 'name обязателен' });
   try {
-    const id = db.insertMember({ name, profession, phone, birthday });
+    const id = db.insertMember({ name, profession, name_he, phone, birthday });
     res.json({ success: true, id });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {

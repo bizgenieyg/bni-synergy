@@ -304,16 +304,16 @@ function getMemberById(id) {
   return db.prepare('SELECT * FROM members WHERE id = ?').get(id);
 }
 
-function insertMember({ name, profession, profession_he, phone, birthday }) {
+function insertMember({ name, profession, profession_he, name_he, phone, birthday }) {
   const createdAt = new Date().toISOString();
   const info = db.prepare(
-    `INSERT INTO members (name, profession, profession_he, phone, birthday, active, createdAt)
-     VALUES (?, ?, ?, ?, ?, 1, ?)`
-  ).run(name.trim(), (profession || '').trim(), (profession_he || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt);
+    `INSERT INTO members (name, profession, profession_he, name_he, phone, birthday, active, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+  ).run(name.trim(), (profession || '').trim(), (profession_he || '').trim(), (name_he || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt);
   return info.lastInsertRowid;
 }
 
-function updateMember(id, { name, profession, profession_he, phone, birthday, active }) {
+function updateMember(id, { name, profession, profession_he, name_he, phone, birthday, active }) {
   const current = getMemberById(id);
   if (!current) return null;
   db.prepare(
@@ -321,6 +321,7 @@ function updateMember(id, { name, profession, profession_he, phone, birthday, ac
        name          = ?,
        profession    = ?,
        profession_he = ?,
+       name_he       = ?,
        phone         = ?,
        birthday      = ?,
        active        = ?
@@ -329,6 +330,7 @@ function updateMember(id, { name, profession, profession_he, phone, birthday, ac
     (name          ?? current.name).trim(),
     (profession    ?? current.profession).trim(),
     (profession_he ?? current.profession_he ?? '').trim(),
+    (name_he       ?? current.name_he ?? '').trim(),
     normalizePhone(phone ?? current.phone),
     (birthday      ?? current.birthday).trim(),
     active         ?? current.active,
@@ -374,6 +376,32 @@ try { db.exec("ALTER TABLE members ADD COLUMN photo TEXT"); } catch {}
 try { db.exec("ALTER TABLE members ADD COLUMN profession_he TEXT NOT NULL DEFAULT ''"); } catch {}
 // Migrate: add sort_order
 try { db.exec("ALTER TABLE members ADD COLUMN sort_order INTEGER DEFAULT 999"); } catch {}
+// Migrate: Hebrew name as written in BNI Connect
+try { db.exec("ALTER TABLE members ADD COLUMN name_he TEXT NOT NULL DEFAULT ''"); } catch {}
+
+// Fill name_he from scripts/members_he.json (key = members.name, exact, active members only). Only empty values are filled.
+(function seedMembersHe() {
+  const file = path.join(__dirname, '..', 'scripts', 'members_he.json');
+  if (!fs.existsSync(file)) return;
+  const map = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const rows = db.prepare('SELECT id, name, name_he FROM members WHERE active = 1').all();
+  const byName = new Map(rows.map(r => [r.name, r]));
+  const upd = db.prepare("UPDATE members SET name_he = ? WHERE id = ? AND name_he = ''");
+  let filled = 0;
+  db.transaction(() => {
+    for (const [name, he] of Object.entries(map)) {
+      const r = byName.get(name);
+      if (r && !r.name_he) filled += upd.run(he, r.id).changes;
+    }
+  })();
+  const unmatchedKeys = Object.keys(map).filter(k => !byName.has(k));
+  const noHe = db.prepare("SELECT name FROM members WHERE active = 1 AND name_he = '' ORDER BY name").all();
+  if (filled || unmatchedKeys.length || noHe.length) {
+    console.log(`[members_he] filled: ${filled}`);
+    if (unmatchedKeys.length) console.log(`[members_he] keys without active member in DB: ${unmatchedKeys.join('; ')}`);
+    if (noHe.length) console.log(`[members_he] active members without name_he: ${noHe.map(m => m.name).join('; ')}`);
+  }
+})();
 
 // ─── Schema: settings ─────────────────────────────────────────────────────────
 

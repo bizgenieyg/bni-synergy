@@ -40,6 +40,7 @@ interface Member {
   name: string
   profession: string
   profession_he?: string
+  name_he?: string
   phone: string
   birthday: string
   active: number
@@ -458,6 +459,7 @@ function MemberModal({ member, onClose, onSaved }:
     name: member?.name ?? '',
     profession: member?.profession ?? '',
     profession_he: member?.profession_he ?? '',
+    name_he: member?.name_he ?? '',
     phone: member?.phone ?? '',
     birthday: member?.birthday ?? '',
     active: member?.active ?? 1,
@@ -590,6 +592,16 @@ function MemberModal({ member, onClose, onSaved }:
           <div className="grid grid-cols-2 gap-3 mb-5">
             {field('name', t('memberModal.nameLabel'), t('memberModal.namePlaceholder'))}
             {field('profession', t('memberModal.professionLabel'), t('memberModal.professionPlaceholder'))}
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-gray-500 block mb-1">{t('memberModal.nameHeLabel')}</label>
+              <input
+                value={form.name_he}
+                onChange={e => setForm(f => ({ ...f, name_he: e.target.value }))}
+                placeholder="שם בעברית..."
+                dir="rtl"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400"
+              />
+            </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1">Профессия (иврит)</label>
               <input
