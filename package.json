@@ -8,13 +8,15 @@
     "dev": "vite",
     "build": "vite build",
     "dev:server": "nodemon server.js",
-    "postinstall": "node scripts/download-fonts.js"
+    "postinstall": "node scripts/download-fonts.js",
+    "test": "node --test tests/"
   },
   "dependencies": {
     "axios": "^1.7.0",
     "better-sqlite3": "^9.4.0",
     "bidi-js": "^1.0.3",
     "canvas-confetti": "^1.9.4",
+    "cheerio": "1.2.0",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
@@ -23,6 +25,8 @@
     "googleapis": "^144.0.0",
     "i18next": "^25.8.18",
     "lucide-react": "^0.577.0",
+    "mailauth": "4.13.3",
+    "mailparser": "3.9.38",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^4.2.1",
     "pdf-lib": "^1.17.1",

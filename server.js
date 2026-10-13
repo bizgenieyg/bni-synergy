@@ -12,6 +12,7 @@ const cron                 = require('node-cron');
 const db       = require('./services/db');
 const sheets   = require('./services/sheets');
 const whatsapp = require('./services/whatsapp');
+const mailIntake = require('./services/mailIntake');
 const pdf      = require('./services/pdf');
 
 const app  = express();
@@ -81,18 +82,23 @@ function getTodayStr() {
          String(d.getFullYear()).slice(2);
 }
 
-function buildConfirmationMessage(guest, settings, presenter = null, memberCount = 0) {
-  const meetingType = settings.meeting_type || 'offline';
-  const location    = settings.meeting_location || '';
-  const zoomUrl     = settings.meeting_zoom_url || '';
-  const dateStr     = formatMeetingDate(guest.meetingDate);
-  const firstName   = whatsapp.getFirstName(guest.name);
-  const locationLine = meetingType === 'zoom'
-    ? `💻 Встреча пройдёт онлайн в Zoom\n🔗 ${zoomUrl}`
-    : `📍 ${location}`;
-  const presenterLine = (presenter && presenter.member_name)
+function meetingLocationLine(settings) {
+  return (settings.meeting_type || 'offline') === 'zoom'
+    ? `💻 Встреча пройдёт онлайн в Zoom\n🔗 ${settings.meeting_zoom_url || ''}`
+    : `📍 ${settings.meeting_location || ''}`;
+}
+
+function speakerLine(presenter) {
+  return (presenter && presenter.member_name)
     ? `\n🎤 Спикер встречи: ${presenter.member_name}${presenter.member_profession ? ' — ' + presenter.member_profession : ''}`
     : '';
+}
+
+function buildConfirmationMessage(guest, settings, presenter = null, memberCount = 0) {
+  const dateStr     = formatMeetingDate(guest.meetingDate);
+  const firstName   = whatsapp.getFirstName(guest.name);
+  const locationLine  = meetingLocationLine(settings);
+  const presenterLine = speakerLine(presenter);
   const countText = memberCount >= 10 ? `более ${Math.floor(memberCount / 10) * 10}` : String(memberCount);
   const attendeesLine = memberCount > 0
     ? `На встрече примут участие ${countText} владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.\n\n`
@@ -107,6 +113,19 @@ function buildConfirmationMessage(guest, settings, presenter = null, memberCount
     `✅ Бизнес-лекция от нашего спикера\n` +
     `✅ Бизнес-завтрак\n` +
     `✅ Стоимость участия 80₪${presenterLine}\n\n` +
+    `Пожалуйста, подтвердите участие:\n` +
+    `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
+    `BNI Synergy`;
+}
+
+// First message to a guest registered from a BNI Connect email
+function buildIntakeInviteMessage(guest, settings, presenter = null) {
+  const firstName = (guest.name || '').trim().split(/\s+/)[0];
+  return `Здравствуйте${firstName ? ', ' + firstName : ''}! 👋\n\n` +
+    `Вас пригласили на встречу BNI Synergy:\n` +
+    `📅 Понедельник, ${formatMeetingDate(guest.meetingDate)} в 7:30\n\n` +
+    `${meetingLocationLine(settings)}${speakerLine(presenter)}\n\n` +
+    `Напишите, пожалуйста, ваше имя, профессию и как вас представить.\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
     `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
     `BNI Synergy`;
@@ -392,6 +411,66 @@ app.post('/api/paybox-webhook', async (req, res) => {
 app.get('/api/paybox-webhook', (req, res) => {
   res.set('Content-Type', 'text/xml; charset=utf-8');
   res.send('<?xml version="1.0" encoding="utf-8"?><response><result>ok</result></response>');
+});
+
+// ─── Mail intake (BNI Connect "guest registered" emails, piped in by Postfix) ──
+
+function isMeetingInPast(ddmmyy) {
+  const [d, m, y] = ddmmyy.split('/').map(Number);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }); // YYYY-MM-DD
+  const meeting = `20${String(y).padStart(2, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return meeting < today;
+}
+
+function onIntakeGuestCreated(g) {
+  sheets.appendGuest({
+    name: g.name, phone: g.phone, specialty: g.specialty, invitedBy: g.invitedBy, meetingDate: g.meetingDate,
+    paymentMethod: g.isSub ? `замена за ${g.invitedBy || '—'}` : 'онлайн', email: g.email,
+  })
+    .then(sheetRow => { if (sheetRow) db.updateSheetRow(g.id, sheetRow); })
+    .catch(err => console.error('[Sheets] appendGuest (mail intake) failed:', err.message));
+
+  if (!g.phone || !g.waEnabled || isMeetingInPast(g.meetingDate)) return;
+  const msg = buildIntakeInviteMessage(g, db.getAllSettings(), db.getPresentationByDate(g.meetingDate));
+  whatsapp.sendMessage(g.phone, msg)
+    .then(() => {
+      db.markWaSent(g.id);
+      db.setGuestProfileStatus(g.id, 'awaiting');
+    })
+    .catch(err => console.error('[MailIntake] WhatsApp invite failed:', err.message));
+}
+
+function isLocalIntakeRequest(req) {
+  const ip = req.socket.remoteAddress;
+  const loopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  // nginx always adds X-Real-IP, so a request that went through the proxy is never accepted here
+  return loopback && !req.headers['x-real-ip'] && !req.headers['x-forwarded-for'];
+}
+
+function intakeSecretOk(req) {
+  const expected = process.env.MAIL_INTAKE_SECRET || '';
+  const got = String(req.headers['x-intake-secret'] || '');
+  const h = s => crypto.createHash('sha256').update(s).digest();
+  return expected.length >= 16 && crypto.timingSafeEqual(h(got), h(expected));
+}
+
+app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }), async (req, res) => {
+  if (!isLocalIntakeRequest(req)) return res.status(404).end();
+  if (!process.env.MAIL_INTAKE_SECRET) return res.status(503).json({ error: 'MAIL_INTAKE_SECRET not configured' });
+  if (!intakeSecretOk(req)) return res.status(403).json({ error: 'forbidden' });
+  if (!Buffer.isBuffer(req.body)) return res.status(415).json({ error: 'send raw message with Content-Type: message/rfc822' });
+  if (!req.body.length) return res.status(400).json({ error: 'empty body' });
+  try {
+    const out = await mailIntake.handleIncomingMail(req.body, {
+      db,
+      nextMeetingDate: () => NEXT_MEETING_DATE,
+      afterCreate: onIntakeGuestCreated,
+    });
+    res.json(out);
+  } catch (err) {
+    console.error('[MailIntake] fatal:', err.stack || err.message);
+    res.status(500).json({ error: 'intake failed' });
+  }
 });
 
 // ─── Guests API ───────────────────────────────────────────────────────────────

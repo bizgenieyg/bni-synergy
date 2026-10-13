@@ -33,6 +33,8 @@ interface Guest {
   createdAt: string
   confirmed: number
   confirmed_at: string
+  source?: string
+  needs_review?: number
 }
 
 interface Member {
@@ -1444,7 +1446,15 @@ function GuestsSection() {
             <tbody>
               {shown.map(g => (
                 <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    {g.name}
+                    {g.source === 'bni_email' && (
+                      <span className="ml-2 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">из письма BNI</span>
+                    )}
+                    {g.needs_review === 1 && (
+                      <span className="ml-1 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">проверить</span>
+                    )}
+                  </td>
                   {searchMode && <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>{g.meetingDate}</td>}
                   <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"

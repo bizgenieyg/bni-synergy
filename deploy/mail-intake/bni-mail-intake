@@ -1,0 +1,34 @@
+#!/bin/bash
+# Postfix pipe target: reads one raw message on stdin and hands it to the local app.
+# Exit 0 = done (or dropped for good), 75 = temporary failure, Postfix retries later.
+set -u
+
+ENV_FILE=/etc/bni-mail-intake.env
+MAX_BYTES=2097152
+
+if [ ! -r "$ENV_FILE" ]; then
+  logger -t bni-mail-intake "cannot read $ENV_FILE"
+  exit 75
+fi
+# shellcheck disable=SC1090
+. "$ENV_FILE"   # MAIL_INTAKE_SECRET, optional MAIL_INTAKE_URL
+
+tmp=$(mktemp) || exit 75
+trap 'rm -f "$tmp"' EXIT
+head -c $((MAX_BYTES + 1)) > "$tmp"
+if [ "$(stat -c %s "$tmp")" -gt "$MAX_BYTES" ]; then
+  logger -t bni-mail-intake "message larger than $MAX_BYTES bytes, dropped"
+  exit 0
+fi
+
+code=$(curl -sS --max-time 60 -o /dev/null -w '%{http_code}' -X POST \
+  -H "X-Intake-Secret: ${MAIL_INTAKE_SECRET}" \
+  -H 'Content-Type: message/rfc822' \
+  --data-binary @"$tmp" \
+  "${MAIL_INTAKE_URL:-http://127.0.0.1:3000/internal/mail-intake}") || { logger -t bni-mail-intake "curl failed"; exit 75; }
+
+case "$code" in
+  2??) exit 0 ;;
+  403|404|5??) logger -t bni-mail-intake "app answered $code, will retry"; exit 75 ;;
+  *) logger -t bni-mail-intake "app answered $code, message dropped"; exit 0 ;;
+esac

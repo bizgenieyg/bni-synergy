@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed as /etc/cron.daily/bni-mail-intake-clean: keep raw intake emails for 30 days.
+find /var/mail-intake -type f -name '*.eml' -mtime +30 -delete
+find /var/mail-intake -mindepth 1 -type d -empty -delete

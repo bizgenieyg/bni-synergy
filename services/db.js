@@ -53,6 +53,20 @@ db.exec("UPDATE guests SET name = TRIM(firstName || ' ' || COALESCE(lastName, ''
 try { db.exec('ALTER TABLE guests ADD COLUMN confirmed INTEGER DEFAULT 0'); } catch {}
 try { db.exec('ALTER TABLE guests ADD COLUMN confirmed_at TEXT'); } catch {}
 try { db.exec('ALTER TABLE guests ADD COLUMN guide_sent INTEGER DEFAULT 0'); } catch {}
+try { db.exec("ALTER TABLE guests ADD COLUMN source TEXT NOT NULL DEFAULT ''"); } catch {}
+try { db.exec('ALTER TABLE guests ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0'); } catch {}
+try { db.exec("ALTER TABLE guests ADD COLUMN profile_status TEXT NOT NULL DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE guests ADD COLUMN introduction TEXT NOT NULL DEFAULT ''"); } catch {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mail_intake (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id  TEXT NOT NULL UNIQUE,
+    received_at TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    guest_id    TEXT,
+    raw_path    TEXT NOT NULL DEFAULT ''
+  );
+`);
 // Auto-confirm all guests registered before 2026-03-20
 db.exec("UPDATE guests SET confirmed = 1 WHERE createdAt < '2026-03-20T00:00:00.000Z' AND confirmed = 0");
 
@@ -162,20 +176,66 @@ function normalizePhone(phone) {
 
 // ─── Guests CRUD ──────────────────────────────────────────────────────────────
 
-function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null, email = '' }) {
+function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null, email = '',
+                       waEnabled = 1, source = '', needsReview = 0 }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
     INSERT INTO guests
-      (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled, email)
-    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled, email,
+       source, needs_review)
+    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name.trim(), normalizePhone(phone),
     (specialty || '').trim(), (invitedBy || '').trim(),
-    meetingDate, paid, paidAt, createdAt, (email || '').trim(),
+    meetingDate, paid, paidAt, createdAt, waEnabled, (email || '').trim(),
+    source, needsReview ? 1 : 0,
   );
   return id;
+}
+
+function findGuestByDatePhone(meetingDate, phone) {
+  const p = normalizePhone(phone);
+  if (!p) return null;
+  return db.prepare('SELECT * FROM guests WHERE meetingDate = ? AND phone = ? LIMIT 1').get(meetingDate, p) || null;
+}
+
+function findGuestByDateName(meetingDate, name) {
+  if (!name) return null;
+  return db.prepare('SELECT * FROM guests WHERE meetingDate = ? AND name = ? LIMIT 1').get(meetingDate, name.trim()) || null;
+}
+
+// Fill only empty text fields of an existing guest (used when a BNI email matches an already registered guest)
+function fillGuestEmptyFields(id, { name, specialty, invitedBy, email }) {
+  db.prepare(`
+    UPDATE guests SET
+      name      = CASE WHEN name = ''      THEN ? ELSE name END,
+      specialty = CASE WHEN specialty = '' THEN ? ELSE specialty END,
+      invitedBy = CASE WHEN invitedBy = '' THEN ? ELSE invitedBy END,
+      email     = CASE WHEN email = ''     THEN ? ELSE email END
+    WHERE id = ?
+  `).run((name || '').trim(), (specialty || '').trim(), (invitedBy || '').trim(), (email || '').trim(), id);
+}
+
+function setGuestProfileStatus(id, status) {
+  db.prepare('UPDATE guests SET profile_status = ? WHERE id = ?').run(status, id);
+}
+
+function claimMailIntake(messageId, rawPath = '') {
+  try {
+    db.prepare('INSERT INTO mail_intake (message_id, received_at, status, raw_path) VALUES (?, ?, ?, ?)')
+      .run(messageId, new Date().toISOString(), 'processing', rawPath);
+    return true;
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) return false;
+    throw err;
+  }
+}
+
+function finishMailIntake(messageId, { status, guestId = null, rawPath = '' }) {
+  db.prepare('UPDATE mail_intake SET status = ?, guest_id = ?, raw_path = ? WHERE message_id = ?')
+    .run(status, guestId, rawPath, messageId);
 }
 
 function findDuplicateGuest(meetingDate, phone, name) {
@@ -916,6 +976,12 @@ module.exports = {
   getGuestById,
   findGuestByPhone,
   findDuplicateGuest,
+  findGuestByDatePhone,
+  findGuestByDateName,
+  fillGuestEmptyFields,
+  setGuestProfileStatus,
+  claimMailIntake,
+  finishMailIntake,
   getTotalCount,
   normalizePhone,
   // members
