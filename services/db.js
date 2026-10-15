@@ -267,8 +267,13 @@ function markConfirmed(id) {
     .run(new Date().toISOString(), id);
 }
 
-function markGuideSent(id) {
-  db.prepare('UPDATE guests SET guide_sent = 1 WHERE id = ?').run(id);
+// Atomic: only the first confirm click wins the right to send the guide
+function claimGuideSent(id) {
+  return db.prepare('UPDATE guests SET guide_sent = 1 WHERE id = ? AND COALESCE(guide_sent, 0) = 0').run(id).changes === 1;
+}
+
+function releaseGuideSent(id) {
+  db.prepare('UPDATE guests SET guide_sent = 0 WHERE id = ?').run(id);
 }
 
 function markDeclined(id) {
@@ -967,7 +972,8 @@ module.exports = {
   markWaSent,
   markPaid,
   markConfirmed,
-  markGuideSent,
+  claimGuideSent,
+  releaseGuideSent,
   markDeclined,
   toggleWaEnabled,
   getGuestsByDate,

@@ -104,24 +104,8 @@ function speakerLine(presenter) {
     : '';
 }
 
-function buildConfirmationMessage(guest, settings, presenter = null, memberCount = 0) {
-  const dateStr     = formatMeetingDate(guest.meetingDate);
-  const firstName   = whatsapp.getFirstName(guest.name);
-  const locationLine  = meetingLocationLine(settings);
-  const presenterLine = speakerLine(presenter);
-  const countText = memberCount >= 10 ? `более ${Math.floor(memberCount / 10) * 10}` : String(memberCount);
-  const attendeesLine = memberCount > 0
-    ? `На встрече примут участие ${countText} владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.\n\n`
-    : '';
-  return `Здравствуйте, ${firstName}! 👋\n\n` +
-    `Группа BNI SYNERGY приглашает вас на утреннюю бизнес-встречу!\n\n` +
-    attendeesLine +
-    `📅 Понедельник, ${dateStr} в 7:30\n` +
-    `${locationLine}\n\n` +
-    `Вас ждёт:\n` +
-    `✅ Личное представление\n` +
-    `✅ Бизнес-лекция от нашего спикера\n` +
-    `✅ Бизнес-завтрак${presenterLine}\n\n` +
+function buildConfirmationMessage(guest) {
+  return `Здравствуйте, ${whatsapp.getFirstName(guest.name)}! 👋\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
     `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
     `BNI Synergy`;
@@ -372,18 +356,10 @@ app.post('/api/register', async (req, res) => {
 
   // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
   if (settings.confirmation_sent_for === meetingDate) {
-    const confirmMsg = buildConfirmationMessage({ id, name, meetingDate, phone, specialty, invitedBy }, settings, presenter, db.getActiveMembers().length);
+    const confirmMsg = buildConfirmationMessage({ id, name });
     setTimeout(() => {
       whatsapp.sendMessage(phone, confirmMsg)
-        .then(async () => {
-          db.markWaSent(id);
-          const photoPath = presenterPhotoPath(presenter);
-          if (photoPath) {
-            const caption = `${presenter.member_name}${presenter.member_profession ? '\n' + presenter.member_profession : ''}`;
-            await whatsapp.sendImage(phone, photoPath, caption)
-              .catch(err => console.error('[WhatsApp] sendImage (late-reg presenter) failed:', err.message));
-          }
-        })
+        .then(() => db.markWaSent(id))
         .catch(err => console.error('[WhatsApp] late-reg confirm failed:', err.message));
     }, 30000); // 30s delay so registration WA goes first
   }
@@ -554,10 +530,12 @@ app.post('/api/guests/:id/confirm', (req, res) => {
     db.markDeclined(guest.id);
   } else {
     db.markConfirmed(guest.id);
-    if (guest.wa_enabled && !guest.guide_sent && guest.phone) {
+    if (guest.wa_enabled && guest.phone && db.claimGuideSent(guest.id)) {
       whatsapp.sendMessage(guest.phone, buildGuestGuideMessage(guest))
-        .then(() => db.markGuideSent(guest.id))
-        .catch(err => console.error('[GuestGuide] send failed:', err.message));
+        .catch(err => {
+          console.error('[GuestGuide] send failed:', err.message);
+          db.releaseGuideSent(guest.id);
+        });
     }
   }
   res.json({ success: true, confirmed: status });
@@ -940,11 +918,10 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
   if (!meeting_date) return res.status(400).json({ error: 'meeting_date обязателен' });
 
   const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled === 1 && !g.confirmed);
-  const settings = db.getAllSettings();
   db.setSetting('confirmation_sent_for', meeting_date);
   res.json({ sent: guests.length });
 
-  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings, null, db.getActiveMembers().length))
+  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g))
     .then(r => {
       db.setSetting('confirmation_sent_date', getTodayStr());
       console.log(`[Confirmations] Done: ${r.sent} sent, ${r.failed} failed`);
@@ -1213,7 +1190,7 @@ cron.schedule('0 18 * * 0', async () => {
   ).all(nextMeeting);
   console.log(`[Cron] Найдено ${guests.length} неподтверждённых гостей`);
 
-  const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings, null, db.getActiveMembers().length));
+  const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g));
   db.setSetting('confirmation_sent_date', today);
   db.setSetting('confirmation_sent_for', nextMeeting);
   console.log(`[Cron] Готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
