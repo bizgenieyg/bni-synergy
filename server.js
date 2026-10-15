@@ -355,7 +355,7 @@ app.post('/api/register', async (req, res) => {
     .catch(err => console.error('[WhatsApp] sendMessage failed:', err.message));
 
   // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
-  if (settings.confirmation_sent_for === meetingDate) {
+  if (settings.confirmation_round1_for === meetingDate || settings.confirmation_round2_for === meetingDate) {
     const confirmMsg = buildConfirmationMessage({ id, name });
     setTimeout(() => {
       whatsapp.sendMessage(phone, confirmMsg)
@@ -919,11 +919,11 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
 
   const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled === 1 && !g.confirmed);
   db.setSetting('confirmation_sent_for', meeting_date);
+  db.setSetting('confirmation_round1_for', meeting_date); // manual send enables the 30-second confirmation for late registrations
   res.json({ sent: guests.length });
 
   whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g))
     .then(r => {
-      db.setSetting('confirmation_sent_date', getTodayStr());
       console.log(`[Confirmations] Done: ${r.sent} sent, ${r.failed} failed`);
     })
     .catch(err => console.error('[Broadcast] send-confirmations error:', err.message));
@@ -1171,69 +1171,22 @@ function checkBirthdays() {
 setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
 checkBirthdays();
 
-// ─── Cron: Sunday 18:00 — send confirmation reminders ────────────────────────
+// ─── Cron: confirmation waves (Asia/Jerusalem) ────────────────────────────────
+// Wave 1: Thursday 10:00, list to the manager at 11:00.  Wave 2: Sunday 18:00, list at 19:00.
+// Each wave keeps its own state so "already sent today" never blocks the other one.
 
-cron.schedule('0 18 * * 0', async () => {
-  console.log('[Cron] Воскресенье 18:00 — проверка рассылки подтверждений');
-  const settings = db.getAllSettings();
-  const nextMeeting = settings.next_meeting_date || NEXT_MEETING_DATE;
-  if (!nextMeeting) return;
+// ─── Cron: confirmation waves — Thu 10:00 (list 11:00) and Sun 18:00 (list 19:00), Asia/Jerusalem ─
 
-  const today = getTodayStr();
-  if (settings.confirmation_sent_date === today) {
-    console.log('[Cron] Уже отправляли сегодня, пропускаем');
-    return;
-  }
+const waves = require('./services/confirmationWaves').createWaves({
+  db, whatsapp, buildConfirmationMessage, getTodayStr, formatMeetingDate,
+  getNextMeeting: () => db.getSetting('next_meeting_date') || NEXT_MEETING_DATE,
+});
+const { runConfirmationWave, sendUnconfirmedList } = waves;
 
-  const guests = db.db.prepare(
-    'SELECT * FROM guests WHERE meetingDate=? AND wa_enabled=1 AND confirmed=0'
-  ).all(nextMeeting);
-  console.log(`[Cron] Найдено ${guests.length} неподтверждённых гостей`);
-
-  const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g));
-  db.setSetting('confirmation_sent_date', today);
-  db.setSetting('confirmation_sent_for', nextMeeting);
-  console.log(`[Cron] Готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
-}, { timezone: 'Asia/Jerusalem' });
-
-// ─── Cron: Sunday 19:00 — send unconfirmed list to configured recipient ───────
-
-cron.schedule('0 19 * * 0', async () => {
-  console.log('[Cron] Воскресенье 19:00 — отправка списка неподтверждённых');
-  const settings = db.getAllSettings();
-  const today    = getTodayStr();
-  // Only run if confirmations were sent today
-  if (settings.confirmation_sent_date !== today) {
-    console.log('[Cron] Подтверждения сегодня не отправлялись, пропускаем');
-    return;
-  }
-  const phone = db.getSetting('unconfirmed_notify_phone');
-  if (!phone) {
-    console.log('[Cron] unconfirmed_notify_phone не настроен, пропускаем');
-    return;
-  }
-  const nextMeeting = settings.next_meeting_date || NEXT_MEETING_DATE;
-  if (!nextMeeting) return;
-
-  const unconfirmed = db.db.prepare(
-    'SELECT name, phone FROM guests WHERE meetingDate=? AND confirmed=0 AND wa_enabled=1 ORDER BY name ASC'
-  ).all(nextMeeting);
-  if (!unconfirmed.length) {
-    console.log('[Cron] Все гости подтвердили участие, список не отправляем');
-    return;
-  }
-
-  const dateStr = formatMeetingDate(nextMeeting);
-  const list    = unconfirmed.map((g, i) => `${i + 1}. ${g.name} — ${g.phone}`).join('\n');
-  const text    = `Добрый вечер! 👋\n\nСписок гостей на встречу ${dateStr}, которые ещё не подтвердили участие (${unconfirmed.length} чел.):\n\n${list}\n\nBNI Synergy`;
-
-  try {
-    await whatsapp.sendMessage(phone, text);
-    console.log(`[Cron] Отправлен список ${unconfirmed.length} неподтверждённых на ${phone}`);
-  } catch (e) {
-    console.error('[Cron] Не удалось отправить список неподтверждённых:', e.message);
-  }
-}, { timezone: 'Asia/Jerusalem' });
+cron.schedule('0 10 * * 4', () => runConfirmationWave(1), { timezone: 'Asia/Jerusalem' });
+cron.schedule('0 11 * * 4', () => sendUnconfirmedList(1), { timezone: 'Asia/Jerusalem' });
+cron.schedule('0 18 * * 0', () => runConfirmationWave(2), { timezone: 'Asia/Jerusalem' });
+cron.schedule('0 19 * * 0', () => sendUnconfirmedList(2), { timezone: 'Asia/Jerusalem' });
 
 // ─── Cron: Monday 10:00 — send members catalog link to guests of today's meeting ─
 
