@@ -68,6 +68,8 @@ db.exec(`
     raw_path    TEXT NOT NULL DEFAULT ''
   );
 `);
+try { db.exec('ALTER TABLE mail_intake ADD COLUMN parsed_json TEXT'); } catch {}
+try { db.exec('ALTER TABLE mail_intake ADD COLUMN notified_at TEXT'); } catch {}
 // Auto-confirm all guests registered before 2026-03-20
 db.exec("UPDATE guests SET confirmed = 1 WHERE createdAt < '2026-03-20T00:00:00.000Z' AND confirmed = 0");
 
@@ -234,9 +236,22 @@ function claimMailIntake(messageId, rawPath = '') {
   }
 }
 
-function finishMailIntake(messageId, { status, guestId = null, rawPath = '' }) {
-  db.prepare('UPDATE mail_intake SET status = ?, guest_id = ?, raw_path = ? WHERE message_id = ?')
-    .run(status, guestId, rawPath, messageId);
+function finishMailIntake(messageId, { status, guestId = null, rawPath = '', parsedJson = null, notifiedAt = null }) {
+  db.prepare('UPDATE mail_intake SET status = ?, guest_id = ?, raw_path = ?, parsed_json = ?, notified_at = ? WHERE message_id = ?')
+    .run(status, guestId, rawPath, parsedJson, notifiedAt, messageId);
+}
+
+// Was this guest (normalized phone + meeting date; name if the letter has no phone) already notified about?
+function findNotifiedIntake({ phone, name, meetingDate }) {
+  if (phone) {
+    return db.prepare(
+      "SELECT id FROM mail_intake WHERE status = 'notified' AND json_extract(parsed_json, '$.phone') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1"
+    ).get(phone, meetingDate) || null;
+  }
+  if (!name) return null;
+  return db.prepare(
+    "SELECT id FROM mail_intake WHERE status = 'notified' AND json_extract(parsed_json, '$.name') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1"
+  ).get(name, meetingDate) || null;
 }
 
 function findDuplicateGuest(meetingDate, phone, name) {
@@ -989,6 +1004,7 @@ module.exports = {
   setGuestProfileStatus,
   claimMailIntake,
   finishMailIntake,
+  findNotifiedIntake,
   getTotalCount,
   normalizePhone,
   // members

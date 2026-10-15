@@ -41,6 +41,8 @@ if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
 
 if (db.getSetting('meeting_waze_url') === null) db.setSetting('meeting_waze_url', '');
 if (db.getSetting('unconfirmed_notify_phone') === null) db.setSetting('unconfirmed_notify_phone', '');
+if (db.getSetting('mail_intake_notify_phone') === null) db.setSetting('mail_intake_notify_phone', '972523695741');
+if (db.getSetting('mail_intake_auto_register') === null) db.setSetting('mail_intake_auto_register', '0');
 
 const PAYBOX_LINK       = 'https://links.payboxapp.com/7SB6P3stE6b';
 
@@ -466,6 +468,9 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
       db,
       nextMeetingDate: () => NEXT_MEETING_DATE,
       afterCreate: onIntakeGuestCreated,
+      autoRegister: () => db.getSetting('mail_intake_auto_register') === '1',
+      notifyPhone: () => db.getSetting('mail_intake_notify_phone'),
+      sendMessage: whatsapp.sendMessage,
     });
     res.json(out);
   } catch (err) {

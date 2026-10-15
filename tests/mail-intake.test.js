@@ -1,6 +1,6 @@
 'use strict';
 
-// Integration test: needs better-sqlite3 (run on a machine where it is built, e.g. the server).
+// Auto-register mode (setting mail_intake_auto_register=1). Needs better-sqlite3 (run on a machine where it is built, e.g. the server).
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
@@ -16,7 +16,7 @@ const { makeResolver, buildMail, bniHtml } = require('./helpers/mail');
 
 const resolver = makeResolver(['bniconnectglobal.com']);
 const created = [];
-const deps = { db, resolver, nextMeetingDate: () => '19/10/26', afterCreate: g => created.push(g) };
+const deps = { db, resolver, nextMeetingDate: () => '19/10/26', afterCreate: g => created.push(g), autoRegister: () => true };
 const run = raw => intake.handleIncomingMail(raw, deps);
 const guestRow = id => db.db.prepare('SELECT * FROM guests WHERE id = ?').get(id);
 const countGuests = () => db.db.prepare('SELECT COUNT(*) c FROM guests').get().c;
