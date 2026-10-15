@@ -104,10 +104,23 @@ function speakerLine(presenter) {
     : '';
 }
 
-function buildConfirmationMessage(guest) {
+function confirmationPlaceBlock(settings) {
+  if ((settings.meeting_type || 'offline') === 'zoom') {
+    return `💻 Встреча пройдёт онлайн в Zoom` + (settings.meeting_zoom_url ? `\n🔗 ${settings.meeting_zoom_url}` : '');
+  }
+  const lines = [];
+  if (settings.meeting_location) lines.push(`📍 ${settings.meeting_location}`);
+  if (settings.meeting_waze_url) lines.push(`🗺️ Навигатор:\n${settings.meeting_waze_url}`);
+  return lines.join('\n');
+}
+
+function buildConfirmationMessage(guest, settings) {
+  const place = confirmationPlaceBlock(settings);
   return `Здравствуйте, ${whatsapp.getFirstName(guest.name)}! 👋\n\n` +
+    `Напоминаем, что вы приглашены на встречу BNI Synergy 🤝\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
     `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
+    (place ? `${place}\n\n` : '') +
     `BNI Synergy`;
 }
 
@@ -357,7 +370,7 @@ app.post('/api/register', async (req, res) => {
 
   // If confirmation blast already ran for this meeting, send confirmation WA to this new guest
   if (settings.confirmation_round1_for === meetingDate || settings.confirmation_round2_for === meetingDate) {
-    const confirmMsg = buildConfirmationMessage({ id, name });
+    const confirmMsg = buildConfirmationMessage({ id, name }, settings);
     setTimeout(() => {
       whatsapp.sendMessage(phone, confirmMsg)
         .then(() => db.markWaSent(id))
@@ -919,11 +932,12 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
   if (!meeting_date) return res.status(400).json({ error: 'meeting_date обязателен' });
 
   const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled === 1 && !g.confirmed);
+  const settings = db.getAllSettings();
   db.setSetting('confirmation_sent_for', meeting_date);
   db.setSetting('confirmation_round1_for', meeting_date); // manual send enables the 30-second confirmation for late registrations
   res.json({ sent: guests.length });
 
-  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g))
+  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings))
     .then(r => {
       console.log(`[Confirmations] Done: ${r.sent} sent, ${r.failed} failed`);
     })

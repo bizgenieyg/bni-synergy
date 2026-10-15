@@ -30,7 +30,7 @@ function createWaves({ db, whatsapp, buildConfirmationMessage, getTodayStr, form
     ).all(nextMeeting);
     console.log(`[Cron] ${w.label}: найдено ${guests.length} неподтверждённых гостей на ${nextMeeting}`);
 
-    const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g));
+    const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings));
     console.log(`[Cron] ${w.label}: найдено ${guests.length}, отправлено ${results.sent}, ошибок ${results.failed}`);
   }
 
