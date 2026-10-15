@@ -77,7 +77,8 @@ function setupFonts(doc) {
  */
 function generateGuestList(res, guests, date) {
   const paidCount = guests.filter(g => g.paid).length;
-  const label = `Встреча: ${date} | Всего: ${guests.length} | Оплатили: ${paidCount}`;
+  const subCount  = guests.filter(g => g.guest_type === 'sub').length;
+  const label = `Встреча: ${date} | Гостей: ${guests.length - subCount} | Замен: ${subCount} | Оплатили: ${paidCount}`;
 
   const doc = new PDFDocument({ size: "A4", layout: "landscape", margins: { top: 30, bottom: 30, left: 30, right: 30 }, bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
@@ -91,11 +92,12 @@ function generateGuestList(res, guests, date) {
 
   const C = {
     num:   { x: 30,  w: 20  },
-    name:  { x: 55,  w: 140 },
-    prof:  { x: 200, w: 255 },
-    phone: { x: 510, w: 120 },
-    inv:   { x: 635, w: 125 },
-    paid:  { x: 750, w: 40  },
+    name:  { x: 55,  w: 130 },
+    prof:  { x: 190, w: 230 },
+    phone: { x: 425, w: 105 },
+    inv:   { x: 535, w: 145 },
+    type:  { x: 685, w: 50  },
+    paid:  { x: 740, w: 50  },
   };
   const TL = 30;   // table left
   const TR = 810;  // table right (landscape width)
@@ -110,13 +112,13 @@ function generateGuestList(res, guests, date) {
       : (heb ? F.hebReg  : F.regular);
   }
 
-  function cell(text, col, y, bold, align) {
+  function cell(text, col, y, bold, align, color) {
     const raw = String(text || '');
     const heb = /[\u0590-\u05FF\uFB1D-\uFB4F]/.test(raw);
     const str = fixHebrew(raw);
     const a   = align || (heb ? 'right' : 'left');
-    doc.font(pickFont(raw, bold)).fontSize(9).fillColor('#111111')
-       .text(str, col.x, y, { width: col.w, lineBreak: false, ellipsis: true, align: a });
+    doc.font(pickFont(raw, bold)).fontSize(9).fillColor(color || '#111111')
+       .text(str, col.x, y, { width: col.w, height: 11, lineBreak: false, ellipsis: true, align: a });
   }
 
   // ── Page header ──
@@ -133,6 +135,7 @@ function generateGuestList(res, guests, date) {
   doc.text('Профессия', C.prof.x,  HDR_Y, { width: C.prof.w,  lineBreak: false });
   doc.text('Телефон',   C.phone.x, HDR_Y, { width: C.phone.w, lineBreak: false });
   doc.text('Пригласил', C.inv.x,   HDR_Y, { width: C.inv.w,   lineBreak: false });
+  doc.text('Тип',       C.type.x,  HDR_Y, { width: C.type.w,  lineBreak: false });
   doc.text('₪',         C.paid.x,  HDR_Y, { width: C.paid.w,  lineBreak: false, align: 'center' });
 
   const HDR_LINE = HDR_Y + 14;
@@ -151,7 +154,8 @@ function generateGuestList(res, guests, date) {
     cell(fixHebrew(g.name),   C.name,  ry, false);
     cell(fixHebrew(g.specialty) || '—',  C.prof,  ry, false);
     cell(g.phone,             C.phone, ry, false);
-    cell(g.invitedBy || '—',  C.inv,   ry, false);
+    cell(fixHebrew(g.invitedBy) || '—',  C.inv,   ry, false);
+    cell(g.guest_type === 'sub' ? 'Зам.' : 'Гость', C.type, ry, false, undefined, g.guest_type === 'sub' ? '#B45309' : undefined);
     cell(g.paid ? '✓' : '✗', C.paid,  ry, false, 'center');
 
     ry += ROW_HEIGHT;
