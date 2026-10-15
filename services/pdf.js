@@ -156,7 +156,7 @@ function generateGuestList(res, guests, date) {
     cell(g.phone,             C.phone, ry, false);
     cell(fixHebrew(g.invitedBy) || '—',  C.inv,   ry, false);
     cell(g.guest_type === 'sub' ? 'Зам.' : 'Гость', C.type, ry, false, undefined, g.guest_type === 'sub' ? '#B45309' : undefined);
-    cell(g.paid ? '✓' : '✗', C.paid,  ry, false, 'center');
+    cell(g.paid ? 'Да' : '—', C.paid,  ry, false, 'center');
 
     ry += ROW_HEIGHT;
     doc.moveTo(TL, ry - 2).lineTo(TR, ry - 2).strokeColor('#e5e7eb').lineWidth(0.4).stroke();
