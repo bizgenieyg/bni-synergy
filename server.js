@@ -82,6 +82,16 @@ function getTodayStr() {
          String(d.getFullYear()).slice(2);
 }
 
+// Approved invitation text, identical to the registration form (public/guest.html)
+const INVITE_BLOCK_1 =
+  `Группа BNI SYNERGY приглашает вас на утреннюю бизнес-встречу!\n\n` +
+  `На встрече примут участие более 30 владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.`;
+const INVITE_BLOCK_2 =
+  `Вас ждёт:\n` +
+  `✅ Личное представление\n` +
+  `✅ Бизнес-лекция от нашего спикера\n` +
+  `✅ Бизнес-завтрак`;
+
 function meetingLocationLine(settings) {
   return (settings.meeting_type || 'offline') === 'zoom'
     ? `💻 Встреча пройдёт онлайн в Zoom\n🔗 ${settings.meeting_zoom_url || ''}`
@@ -111,8 +121,7 @@ function buildConfirmationMessage(guest, settings, presenter = null, memberCount
     `Вас ждёт:\n` +
     `✅ Личное представление\n` +
     `✅ Бизнес-лекция от нашего спикера\n` +
-    `✅ Бизнес-завтрак\n` +
-    `✅ Стоимость участия 80₪${presenterLine}\n\n` +
+    `✅ Бизнес-завтрак${presenterLine}\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
     `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
     `BNI Synergy`;
@@ -324,7 +333,8 @@ app.post('/api/register', async (req, res) => {
   if (isSub) {
     waText =
       `Шалом, ${firstName}! 👋\n\n` +
-      `Вы зарегистрированы как замена на встречу BNI SYNERGY 🤝\n` +
+      `Вы зарегистрированы как замена на встречу BNI SYNERGY 🤝\n\n` +
+      `${INVITE_BLOCK_1}\n\n${INVITE_BLOCK_2}\n\n` +
       `📅 ${meetingDate} в 7:30\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
       `🗺️ Навигатор:\n${settings.meeting_waze_url || ''}\n\n` +
@@ -332,7 +342,8 @@ app.post('/api/register', async (req, res) => {
   } else {
     waText =
       `Шалом, ${firstName}! 👋\n\n` +
-      `Вы зарегистрированы на встречу BNI SYNERGY 🤝\n` +
+      `Вы зарегистрированы на встречу BNI SYNERGY 🤝\n\n` +
+      `${INVITE_BLOCK_1}\n\n${INVITE_BLOCK_2}\n\n` +
       `📅 ${meetingDate} в 7:30\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
       `💳 Оплата участия (80₪):\n${PAYBOX_LINK}\n\n` +

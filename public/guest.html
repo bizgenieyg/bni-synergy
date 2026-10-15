@@ -123,6 +123,16 @@
       color: var(--red);
     }
 
+    /* ── Invitation blocks ── */
+    .invite-info {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      margin-bottom: 18px;
+    }
+    .invite-info p { margin-bottom: 10px; }
+    .invite-info ul { list-style: none; margin: 4px 0 0; padding: 0; }
+
     /* ── Meeting info ── */
     .meeting-info {
       background: #fef2f2;
@@ -230,6 +240,17 @@
 
       <!-- Sub-mode banner (shown only for type=sub) -->
       <div class="sub-banner" id="subBanner" style="display:none"></div>
+
+      <div class="invite-info" id="inviteInfo">
+        <p>Группа BNI SYNERGY приглашает вас на утреннюю бизнес-встречу!</p>
+        <p>На встрече примут участие более 30 владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.</p>
+        <p style="margin-bottom:0">Вас ждёт:</p>
+        <ul>
+          <li>✅ Личное представление</li>
+          <li>✅ Бизнес-лекция от нашего спикера</li>
+          <li>✅ Бизнес-завтрак</li>
+        </ul>
+      </div>
 
       <div class="meeting-info" id="meetingInfo" style="display:none"></div>
       <div class="error-msg" id="errorMsg"></div>
