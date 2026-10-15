@@ -54,6 +54,7 @@ try { db.exec('ALTER TABLE guests ADD COLUMN confirmed INTEGER DEFAULT 0'); } ca
 try { db.exec('ALTER TABLE guests ADD COLUMN confirmed_at TEXT'); } catch {}
 try { db.exec('ALTER TABLE guests ADD COLUMN guide_sent INTEGER DEFAULT 0'); } catch {}
 try { db.exec("ALTER TABLE guests ADD COLUMN source TEXT NOT NULL DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE guests ADD COLUMN guest_type TEXT NOT NULL DEFAULT 'guest'"); } catch {}
 try { db.exec('ALTER TABLE guests ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0'); } catch {}
 try { db.exec("ALTER TABLE guests ADD COLUMN profile_status TEXT NOT NULL DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE guests ADD COLUMN introduction TEXT NOT NULL DEFAULT ''"); } catch {}
@@ -177,20 +178,20 @@ function normalizePhone(phone) {
 // ─── Guests CRUD ──────────────────────────────────────────────────────────────
 
 function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null, email = '',
-                       waEnabled = 1, source = '', needsReview = 0 }) {
+                       waEnabled = 1, source = '', needsReview = 0, guestType = 'guest' }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
     INSERT INTO guests
       (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled, email,
-       source, needs_review)
-    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       source, needs_review, guest_type)
+    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name.trim(), normalizePhone(phone),
     (specialty || '').trim(), (invitedBy || '').trim(),
     meetingDate, paid, paidAt, createdAt, waEnabled, (email || '').trim(),
-    source, needsReview ? 1 : 0,
+    source, needsReview ? 1 : 0, guestType === 'sub' ? 'sub' : 'guest',
   );
   return id;
 }

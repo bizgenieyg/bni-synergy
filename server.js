@@ -295,6 +295,7 @@ app.post('/api/register', async (req, res) => {
     name, phone, specialty, invitedBy, meetingDate, email: email || '',
     paid:   isSub ? 1 : 0,
     paidAt: isSub ? new Date().toISOString() : null,
+    guestType: isSub ? 'sub' : 'guest',
   });
 
   // 2. Google Sheets — non-blocking

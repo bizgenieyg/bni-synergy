@@ -51,6 +51,7 @@ test('guest sample (Cyrillic): created with all fields, inviter matched by name_
   assert.equal(g.invitedBy, 'Артур Блаер');
   assert.equal(g.meetingDate, '20/10/26');
   assert.equal(g.paid, 0);
+  assert.equal(g.guest_type, 'guest');
   assert.equal(g.wa_enabled, 1);
   assert.equal(g.source, 'bni_email');
   assert.equal(g.needs_review, 0);
@@ -64,6 +65,7 @@ test('substitute sample (Hebrew): paid=1, inviter with ד"ר matched', async () 
   const g = guestRow(out.guestId);
   assert.equal(g.name, 'דנה כהן');
   assert.equal(g.paid, 1);
+  assert.equal(g.guest_type, 'sub');
   assert.equal(g.phone, '972525559876');
   assert.equal(g.invitedBy, 'Александр Кудинов, д-р');
   assert.equal(g.needs_review, 0);

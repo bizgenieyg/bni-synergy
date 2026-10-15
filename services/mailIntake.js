@@ -163,6 +163,7 @@ function processGuestMail(parsed, deps) {
     paid: isSub ? 1 : 0,
     paidAt: isSub ? new Date().toISOString() : null,
     waEnabled: phone ? 1 : 0,
+    guestType: isSub ? 'sub' : 'guest',
     source: 'bni_email',
     needsReview,
   });

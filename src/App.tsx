@@ -6,7 +6,7 @@ import {
   Plus, Trash2, Edit2, Check, X, Search, Download, Send, Phone,
   RefreshCw, MessageCircle, UserCheck, Loader2, TrendingUp,
   DollarSign, Handshake, Trophy, CheckCircle2, Presentation,
-  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare, Calendar
+  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare, Calendar, Menu
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import confetti from 'canvas-confetti'
@@ -35,6 +35,7 @@ interface Guest {
   confirmed_at: string
   source?: string
   needs_review?: number
+  guest_type?: string
 }
 
 interface Member {
@@ -143,6 +144,19 @@ async function api(path: string, opts?: RequestInit) {
     window.location.reload()
   }
   return res
+}
+
+function useIsMobile(maxWidth = 640) {
+  const query = `(max-width: ${maxWidth}px)`
+  const [mobile, setMobile] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const onChange = () => setMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [query])
+  return mobile
 }
 
 function waPhone(phone: string) {
@@ -1242,6 +1256,64 @@ function GuestsSection() {
     setAllGuests(a => (a ? fn(a) : a))
   }
 
+  const isMobile = useIsMobile()
+
+  const reviewBadges = (g: Guest) => (
+    <>
+      {g.source === 'bni_email' && (
+        <span className="ml-2 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">из письма BNI</span>
+      )}
+      {g.needs_review === 1 && (
+        <span className="ml-1 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">проверить</span>
+      )}
+    </>
+  )
+
+  const typeBadge = (g: Guest) => g.guest_type === 'sub'
+    ? <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Замена</span>
+    : <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Гость</span>
+
+  const confirmBadge = (g: Guest) => {
+    const when = g.confirmed_at ? new Date(g.confirmed_at).toLocaleString('ru-RU', { timeZone: 'Asia/Jerusalem' }) : undefined
+    if (g.confirmed === 1) return <span title={when} className="text-xs font-medium text-green-600 whitespace-nowrap">✅ Подтвердил</span>
+    if (g.confirmed === -1) return <span title={when} className="text-xs font-medium text-red-500 whitespace-nowrap">❌ Отказал</span>
+    return <span className="text-xs text-gray-400 whitespace-nowrap">⏳ Нет</span>
+  }
+
+  const waButton = (g: Guest, extra: string) => (
+    <button onClick={() => toggleWa(g.id)}
+      className={cn('px-2 py-1 rounded-full text-xs font-medium', extra, g.wa_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
+      {g.wa_enabled ? t('guests.waOn') : t('guests.waOff')}
+    </button>
+  )
+
+  const payCell = (g: Guest, extra: string) => g.paid
+    ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> {t('guests.paidLabel')}</span>
+    : <button onClick={() => markPaid(g.id)} title={t('guests.markPaid')}
+        className={cn('text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium', extra)} style={{ padding: '4px 8px' }}>₪</button>
+
+  const specialtyCell = (g: Guest) => editingSpecialty === g.id ? (
+    <div className="flex items-center gap-1">
+      <input
+        autoFocus
+        value={specialtyDraft}
+        onChange={e => setSpecialtyDraft(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') saveSpecialty(g.id); if (e.key === 'Escape') setEditingSpecialty(null) }}
+        className="border border-gray-300 rounded px-2 py-0.5 text-sm w-40 max-w-full focus:outline-none focus:border-blue-400"
+      />
+      <button onClick={() => saveSpecialty(g.id)} className="text-green-600 hover:text-green-700 text-xs font-medium px-1">✓</button>
+      <button onClick={() => setEditingSpecialty(null)} className="text-gray-400 hover:text-gray-600 text-xs px-1">✕</button>
+    </div>
+  ) : (
+    <span
+      onClick={() => { setEditingSpecialty(g.id); setSpecialtyDraft(g.specialty || '') }}
+      className="cursor-pointer hover:text-blue-600 hover:underline"
+      title="Нажмите чтобы изменить"
+    >
+      {g.specialty || <span className="text-gray-300 italic">—</span>}
+    </span>
+  )
+
   const markPaid = async (id: string) => {
     await api(`/api/guests/${id}/paid`, { method: 'PUT' })
     mutateGuests(gs => gs.map(g => g.id === id ? { ...g, paid: 1 } : g))
@@ -1317,7 +1389,7 @@ function GuestsSection() {
       )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-900">{t('guests.title')}</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={sendConfirmations} disabled={sendingConfirmations || !selectedDate || searchMode}
             className="text-xs px-3 py-2 rounded-xl border border-blue-200 bg-white text-blue-600 hover:border-blue-300 flex items-center gap-1.5 disabled:opacity-50">
             {sendingConfirmations ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
@@ -1402,7 +1474,7 @@ function GuestsSection() {
       </div>
 
       {(selectedDate || searchMode) && (
-        <div className="flex gap-3 text-sm text-gray-600">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-600">
           <span className="font-semibold text-gray-900">{statGuests.length}</span> {t('guests.guests')} ·
           <span className="text-green-600 font-semibold">{paid}</span> {t('guests.paid')} ·
           <span className="text-gray-400">{statGuests.length - paid}</span> {t('guests.unpaid')} ·
@@ -1427,87 +1499,69 @@ function GuestsSection() {
           <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
         ) : shown.length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">{search ? t('guests.nothingFound') : t('guests.noGuests')}</div>
+        ) : isMobile ? (
+          <div className="divide-y divide-gray-100">
+            {shown.map(g => (
+              <div key={g.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 font-medium text-gray-900 break-words">{g.name}{reviewBadges(g)}</div>
+                  {typeBadge(g)}
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  {g.phone ? (
+                    <a href={`tel:+${waPhone(g.phone)}`} className="inline-flex items-center gap-1 min-h-[44px] text-gray-700 whitespace-nowrap">
+                      <Phone size={13} />{formatPhoneDisplay(g.phone)}
+                    </a>
+                  ) : <span className="text-gray-300">—</span>}
+                  <div className="min-w-0 text-right text-gray-500 break-words">{specialtyCell(g)}</div>
+                </div>
+                <div className="text-sm text-gray-500 break-words">Пригласил: {g.invitedBy || '—'}</div>
+                <div className="flex items-center flex-wrap gap-2">
+                  {waButton(g, 'min-h-[44px] px-4')}
+                  {confirmBadge(g)}
+                  {payCell(g, 'min-h-[44px] min-w-[44px]')}
+                  <button onClick={() => setDeleteConfirm(g)} title="Удалить гостя"
+                    className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-300 hover:text-red-500">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                {searchMode && <div className="text-xs text-gray-400">Встреча: {g.meetingDate}</div>}
+              </div>
+            ))}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
                 <th className="px-4 py-3 font-medium">{t('guests.colName')}</th>
-                {searchMode && <th className="px-4 py-3 font-medium">Встреча</th>}
                 <th className="px-4 py-3 font-medium">{t('guests.colPhone')}</th>
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('guests.colInvitedBy')}</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Email</th>
+                <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colInvitedBy')}</th>
+                <th className="px-4 py-3 font-medium">Гость/Замена</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
                 <th className="px-4 py-3 font-medium">Подтверждение</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
+                {!searchMode && <th className="px-4 py-3 font-medium hidden lg:table-cell">Email</th>}
+                {searchMode && <th className="px-4 py-3 font-medium">Встреча</th>}
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
               {shown.map(g => (
                 <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    {g.name}
-                    {g.source === 'bni_email' && (
-                      <span className="ml-2 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">из письма BNI</span>
-                    )}
-                    {g.needs_review === 1 && (
-                      <span className="ml-1 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">проверить</span>
-                    )}
-                  </td>
-                  {searchMode && <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>{g.meetingDate}</td>}
+                  <td className="px-4 py-3 font-medium text-gray-900">{g.name}{reviewBadges(g)}</td>
                   <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
                       className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{formatPhoneDisplay(g.phone)}</a>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
-                    {editingSpecialty === g.id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          autoFocus
-                          value={specialtyDraft}
-                          onChange={e => setSpecialtyDraft(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') saveSpecialty(g.id); if (e.key === 'Escape') setEditingSpecialty(null) }}
-                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-40 focus:outline-none focus:border-blue-400"
-                        />
-                        <button onClick={() => saveSpecialty(g.id)} className="text-green-600 hover:text-green-700 text-xs font-medium">✓</button>
-                        <button onClick={() => setEditingSpecialty(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
-                      </div>
-                    ) : (
-                      <span
-                        onClick={() => { setEditingSpecialty(g.id); setSpecialtyDraft(g.specialty || '') }}
-                        className="cursor-pointer hover:text-blue-600 hover:underline"
-                        title="Нажмите чтобы изменить"
-                      >
-                        {g.specialty || <span className="text-gray-300 italic">—</span>}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.invitedBy}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.email}</td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => toggleWa(g.id)}
-                      className={cn('px-2 py-1 rounded-full text-xs font-medium', g.wa_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
-                      {g.wa_enabled ? t('guests.waOn') : t('guests.waOff')}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    {g.confirmed === 1
-                      ? <span className="text-xs font-medium text-green-600">✅ Подтвердил</span>
-                      : g.confirmed === -1
-                        ? <span className="text-xs font-medium text-red-500">❌ Отказал</span>
-                        : g.waSent === 1
-                          ? <span className="text-xs font-medium text-amber-500">⏱ Ожидает</span>
-                          : g.wa_enabled === 0
-                            ? <span className="text-xs text-red-400">🚫 Отказал</span>
-                            : <span className="text-xs text-gray-400">📭 Не отправлено</span>
-                    }
-                  </td>
-                  <td className="px-4 py-3">
-                    {g.paid
-                      ? <span className="flex items-center gap-1 text-green-600 text-xs font-medium"><CheckCircle2 size={13} /> {t('guests.paidLabel')}</span>
-                      : <button onClick={() => markPaid(g.id)} title={t('guests.markPaid')} className="text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium" style={{ padding: '4px 8px' }}>₪</button>}
-                  </td>
+                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{specialtyCell(g)}</td>
+                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{g.invitedBy}</td>
+                  <td className="px-4 py-3">{typeBadge(g)}</td>
+                  <td className="px-4 py-3">{waButton(g, '')}</td>
+                  <td className="px-4 py-3">{confirmBadge(g)}</td>
+                  <td className="px-4 py-3">{payCell(g, '')}</td>
+                  {!searchMode && <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.email}</td>}
+                  {searchMode && <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>{g.meetingDate}</td>}
                   <td className="px-4 py-3">
                     <button onClick={() => setDeleteConfirm(g)} title="Удалить гостя"
                       className="text-gray-300 hover:text-red-500 transition-colors">
@@ -2720,6 +2774,8 @@ export default function App() {
   const [wahaOk, setWahaOk] = useState<boolean | null>(null)
   const [wahaBannerDismissed, setWahaBannerDismissed] = useState(false)
   const [wahaRestarting, setWahaRestarting] = useState(false)
+  const isMobile = useIsMobile()
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [wahaQrOpen, setWahaQrOpen] = useState(false)
   const [wahaQrData, setWahaQrData] = useState<{ qr: string; found: boolean }>({ qr: '', found: false })
 
@@ -2767,7 +2823,7 @@ export default function App() {
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
 
-  const sidebarW = collapsed ? 64 : 240
+  const sidebarW = isMobile ? 0 : collapsed ? 64 : 240
   const showBanner = wahaOk === false && !wahaBannerDismissed
 
   const SECTIONS: Record<Section, React.ReactNode> = {
@@ -2781,8 +2837,28 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Sidebar section={section} collapsed={collapsed} onNav={setSection}
-        onCollapse={() => setCollapsed(c => !c)} onLogout={logout} wahaOk={wahaOk} />
+      {isMobile ? (
+        <>
+          <div className="sticky top-0 z-30 flex items-center gap-3 h-12 px-3 bg-gray-900 text-white">
+            <button onClick={() => setDrawerOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-white/10" aria-label="Меню">
+              <Menu size={20} />
+            </button>
+            <span className="font-black tracking-wider" style={{ color: RED }}>BNI</span>
+            <span className="text-[10px] font-semibold text-white/40 tracking-widest uppercase">SYNERGY</span>
+          </div>
+          {drawerOpen && (
+            <>
+              <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setDrawerOpen(false)} />
+              <Sidebar section={section} collapsed={false}
+                onNav={s => { setSection(s); setDrawerOpen(false) }}
+                onCollapse={() => setDrawerOpen(false)} onLogout={logout} wahaOk={wahaOk} />
+            </>
+          )}
+        </>
+      ) : (
+        <Sidebar section={section} collapsed={collapsed} onNav={setSection}
+          onCollapse={() => setCollapsed(c => !c)} onLogout={logout} wahaOk={wahaOk} />
+      )}
       <main className="transition-all duration-300 min-h-screen"
         style={isRtl ? { paddingRight: sidebarW } : { paddingLeft: sidebarW }}>
         {/* WhatsApp disconnection banner */}
@@ -2807,7 +2883,7 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="p-3 sm:p-6 max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div key={section} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
