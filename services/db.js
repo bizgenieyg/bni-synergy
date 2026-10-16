@@ -241,17 +241,15 @@ function finishMailIntake(messageId, { status, guestId = null, rawPath = '', par
     .run(status, guestId, rawPath, parsedJson, notifiedAt, messageId);
 }
 
-// Was this guest (normalized phone + meeting date; name if the letter has no phone) already notified about?
-function findNotifiedIntake({ phone, name, meetingDate }) {
-  if (phone) {
-    return db.prepare(
-      "SELECT id FROM mail_intake WHERE status = 'notified' AND json_extract(parsed_json, '$.phone') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1"
-    ).get(phone, meetingDate) || null;
-  }
-  if (!name) return null;
+// Was a message already sent for this guest (normalized phone + meeting date; name if the letter has no phone)?
+function findSentIntake({ phone, name, meetingDate, statuses }) {
+  const field = phone ? 'phone' : 'name';
+  const value = phone || name;
+  if (!value) return null;
+  const marks = statuses.map(() => '?').join(',');
   return db.prepare(
-    "SELECT id FROM mail_intake WHERE status = 'notified' AND json_extract(parsed_json, '$.name') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1"
-  ).get(name, meetingDate) || null;
+    `SELECT id FROM mail_intake WHERE status IN (${marks}) AND json_extract(parsed_json, '$.${field}') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1`
+  ).get(...statuses, value, meetingDate) || null;
 }
 
 function findDuplicateGuest(meetingDate, phone, name) {
@@ -1004,7 +1002,7 @@ module.exports = {
   setGuestProfileStatus,
   claimMailIntake,
   finishMailIntake,
-  findNotifiedIntake,
+  findSentIntake,
   getTotalCount,
   normalizePhone,
   // members

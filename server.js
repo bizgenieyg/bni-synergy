@@ -43,6 +43,7 @@ if (db.getSetting('meeting_waze_url') === null) db.setSetting('meeting_waze_url'
 if (db.getSetting('unconfirmed_notify_phone') === null) db.setSetting('unconfirmed_notify_phone', '');
 if (db.getSetting('mail_intake_notify_phone') === null) db.setSetting('mail_intake_notify_phone', '972523695741');
 if (db.getSetting('mail_intake_auto_register') === null) db.setSetting('mail_intake_auto_register', '0');
+if (db.getSetting('mail_intake_mode') === null) db.setSetting('mail_intake_mode', 'test');
 
 const PAYBOX_LINK       = 'https://links.payboxapp.com/7SB6P3stE6b';
 
@@ -126,7 +127,27 @@ function buildConfirmationMessage(guest, settings) {
     `BNI Synergy`;
 }
 
-// First message to a guest registered from a BNI Connect email
+// BNI Connect letter: invitation (to the guest, or for the inviting member to forward)
+function buildMailInviteMessage({ name, meetingDate }, settings) {
+  const first = name && whatsapp.getFirstName(name);
+  const place = confirmationPlaceBlock(settings);
+  return `Здравствуйте${first ? ', ' + first : ''}! 👋\n\n` +
+    `Вас пригласили на встречу BNI Synergy:\n` +
+    `📅 Понедельник, ${formatMeetingDate(meetingDate)} в 7:30\n\n` +
+    (place ? `${place}\n\n` : '') +
+    `Пожалуйста, зарегистрируйтесь по ссылке:\n` +
+    `✅ https://bnisynergy.biz/guest\n\n` +
+    `BNI Synergy`;
+}
+
+// BNI Connect letter without a usable guest number: ask the inviting member to forward the invitation
+function buildMailMemberRequest({ memberName, guestName }) {
+  return `Здравствуйте${memberName ? ', ' + memberName : ''}! 👋\n\n` +
+    `Вы записали в BNI Connect гостя: ${guestName || '—'}. В записи нет мобильного номера, поэтому мы не можем написать ему сами.\n\n` +
+    `Пожалуйста, перешлите гостю следующее сообщение 👇`;
+}
+
+// First message to a guest registered from a BNI Connect email (only with mail_intake_auto_register=1)
 function buildIntakeInviteMessage(guest, settings, presenter = null) {
   const firstName = (guest.name || '').trim().split(/\s+/)[0];
   return `Здравствуйте${firstName ? ', ' + firstName : ''}! 👋\n\n` +
@@ -469,8 +490,13 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
       nextMeetingDate: () => NEXT_MEETING_DATE,
       afterCreate: onIntakeGuestCreated,
       autoRegister: () => db.getSetting('mail_intake_auto_register') === '1',
+      mode: () => db.getSetting('mail_intake_mode'),
       notifyPhone: () => db.getSetting('mail_intake_notify_phone'),
-      sendMessage: whatsapp.sendMessage,
+      checkWhatsApp: whatsapp.checkNumberExists,
+      sendSequence: whatsapp.sendSequence,
+      isPast: isMeetingInPast,
+      buildInvite: g => buildMailInviteMessage(g, db.getAllSettings()),
+      buildMemberRequest: buildMailMemberRequest,
     });
     res.json(out);
   } catch (err) {
@@ -721,7 +747,7 @@ app.get('/api/settings', (req, res) => {
   res.json(db.getAllSettings());
 });
 
-app.put('/api/settings', (req, res) => {
+app.put('/api/settings', adminAuth, (req, res) => {
   const { key, value } = req.body;
   if (!key) return res.status(400).json({ error: 'key обязателен' });
   db.setSetting(key, value ?? '');

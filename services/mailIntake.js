@@ -126,53 +126,118 @@ function logOtherMail(parsed) {
 }
 
 const DEFAULT_NOTIFY_PHONE = '972523695741';
+const ISRAEL_PHONE_RE = /(?<!\d)(?:\+?972[\s-]?|0)(?:5\d|7\d|[2-489])[\s-]?\d{3}[\s-]?\d{4}(?!\d)/g;
 
-function buildNotificationText(i) {
-  const dash = v => (v ? v : '—');
-  const type = i.type === 'אורח' ? 'Гость' : i.type === 'ממלא מקום' ? 'Замена' : 'Не определён ⚠️';
-  const phone = i.phone ? i.phone : '— ⚠️ нет в письме';
-  const inviter = i.inviterMatched ? i.invitedBy : (i.invitedBy ? `${i.invitedBy} ⚠️ не найден в списке` : '—');
-  const date = i.meetingDate ? i.meetingDate.replace(/^(\d{2}\/\d{2})\/(\d{2})$/, '$1/20$2') : '—';
-  return `📩 Новый гость из BNI Connect\n\n` +
-    `Тип: ${type}\n` +
-    `Имя: ${dash(i.name)}\n` +
-    `Телефон: ${phone}\n` +
-    `Компания / профессия: ${dash(i.company)} / ${dash(i.profession)}\n` +
-    `Пригласил: ${inviter}\n` +
-    `Встреча: ${date}`;
+function normalizeIsraelPhone(raw, db) {
+  const n = db.normalizePhone(raw);
+  if (/^972\d{9}$/.test(n)) return n;
+  let d = String(raw).replace(/\D/g, '');
+  if (d.startsWith('972')) d = d.slice(3);
+  if (d.startsWith('0')) d = d.slice(1);
+  return d.length === 8 ? '972' + d : '';   // landline: 0X + 7 digits
 }
 
-// Default stage: only notify the manager in WhatsApp (no guest record, no message to the guest)
-async function notifyAboutLetter(f, deps) {
+// All Israeli numbers of the letter; a mobile 05x wins, otherwise the first one found
+function pickPhone(text, db) {
+  const all = (String(text).match(ISRAEL_PHONE_RE) || []).map(r => normalizeIsraelPhone(r, db)).filter(Boolean);
+  return { phone: all.find(p => /^9725\d{8}$/.test(p)) || all[0] || '', all };
+}
+
+function maskPhone(p) {
+  return p && p.length > 7 ? `${p.slice(0, 3)}***${p.slice(-4)}` : '***';
+}
+
+const TYPE_LABEL = t => (t === 'אורח' ? 'Гость' : t === 'ממלא מקום' ? 'Замена' : 'Не определён ⚠️');
+
+// Service line (test mode, and always in branch C)
+function serviceLine({ prefix, target, info }) {
+  const invited = info.invitedBy || '—';
+  return `${prefix} → ${target} | ${TYPE_LABEL(info.type)} | Пригласил: ${invited}${info.inviterMatched ? '' : ' ⚠️'}`;
+}
+
+/**
+ * Last step for a BNI guest letter (no guest record is created):
+ *   A: guest has a WhatsApp number  -> invitation to the guest
+ *   B: no number in WhatsApp         -> two messages to the inviting member (ask to forward + invitation)
+ *   C: inviter unknown / no phone    -> the same two messages to the manager, marked ⚠️
+ * Mode `test` (default) sends everything to the manager with a service line first.
+ */
+async function sendInvitations(f, deps) {
   const { db } = deps;
-  const phoneRaw = (f.phones.match(PHONE_RE) || [])[0] || '';
-  const phone = phoneRaw ? db.normalizePhone(phoneRaw) : '';
+  const mode = deps.mode && deps.mode() === 'prod' ? 'prod' : 'test';
+  const manager = (deps.notifyPhone && deps.notifyPhone()) || DEFAULT_NOTIFY_PHONE;
+
+  const { phone } = pickPhone(f.phones, db);
   const inviter = matchInviter(f.invitedBy, db.getActiveMembers().filter(m => m.name_he));
+  let meetingDate = f.meetingDates[0] || '';
+  const dateFallback = !meetingDate;
+  if (dateFallback) meetingDate = deps.nextMeetingDate();
+
   const info = {
     type: f.type, name: f.name, phone, company: f.company, profession: f.profession,
-    invitedBy: inviter ? inviter.name : f.invitedBy, inviterMatched: !!inviter,
-    meetingDate: f.meetingDates[0] || '',
+    invitedBy: inviter ? inviter.name : f.invitedBy, inviterMatched: !!inviter, meetingDate,
   };
-  const parsedJson = JSON.stringify({ ...info, invitedByRaw: f.invitedBy, email: f.email });
+  const base = { ...info, invitedByRaw: f.invitedBy, email: f.email, dateFallback, mode };
 
-  if (db.findNotifiedIntake({ phone, name: f.name, meetingDate: info.meetingDate })) {
-    return { status: 'duplicate', reason: 'same guest already notified', parsedJson };
+  if (deps.isPast && deps.isPast(meetingDate)) {
+    return { status: 'skipped_past', reason: 'meeting date is in the past', parsedJson: JSON.stringify(base) };
   }
-  const to = (deps.notifyPhone && deps.notifyPhone()) || DEFAULT_NOTIFY_PHONE;
+  const sentStatuses = mode === 'test' ? ['sent_test'] : ['sent_guest', 'sent_member', 'sent_fallback'];
+  if (db.findSentIntake({ phone, name: f.name, meetingDate, statuses: sentStatuses })) {
+    return { status: 'duplicate', reason: 'already sent for this guest', parsedJson: JSON.stringify(base) };
+  }
+
+  let numberExists = null;
+  if (phone) {
+    try { numberExists = await deps.checkWhatsApp(phone); }
+    catch (err) { console.error('[MailIntake] WhatsApp number check failed:', err.message); }
+  }
+
+  const memberFirst = inviter ? inviter.name.trim().split(/\s+/)[0] : '';
+  let branch, to, texts, serviceTarget;
+  const invite = deps.buildInvite({ name: f.name, meetingDate });
+  if (phone && numberExists === true) {
+    branch = 'A'; to = phone; texts = [invite]; serviceTarget = 'гость';
+  } else if (inviter && inviter.phone) {
+    branch = 'B'; to = inviter.phone; texts = [deps.buildMemberRequest({ memberName: memberFirst, guestName: f.name }), invite];
+    serviceTarget = `участник ${memberFirst}, ${inviter.phone}`;
+  } else {
+    branch = 'C'; to = manager; texts = [deps.buildMemberRequest({ memberName: memberFirst, guestName: f.name }), invite];
+    serviceTarget = inviter
+      ? `участник ${memberFirst} (нет телефона ⚠️)`
+      : `участник ${f.invitedBy || '—'} (не найден в списке ⚠️)`;
+  }
+
+  const parsedJson = JSON.stringify({ ...base, branch, numberExists, to });
+  let status;
+  if (mode === 'test') {
+    const line = serviceLine({ prefix: '🧪 ТЕСТ', target: serviceTarget, info });
+    texts = texts.map(t => `${line}\n${t}`);
+    to = manager; status = 'sent_test';
+  } else if (branch === 'C') {
+    const line = serviceLine({ prefix: '⚠️ ПЕРЕШЛИТЕ ВРУЧНУЮ', target: serviceTarget, info });
+    texts = texts.map(t => `${line}\n${t}`);
+    status = 'sent_fallback';
+  } else {
+    status = branch === 'A' ? 'sent_guest' : 'sent_member';
+  }
+
   try {
-    await deps.sendMessage(to, buildNotificationText(info));
-    return { status: 'notified', parsedJson, notifiedAt: new Date().toISOString() };
+    await deps.sendSequence(to, texts);
   } catch (err) {
-    console.error('[MailIntake] notification failed (WhatsApp unavailable?):', err.message);
-    return { status: 'notify_failed', reason: err.message, parsedJson };
+    console.error('[MailIntake] sending failed (WhatsApp unavailable?):', err.message);
+    console.log(`[MailIntake] branch=${branch} mode=${mode} to=${maskPhone(to)} status=send_failed`);
+    return { status: 'send_failed', branch, reason: err.message, parsedJson };
   }
+  console.log(`[MailIntake] branch=${branch} mode=${mode} to=${maskPhone(to)} status=${status}`);
+  return { status, branch, parsedJson, notifiedAt: new Date().toISOString() };
 }
 
 async function processGuestMail(parsed, deps) {
   const { db } = deps;
   if (!parsed.html) return { status: 'unparsed', reason: 'no html part' };
   const f = parseBniHtml(parsed.html);
-  if (!(deps.autoRegister && deps.autoRegister())) return notifyAboutLetter(f, deps);
+  if (!(deps.autoRegister && deps.autoRegister())) return sendInvitations(f, deps);
 
   let needsReview = false;
   let isSub = false;
@@ -262,5 +327,6 @@ async function handleIncomingMail(raw, deps) {
 
 module.exports = {
   BNI_FROM, BNI_DKIM_DOMAIN, BNI_SUBJECT, PHONE_RE,
-  cleanText, normalizeHebName, matchInviter, parseBniHtml, classify, handleIncomingMail, buildNotificationText,
+  cleanText, normalizeHebName, matchInviter, parseBniHtml, classify, handleIncomingMail,
+  ISRAEL_PHONE_RE, pickPhone,
 };

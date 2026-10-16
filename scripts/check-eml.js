@@ -18,7 +18,7 @@ const intake = require('../services/mailIntake');
   console.log('Verdict:', cls.kind, cls.reason || '');
   if (parsed.html) {
     const f = intake.parseBniHtml(parsed.html);
-    const phone = (f.phones.match(intake.PHONE_RE) || [])[0] || '(none)';
-    console.log('Fields :', JSON.stringify({ ...f, phoneFound: phone }, null, 2));
+    const phones = (f.phones.match(intake.ISRAEL_PHONE_RE) || []);
+    console.log('Fields :', JSON.stringify({ ...f, phonesFound: phones }, null, 2));
   }
 })();

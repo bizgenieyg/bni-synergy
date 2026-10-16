@@ -878,6 +878,8 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
   const [meetingWazeUrl, setMeetingWazeUrl] = useState('')
   const [meetingZoomUrl, setMeetingZoomUrl] = useState('')
   const [unconfirmedNotifyPhone, setUnconfirmedNotifyPhone] = useState('')
+  const [mailMode, setMailMode] = useState<'test' | 'prod'>('test')
+  const [mailNotifyPhone, setMailNotifyPhone] = useState('')
   const [savingMeetingField, setSavingMeetingField] = useState<string | null>(null)
 
   const saveMeetingField = async (key: string, value: string) => {
@@ -919,6 +921,8 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       if (cfg.meeting_waze_url) setMeetingWazeUrl(cfg.meeting_waze_url)
       if (cfg.meeting_zoom_url) setMeetingZoomUrl(cfg.meeting_zoom_url)
       if (cfg.unconfirmed_notify_phone) setUnconfirmedNotifyPhone(cfg.unconfirmed_notify_phone)
+      setMailMode(cfg.mail_intake_mode === 'prod' ? 'prod' : 'test')
+      if (cfg.mail_intake_notify_phone) setMailNotifyPhone(cfg.mail_intake_notify_phone)
       if (gc.date) api(`/api/guests?date=${gc.date}`).then(r => r.json()).then(g => setRecentGuests(g.slice(0, 5)))
     })
   }, [])
@@ -1058,6 +1062,32 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-1.5">Уведомления о неподтверждённых (телефон)</p>
+      </div>
+
+      {/* BNI Connect letters */}
+      <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">📩 Письма BNI Connect</p>
+        <div className="flex gap-2 mb-3">
+          {(['test', 'prod'] as const).map(m => (
+            <button key={m}
+              onClick={async () => { setMailMode(m); await saveMeetingField('mail_intake_mode', m) }}
+              className={cn('flex-1 py-2 rounded-xl text-sm font-medium border',
+                mailMode === m ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300')}>
+              {m === 'test' ? 'Тест (всё Юрию)' : 'Боевой'}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input value={mailNotifyPhone} onChange={e => setMailNotifyPhone(e.target.value)}
+            placeholder="972501234567"
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+          <button onClick={() => saveMeetingField('mail_intake_notify_phone', mailNotifyPhone)}
+            disabled={savingMeetingField === 'mail_intake_notify_phone'}
+            className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
+            {savingMeetingField === 'mail_intake_notify_phone' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">Тест: все сообщения идут на этот номер со служебной строкой. Боевой: гостю или участнику.</p>
       </div>
 
       {/* KPI Cards */}

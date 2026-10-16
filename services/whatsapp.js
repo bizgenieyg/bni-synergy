@@ -69,6 +69,30 @@ async function sendGroupMessage(groupChatId, text) {
   }
 }
 
+/**
+ * Is this number registered in WhatsApp? (WAHA GET /api/contacts/check-exists → { numberExists, chatId })
+ * Throws if the check itself fails (session not WORKING, network).
+ */
+async function checkNumberExists(phone) {
+  const res = await axios.get(`${WAHA_URL}/api/contacts/check-exists`, {
+    params: { phone: String(phone).replace(/\D/g, ''), session: WAHA_SESSION },
+    headers: WAHA_HEADERS,
+    timeout: 20_000,
+  });
+  return res.data.numberExists === true;
+}
+
+/**
+ * Send several messages to one number in order, with the usual short pause between them.
+ * Stops at the first failure (a later message must not arrive without the earlier one).
+ */
+async function sendSequence(phone, texts) {
+  for (let i = 0; i < texts.length; i++) {
+    await sendMessage(phone, texts[i]);
+    if (i < texts.length - 1) await new Promise(resolve => setTimeout(resolve, randomDelay()));
+  }
+}
+
 // ─── Broadcast ────────────────────────────────────────────────────────────────
 
 /**
@@ -153,4 +177,4 @@ async function sendImage(phone, filePath, caption) {
   }
 }
 
-module.exports = { sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId };
+module.exports = { checkNumberExists, sendSequence, sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId };
