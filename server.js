@@ -79,10 +79,9 @@ function formatMeetingDate(ddmmyy) {
 }
 
 function getTodayStr() {
-  const d = new Date();
-  return String(d.getDate()).padStart(2, '0') + '/' +
-         String(d.getMonth() + 1).padStart(2, '0') + '/' +
-         String(d.getFullYear()).slice(2);
+  // Today in Asia/Jerusalem as DD/MM/YY (independent of the server's own timezone)
+  const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).split('-');
+  return `${d}/${m}/${y.slice(2)}`;
 }
 
 // Approved invitation text, identical to the registration form (public/guest.html)
@@ -947,15 +946,8 @@ app.post('/api/whatsapp/send-catalog', async (req, res) => {
   const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled !== 0);
   res.json({ sent: guests.length });
 
-  whatsapp.sendWithDelay(guests, g =>
-    `Здравствуйте, ${whatsapp.getFirstName(g.name)}! 👋\n\n` +
-    `Рады были видеть вас сегодня на встрече BNI SYNERGY! 🤝\n\n` +
-    `Надеемся, что помимо приятного общения вы нашли для себя деловой интерес и новые возможности для сотрудничества.\n\n` +
-    `Для вашего удобства — каталог участников группы с профессиями и контактами:\n` +
-    `https://bnisynergy.biz/members-catalog\n\n` +
-    `Будем рады видеть вас снова! 😊\n` +
-    `Команда BNI SYNERGY`
-  ).catch(err => console.error('[Broadcast] send-catalog error:', err.message));
+  catalog.sendManual(meeting_date)
+    .catch(err => console.error('[Broadcast] send-catalog error:', err.message));
 });
 
 app.post('/api/whatsapp/send-confirmations', async (req, res) => {
@@ -1223,6 +1215,9 @@ checkBirthdays();
 
 // ─── Cron: confirmation waves — Thu 10:00 (list 11:00) and Sun 18:00 (list 19:00), Asia/Jerusalem ─
 
+const catalog = require('./services/catalogBroadcast').createCatalog({
+  db, whatsapp, getTodayStr, getSessionStatus: whatsapp.getSessionStatus,
+});
 const waves = require('./services/confirmationWaves').createWaves({
   db, whatsapp, buildConfirmationMessage, getTodayStr, formatMeetingDate,
   getNextMeeting: () => db.getSetting('next_meeting_date') || NEXT_MEETING_DATE,
@@ -1236,30 +1231,9 @@ cron.schedule('0 19 * * 0', () => sendUnconfirmedList(2), { timezone: 'Asia/Jeru
 
 // ─── Cron: Monday 10:00 — send members catalog link to guests of today's meeting ─
 
-cron.schedule('0 10 * * 1', async () => {
+cron.schedule('0 10 * * 1', () => {
   console.log('[Cron] Понедельник 10:00 — рассылка каталога участников');
-  const settings    = db.getAllSettings();
-  const meetingDate = settings.next_meeting_date || NEXT_MEETING_DATE;
-  if (meetingDate !== getTodayStr()) {
-    console.log(`[Cron] Встреча ${meetingDate || '(не задана)'} не сегодня, пропускаем`);
-    return;
-  }
-  if (settings.catalog_sent_for === meetingDate) {
-    console.log('[Cron] Каталог на эту встречу уже отправлен, пропускаем');
-    return;
-  }
-  db.setSetting('catalog_sent_for', meetingDate);
-
-  const guests = db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled === 1);
-  console.log(`[Cron] Каталог: найдено ${guests.length} гостей`);
-
-  const results = await whatsapp.sendWithDelay(guests, g =>
-    `${whatsapp.getFirstName(g.name)}, спасибо, что были на встрече BNI SYNERGY! 🙏\n\n` +
-    `Как и обещали, делимся каталогом участников группы — здесь контакты всех, с кем вы познакомились:\n\n` +
-    `👉 https://bnisynergy.biz/members-catalog\n\n` +
-    `Будем рады видеть вас снова! 🤝`
-  );
-  console.log(`[Cron] Каталог готово. Отправлено: ${results.sent}, ошибок: ${results.failed}`);
+  catalog.runMondayCron().catch(err => console.error('[Cron] Каталог:', err.message));
 }, { timezone: 'Asia/Jerusalem' });
 
 // ─── Start ────────────────────────────────────────────────────────────────────

@@ -177,4 +177,9 @@ async function sendImage(phone, filePath, caption) {
   }
 }
 
-module.exports = { checkNumberExists, sendSequence, sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId };
+async function getSessionStatus() {
+  const { data } = await axios.get(`${WAHA_URL}/api/sessions/${WAHA_SESSION}`, { headers: WAHA_HEADERS, timeout: 10000 });
+  return data.status;
+}
+
+module.exports = { getSessionStatus, checkNumberExists, sendSequence, sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId };
