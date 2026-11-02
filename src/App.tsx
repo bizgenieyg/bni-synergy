@@ -13,6 +13,7 @@ import confetti from 'canvas-confetti'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { motion, AnimatePresence } from 'framer-motion'
+import { pickDefaultMeeting } from './pickMeeting'
 
 const cn = (...args: Parameters<typeof clsx>) => twMerge(clsx(...args))
 const RED = '#dc2626'
@@ -1252,7 +1253,8 @@ function GuestsSection() {
       const sorted = [...m].sort((a, b) => parseDateStr(a) - parseDateStr(b))
       setMeetings(sorted); setNextMeeting(s.date || '')
       setConfirmationSentFor(cfg.confirmation_sent_for || '')
-      if (sorted.length) setSelectedDate(sorted[sorted.length - 1])
+      const def = pickDefaultMeeting(sorted, s.date || '')
+      if (def) setSelectedDate(def)
     })
   }, [])
 
