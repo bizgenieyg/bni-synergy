@@ -9,7 +9,7 @@ process.env.DB_PATH = path.join(tmp, 'test.db');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const db = require('../services/db');
-const { createCatalog } = require('../services/catalogBroadcast');
+const { createCatalog, FACEBOOK_BLOCK } = require('../services/catalogBroadcast');
 
 const TODAY = '02/11/26';
 const sent = [];
@@ -30,9 +30,11 @@ add('Alice A', '0541000001', TODAY);
 add('Bob B', '0541000002', TODAY, 0);
 add('Carl C', '0541000003', '09/11/26');
 
-test('text: catalog link then the closing line', () => {
+test('text: Facebook block sits between the catalog link and the closing line', () => {
   const t = catalog.buildCatalogMessage({ name: 'Alice A' });
-  assert.ok(t.includes('https://bnisynergy.biz/members-catalog\n\nБудем рады видеть вас снова! 😊\nКоманда BNI SYNERGY'));
+  assert.ok(t.includes('https://www.facebook.com/share/g/1PXaN6Uxgg/'));
+  assert.ok(t.includes(
+    'https://bnisynergy.biz/members-catalog\n\n' + FACEBOOK_BLOCK + '\n\nБудем рады видеть вас снова! 😊\nКоманда BNI SYNERGY'));
   assert.ok(t.startsWith('Здравствуйте, Alice! 👋\n\nРады были видеть вас сегодня'));
 });
 

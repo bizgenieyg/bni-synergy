@@ -3,6 +3,10 @@
 // Post-meeting catalog message: shared by the manual button and the Monday 10:00 cron,
 // so the text and the recipient selection cannot drift apart.
 
+const FACEBOOK_BLOCK =
+  `Приглашаем вас в нашу группу BNI SYNERGY в Facebook:\n` +
+  `https://www.facebook.com/share/g/1PXaN6Uxgg/`;
+
 function buildCatalogMessage(guest, getFirstName) {
   return (
     `Здравствуйте, ${getFirstName(guest.name)}! 👋\n\n` +
@@ -10,6 +14,7 @@ function buildCatalogMessage(guest, getFirstName) {
     `Надеемся, что помимо приятного общения вы нашли для себя деловой интерес и новые возможности для сотрудничества.\n\n` +
     `Для вашего удобства — каталог участников группы с профессиями и контактами:\n` +
     `https://bnisynergy.biz/members-catalog\n\n` +
+    `${FACEBOOK_BLOCK}\n\n` +
     `Будем рады видеть вас снова! 😊\n` +
     `Команда BNI SYNERGY`
   );
@@ -56,4 +61,4 @@ function createCatalog({ db, whatsapp, getTodayStr, getSessionStatus }) {
   return { buildCatalogMessage: g => buildCatalogMessage(g, whatsapp.getFirstName), sendManual, runMondayCron };
 }
 
-module.exports = { createCatalog, buildCatalogMessage };
+module.exports = { createCatalog, buildCatalogMessage, FACEBOOK_BLOCK };
