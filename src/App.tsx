@@ -2419,8 +2419,16 @@ function GroupValueSection() {
 
 // ─── Presentations Section ───────────────────────────────────────────────────
 
-const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
-const DAYS_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
+// Calendar week starts on Sunday: column 0 = Sunday ... column 6 = Saturday (Date.getDay() order).
+const MEETING_DOW = 1 // Monday
+const ucFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+function weekdayShortNames(lang: string): string[] {
+  const f = new Intl.DateTimeFormat(lang, { weekday: 'short' })
+  return Array.from({ length: 7 }, (_, i) => ucFirst(f.format(new Date(2023, 0, 1 + i)))) // 1 Jan 2023 was a Sunday
+}
+function monthName(lang: string, month: number, year: number): string {
+  return ucFirst(new Intl.DateTimeFormat(lang, { month: 'long' }).format(new Date(year, month, 1)))
+}
 
 function presDateStr(d: Date): string {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(2)}`
@@ -2499,6 +2507,8 @@ function PresEditModal({ date, members, item, onSave, onClose }: PresEditModalPr
 }
 
 function PresentationsSection() {
+  const { i18n } = useTranslation()
+  const dayNames = useMemo(() => weekdayShortNames(i18n.language), [i18n.language])
   const [items, setItems] = useState<Presentation[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
@@ -2531,8 +2541,7 @@ function PresentationsSection() {
 
   const calendarCells = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1)
-    let dow = firstDay.getDay() // 0=Sun
-    dow = (dow + 6) % 7 // Mon=0..Sun=6
+    const dow = firstDay.getDay() // 0=Sun..6=Sat — the grid starts on Sunday, so this is the offset
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
     const cells: (Date | null)[] = []
     for (let i = 0; i < dow; i++) cells.push(null)
@@ -2579,7 +2588,7 @@ function PresentationsSection() {
           <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
             <ChevronLeft size={18} />
           </button>
-          <span className="font-semibold text-gray-800">{MONTHS_RU[viewMonth]} {viewYear}</span>
+          <span className="font-semibold text-gray-800">{monthName(i18n.language, viewMonth, viewYear)} {viewYear}</span>
           <button onClick={nextMonthFn} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
             <ChevronRight size={18} />
           </button>
@@ -2587,8 +2596,8 @@ function PresentationsSection() {
 
         {/* Day-of-week headers */}
         <div className="grid grid-cols-7 border-b border-gray-100">
-          {DAYS_SHORT.map(d => (
-            <div key={d} className={cn('text-center text-xs font-semibold py-2', d === 'Пн' ? 'text-red-500' : 'text-gray-400')}>
+          {dayNames.map((d, i) => (
+            <div key={i} className={cn('text-center text-xs font-semibold py-2', i === MEETING_DOW ? 'text-red-500' : 'text-gray-400')}>
               {d}
             </div>
           ))}
@@ -2601,7 +2610,7 @@ function PresentationsSection() {
               return <div key={idx} className="h-20 border-b border-r border-gray-50 bg-gray-50/40 last:border-r-0" />
             }
 
-            const isMonday = day.getDay() === 1
+            const isMonday = day.getDay() === MEETING_DOW
             const dateStr = presDateStr(day)
             const pres = presMap[dateStr]
             const member = pres?.member_id != null ? memberMap[pres.member_id] : null
