@@ -176,6 +176,13 @@ function parseDateStr(str: string): number {
   return new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0])).getTime()
 }
 
+// Phones, links and other LTR-only strings must not be reordered by the RTL (he) layout.
+// Inputs keep the page-side alignment: right in he, left in ru/en.
+const LTR_INPUT = 'rtl:text-right'
+function Ltr({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <span dir="ltr" className={cn('inline-block', className)}>{children}</span>
+}
+
 function formatPhoneDisplay(phone: string): string {
   if (!phone) return ''
   let digits = phone.replace(/\D/g, '')
@@ -567,7 +574,8 @@ function MemberModal({ member, onClose, onSaved }:
         <input value={form[key] as string}
           onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
           placeholder={placeholder}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+          {...(key === 'phone' || key === 'birthday' ? { dir: 'ltr' as const } : {})}
+          className={cn('w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400', (key === 'phone' || key === 'birthday') && LTR_INPUT)} />
       )}
     </div>
   )
@@ -655,7 +663,8 @@ function MemberModal({ member, onClose, onSaved }:
                   <span className="text-xs text-gray-500 capitalize w-20 flex-shrink-0">{s.platform}</span>
                   <input value={s.url}
                     onChange={e => setSocials(ss => ss.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
-                    className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+                    dir="ltr"
+                    className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
                   <button onClick={() => setSocials(ss => ss.filter((_, j) => j !== i))}
                     className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 flex-shrink-0">
                     <Trash2 size={13} />
@@ -670,8 +679,8 @@ function MemberModal({ member, onClose, onSaved }:
                   {SOCIAL_PLATFORMS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
                 <input value={addingUrl} onChange={e => setAddingUrl(e.target.value)}
-                  placeholder={t('memberModal.urlPlaceholder')}
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+                  placeholder={t('memberModal.urlPlaceholder')} dir="ltr"
+                  className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
                 <button onClick={() => {
                   if (addingUrl.trim()) {
                     setSocials(ss => [...ss, { platform: addingPlatform, url: addingUrl.trim() }])
@@ -767,8 +776,8 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">{t('ui.phoneOptional')} <span className="font-normal text-gray-400">{t('ui.optional')}</span></label>
-            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+972 050 000 0000"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+972 050 000 0000" dir="ltr"
+              className={cn('w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
           </div>
         </div>
 
@@ -781,7 +790,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
             </button>
           ))}
         </div>
-        {link && <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-3">{link}</div>}
+        {link && <div dir="ltr" className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-3 rtl:text-right">{link}</div>}
         {link && presenter?.member_name && (
           <div className="text-xs text-gray-600 mb-3 bg-red-50 rounded-lg px-3 py-2">
             🎤 {t('ui.presenterLine')}: <span className="font-semibold text-gray-800">{presenter.member_name}</span>
@@ -1030,8 +1039,8 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
             </div>
             <div className="flex gap-2">
               <input value={meetingWazeUrl} onChange={e => setMeetingWazeUrl(e.target.value)}
-                placeholder="https://waze.com/ul/…"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+                placeholder="https://waze.com/ul/…" dir="ltr"
+                className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
               <button onClick={() => saveMeetingField('meeting_waze_url', meetingWazeUrl)}
                 disabled={savingMeetingField === 'meeting_waze_url'}
                 className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
@@ -1042,8 +1051,8 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
         ) : (
           <div className="flex gap-2">
             <input value={meetingZoomUrl} onChange={e => setMeetingZoomUrl(e.target.value)}
-              placeholder="https://zoom.us/j/…"
-              className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+              placeholder="https://zoom.us/j/…" dir="ltr"
+              className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
             <button onClick={() => saveMeetingField('meeting_zoom_url', meetingZoomUrl)}
               disabled={savingMeetingField === 'meeting_zoom_url'}
               className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
@@ -1058,8 +1067,8 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
         <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🔔 {t('ui.notifications')}</p>
         <div className="flex gap-2">
           <input value={unconfirmedNotifyPhone} onChange={e => setUnconfirmedNotifyPhone(e.target.value)}
-            placeholder="972501234567"
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+            placeholder="972501234567" dir="ltr"
+            className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
           <button onClick={() => saveMeetingField('unconfirmed_notify_phone', unconfirmedNotifyPhone)}
             disabled={savingMeetingField === 'unconfirmed_notify_phone'}
             className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
@@ -1084,8 +1093,8 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
         </div>
         <div className="flex gap-2">
           <input value={mailNotifyPhone} onChange={e => setMailNotifyPhone(e.target.value)}
-            placeholder="972501234567"
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
+            placeholder="972501234567" dir="ltr"
+            className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
           <button onClick={() => saveMeetingField('mail_intake_notify_phone', mailNotifyPhone)}
             disabled={savingMeetingField === 'mail_intake_notify_phone'}
             className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
@@ -1551,7 +1560,7 @@ function GuestsSection() {
                 <div className="flex items-center justify-between gap-3 text-sm">
                   {g.phone ? (
                     <a href={`tel:+${waPhone(g.phone)}`} className="inline-flex items-center gap-1 min-h-[44px] text-gray-700 whitespace-nowrap">
-                      <Phone size={13} />{formatPhoneDisplay(g.phone)}
+                      <Phone size={13} /><Ltr>{formatPhoneDisplay(g.phone)}</Ltr>
                     </a>
                   ) : <span className="text-gray-300">—</span>}
                   <div className="min-w-0 text-right text-gray-500 break-words">{specialtyCell(g)}</div>
@@ -1595,7 +1604,7 @@ function GuestsSection() {
                   <td className="px-4 py-3 font-medium text-gray-900">{g.name}{reviewBadges(g)}</td>
                   <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>
                     <a href={`https://wa.me/${waPhone(g.phone)}`} target="_blank" rel="noopener noreferrer"
-                      className="hover:text-green-600 flex items-center gap-1"><Phone size={11} />{formatPhoneDisplay(g.phone)}</a>
+                      className="hover:text-green-600 flex items-center gap-1"><Phone size={11} /><Ltr>{formatPhoneDisplay(g.phone)}</Ltr></a>
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{specialtyCell(g)}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{g.invitedBy}</td>
@@ -1830,7 +1839,7 @@ function MembersSection() {
                     {m.phone && (
                       <a href={`https://wa.me/${waPhone(m.phone)}`} target="_blank" rel="noopener noreferrer"
                         className="text-gray-500 hover:text-green-600 flex items-center gap-1 text-xs">
-                        <Phone size={11} /> {formatPhoneDisplay(m.phone)}
+                        <Phone size={11} /> <Ltr>{formatPhoneDisplay(m.phone)}</Ltr>
                       </a>
                     )}
                   </td>
