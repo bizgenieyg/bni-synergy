@@ -6,7 +6,7 @@ import {
   Plus, Trash2, Edit2, Check, X, Search, Download, Send, Phone,
   RefreshCw, MessageCircle, UserCheck, Loader2, TrendingUp,
   DollarSign, Handshake, Trophy, CheckCircle2, Presentation,
-  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare, Calendar, Menu
+  Instagram, Linkedin, Facebook, Globe, Upload, Camera, MessageSquare, Calendar, Menu, Settings
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import confetti from 'canvas-confetti'
@@ -52,6 +52,11 @@ interface Member {
   active: number
   photo?: string
 }
+
+interface PositionDef { id: number; code: string; name_he: string; name_ru: string; name_en: string; grants_admin: number; notify_unconfirmed: number }
+interface PositionAssignment { position_id: number; is_head: number }
+const positionName = (p: PositionDef, lang: string) =>
+  (lang === 'he' ? p.name_he : lang === 'ru' ? p.name_ru : p.name_en) || p.name_en || p.name_ru || p.name_he || p.code
 
 interface MemberSocial {
   platform: string
@@ -127,7 +132,7 @@ interface Presentation {
   status?: string
 }
 
-type Section = 'dashboard' | 'guests' | 'members' | 'voting' | 'group-value' | 'presentations'
+type Section = 'dashboard' | 'guests' | 'members' | 'voting' | 'group-value' | 'presentations' | 'group-settings'
 type Period = 'week' | 'month' | 'quarter' | 'year' | 'all'
 
 // ─── API helpers ────────────────────────────────────────────────────────────
@@ -304,6 +309,7 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk, onWa
     { id: 'voting',        label: t('nav.voting'),           icon: <Vote size={18} /> },
     { id: 'group-value',   label: 'Group Value',             icon: <TrendingUp size={18} /> },
     { id: 'presentations', label: t('nav.presentations'),    icon: <Presentation size={18} /> },
+    { id: 'group-settings', label: t('ui.groupSettings'),     icon: <Settings size={18} /> },
   ]
 
   return (
@@ -499,9 +505,11 @@ function DatePickerInput({ value, onChange, placeholder = 'DD/MM/YY' }:
 
 // ─── Member Edit Modal ───────────────────────────────────────────────────────
 
-function MemberModal({ member, onClose, onSaved }:
-  { member: Member | null; onClose: () => void; onSaved: (m: Member) => void }) {
-  const { t } = useTranslation()
+function MemberModal({ member, positions, assigned, onClose, onSaved }:
+  { member: Member | null; positions: PositionDef[]; assigned: PositionAssignment[]; onClose: () => void; onSaved: (m: Member) => void }) {
+  const { t, i18n } = useTranslation()
+  const [selPos, setSelPos] = useState<Record<number, { on: boolean; head: boolean }>>(() =>
+    Object.fromEntries(assigned.map(a => [a.position_id, { on: true, head: !!a.is_head }])))
   const isNew = member === null
   const [form, setForm] = useState({
     name: member?.name ?? '',
@@ -574,6 +582,13 @@ function MemberModal({ member, onClose, onSaved }:
         method: 'PUT',
         body: JSON.stringify({ socials }),
       })
+
+      if (positions.length) {
+        await api(`/api/members/${savedMember.id}/positions`, {
+          method: 'PUT',
+          body: JSON.stringify({ positions: Object.entries(selPos).filter(([, v]) => v.on).map(([id, v]) => ({ position_id: Number(id), is_head: v.head ? 1 : 0 })) }),
+        })
+      }
 
       onSaved(savedMember)
     } finally {
@@ -665,6 +680,33 @@ function MemberModal({ member, onClose, onSaved }:
             {field('birthday', t('memberModal.birthdayLabel'), t('memberModal.birthdayPlaceholder'))}
             <div className="col-span-2">{field('active', t('memberModal.statusLabel'))}</div>
           </div>
+
+          {positions.length > 0 && (
+            <div className="border-t border-gray-100 pt-4 mb-5">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t('ui.positions')}</p>
+              <div className="space-y-2">
+                {positions.map(p => {
+                  const st = selPos[p.id] || { on: false, head: false }
+                  return (
+                    <div key={p.id} className="flex items-center gap-3 flex-wrap">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer min-w-[10rem]">
+                        <input type="checkbox" checked={st.on}
+                          onChange={e => setSelPos(m => ({ ...m, [p.id]: { on: e.target.checked, head: e.target.checked ? st.head : false } }))} />
+                        {positionName(p, i18n.language)}
+                      </label>
+                      {st.on && (
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                          <input type="checkbox" checked={st.head}
+                            onChange={e => setSelPos(m => ({ ...m, [p.id]: { on: true, head: e.target.checked } }))} />
+                          {t('ui.teamHead')}
+                        </label>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="border-t border-gray-100 pt-4 mb-5">
             <div className="flex items-center justify-between mb-3">
@@ -865,15 +907,6 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
-function getNextMonday(): string {
-  const d = new Date()
-  const day = d.getDay() // 0=Sun, 1=Mon, …, 6=Sat
-  const daysUntil = day === 1 ? 7 : (8 - day) % 7
-  d.setDate(d.getDate() + daysUntil)
-  const yy = String(d.getFullYear()).slice(2)
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${yy}`
-}
-
 function shiftDDMM(ddmm: string, days: number): string {
   const parts = ddmm.split('/')
   if (parts.length < 2) return ddmm
@@ -909,10 +942,8 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
   const [gv1on1, setGv1on1] = useState(0)
   const [loading, setLoading] = useState(false)
   const [savingMeeting, setSavingMeeting] = useState(false)
+  const [scheduleAuto, setScheduleAuto] = useState(false)
   const [meetingType, setMeetingType] = useState<'offline' | 'zoom'>('offline')
-  const [meetingLocation, setMeetingLocation] = useState('')
-  const [meetingWazeUrl, setMeetingWazeUrl] = useState('')
-  const [meetingZoomUrl, setMeetingZoomUrl] = useState('')
   const [unconfirmedNotifyPhone, setUnconfirmedNotifyPhone] = useState('')
   const [mailMode, setMailMode] = useState<'test' | 'prod'>('test')
   const [mailNotifyPhone, setMailNotifyPhone] = useState('')
@@ -943,7 +974,9 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
       api('/api/members?active=true').then(r => r.json()),
       api('/api/group-value/totals?period=all').then(r => r.json()),
       api('/api/settings').then(r => r.json()),
-    ]).then(([s, vs, vr, gc, b, m, gv, cfg]) => {
+      api('/api/settings/next-meeting').then(r => r.json()),
+    ]).then(([s, vs, vr, gc, b, m, gv, cfg, nm]) => {
+      setScheduleAuto(!!nm.auto)
       setStats(s)
       setVotingStatus(vs)
       setResults((vr as {date:string,results:VoteResult[]}[]).find(x => x.date === vs.meetingDate)?.results ?? vr[0]?.results ?? [])
@@ -953,9 +986,6 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
       setGvTotal(gv?.total_amount || 0)
       setGv1on1(gv?.total_1on1 || 0)
       if (cfg.meeting_type) setMeetingType(cfg.meeting_type as 'offline' | 'zoom')
-      if (cfg.meeting_location) setMeetingLocation(cfg.meeting_location)
-      if (cfg.meeting_waze_url) setMeetingWazeUrl(cfg.meeting_waze_url)
-      if (cfg.meeting_zoom_url) setMeetingZoomUrl(cfg.meeting_zoom_url)
       if (cfg.unconfirmed_notify_phone) setUnconfirmedNotifyPhone(cfg.unconfirmed_notify_phone)
       setMailMode(cfg.mail_intake_mode === 'prod' ? 'prod' : 'test')
       if (cfg.mail_intake_notify_phone) setMailNotifyPhone(cfg.mail_intake_notify_phone)
@@ -1009,25 +1039,31 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
           <Calendar size={14} className="text-gray-400" />
           {t('ui.nextMeeting')}
         </span>
-        <div className="flex items-center gap-0.5 border border-gray-200 rounded-xl overflow-hidden">
-          <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, -7))}
-            disabled={savingMeeting || !nextMeeting}
-            className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
-            <NavChevron dir="prev" size={16} />
-          </button>
-          <span className="text-sm font-bold text-gray-900 min-w-[56px] text-center px-1">
+        {scheduleAuto ? (
+          <span className="text-sm font-bold text-gray-900 px-3 py-1.5 border border-gray-200 rounded-xl" title={t('ui.scheduleAutoHint')}>
             {nextMeeting ? nextMeeting.split('/').slice(0,2).join('/') : '—'}
           </span>
-          <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, 7))}
-            disabled={savingMeeting || !nextMeeting}
-            className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
-            <NavChevron dir="next" size={16} />
-          </button>
-        </div>
-        <button onClick={() => saveMeeting(getNextMonday())} disabled={savingMeeting}
-          className="text-xs px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition-colors">
-          {t('ui.auto')}
-        </button>
+        ) : (
+          <>
+            <div className="flex items-center gap-0.5 border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, -7))}
+                disabled={savingMeeting || !nextMeeting}
+                className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+                <NavChevron dir="prev" size={16} />
+              </button>
+              <span className="text-sm font-bold text-gray-900 min-w-[56px] text-center px-1">
+                {nextMeeting ? nextMeeting.split('/').slice(0,2).join('/') : '—'}
+              </span>
+              <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, 7))}
+                disabled={savingMeeting || !nextMeeting}
+                className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
+                <NavChevron dir="next" size={16} />
+              </button>
+            </div>
+            <button onClick={() => onNavigate('group-settings')}
+              className="text-xs text-red-500 hover:underline">{t('ui.setMeetingDay')}</button>
+          </>
+        )}
         {savingMeeting && <Loader2 size={14} className="animate-spin text-gray-400" />}
       </div>
 
@@ -1047,41 +1083,9 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
             </button>
           ))}
         </div>
-        {meetingType === 'offline' ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <input value={meetingLocation} onChange={e => setMeetingLocation(e.target.value)}
-                placeholder={t('ui.meetingAddress')}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
-              <button onClick={() => saveMeetingField('meeting_location', meetingLocation)}
-                disabled={savingMeetingField === 'meeting_location'}
-                className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
-                {savingMeetingField === 'meeting_location' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input value={meetingWazeUrl} onChange={e => setMeetingWazeUrl(e.target.value)}
-                placeholder="https://waze.com/ul/…" dir="ltr"
-                className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
-              <button onClick={() => saveMeetingField('meeting_waze_url', meetingWazeUrl)}
-                disabled={savingMeetingField === 'meeting_waze_url'}
-                className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
-                {savingMeetingField === 'meeting_waze_url' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <input value={meetingZoomUrl} onChange={e => setMeetingZoomUrl(e.target.value)}
-              placeholder="https://zoom.us/j/…" dir="ltr"
-              className={cn('flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
-            <button onClick={() => saveMeetingField('meeting_zoom_url', meetingZoomUrl)}
-              disabled={savingMeetingField === 'meeting_zoom_url'}
-              className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:border-gray-300 text-sm disabled:opacity-50">
-              {savingMeetingField === 'meeting_zoom_url' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
-            </button>
-          </div>
-        )}
+        <button onClick={() => onNavigate('group-settings')} className="text-xs text-red-500 hover:underline">
+          {t('ui.addressMovedHint')}
+        </button>
       </div>
 
       {/* Notifications Settings */}
@@ -1097,7 +1101,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
             {savingMeetingField === 'unconfirmed_notify_phone' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1.5">{t('ui.notifyUnconfirmed')}</p>
+        <p className="text-xs text-gray-400 mt-1.5">{t('ui.notifyUnconfirmed')} {t('ui.notifyFallbackHint')}</p>
       </div>
 
       {/* BNI Connect letters */}
@@ -1656,7 +1660,9 @@ function GuestsSection() {
 // ─── Members Section ─────────────────────────────────────────────────────────
 
 function MembersSection() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const [positionDefs, setPositionDefs] = useState<PositionDef[]>([])
+  const [assignments, setAssignments] = useState<Record<number, PositionAssignment[]>>({})
   const [members, setMembers] = useState<Member[]>([])
   const [memberSocials, setMemberSocials] = useState<Record<number, MemberSocial[]>>({})
   const [search, setSearch] = useState('')
@@ -1673,11 +1679,14 @@ function MembersSection() {
   const dragIdx = useRef<number | null>(null)
 
   const load = useCallback(async () => {
-    const [m, s, b] = await Promise.all([
+    const [m, s, b, pos] = await Promise.all([
       api('/api/members').then(r => r.json()),
       api('/api/settings/next-meeting').then(r => r.json()),
       api('/api/birthdays/upcoming?days=14').then(r => r.json()),
+      api('/api/positions').then(r => r.json()).catch(() => ({ positions: [], assignments: {} })),
     ])
+    setPositionDefs(pos.positions || [])
+    setAssignments(pos.assignments || {})
     setMembers(m)
     setNextMeeting(s.date || '')
     setBirthdays(b)
@@ -1842,6 +1851,7 @@ function MembersSection() {
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('members.colProfession')}</th>
                 <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('members.colPhone')}</th>
                 <th className="px-4 py-3 font-medium hidden xl:table-cell">{t('members.colBirthday')}</th>
+                <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('ui.positions')}</th>
                 <th className="px-4 py-3 font-medium">{t('members.colSocials')}</th>
                 <th className="px-4 py-3 font-medium w-20">{t('members.colActions')}</th>
               </tr>
@@ -1867,6 +1877,12 @@ function MembersSection() {
                   </td>
                   <td className="px-4 py-2.5 text-gray-400 text-xs hidden xl:table-cell">
                     {m.birthday && <span>🎂 {m.birthday}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-gray-600 hidden lg:table-cell">
+                    {(assignments[m.id] || []).map(a => {
+                      const p = positionDefs.find(x => x.id === a.position_id)
+                      return p ? <div key={a.position_id}>{a.is_head ? '★ ' : ''}{positionName(p, i18n.language)}</div> : null
+                    })}
                   </td>
                   <td className="px-4 py-2.5">
                     <SocialIcons socials={memberSocials[m.id] || []} />
@@ -1905,6 +1921,8 @@ function MembersSection() {
         {editingMember !== undefined && (
           <MemberModal
             member={editingMember}
+            positions={positionDefs}
+            assigned={editingMember ? (assignments[editingMember.id] || []) : []}
             onClose={() => setEditingMember(undefined)}
             onSaved={onSaved}
           />
@@ -2722,6 +2740,103 @@ function PresentationsSection() {
   )
 }
 
+// ─── Group settings ──────────────────────────────────────────────────────────
+
+interface GroupInfo {
+  id: number; name: string; address: string; waze_url: string; zoom_url: string; payment_url: string
+  payment_amount: number | null; meeting_weekday: number | null; meeting_time: string | null
+  next_meeting: string; schedule_set: boolean
+}
+
+function GroupSettingsSection() {
+  const { t, i18n } = useTranslation()
+  const [g, setG] = useState<GroupInfo | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const dayNames = useMemo(() => Array.from({ length: 7 }, (_, i) =>
+    ucFirst(new Intl.DateTimeFormat(i18n.language, { weekday: 'long' }).format(new Date(2023, 0, 1 + i)))), [i18n.language])
+
+  useEffect(() => { api('/api/group').then(r => r.json()).then(setG) }, [])
+
+  if (!g) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-gray-400" /></div>
+
+  const set = (patch: Partial<GroupInfo>) => setG(prev => prev ? { ...prev, ...patch } : prev)
+  const save = async () => {
+    setSaving(true); setMsg(null)
+    try {
+      const r = await api('/api/group', { method: 'PUT', body: JSON.stringify({
+        address: g.address, waze_url: g.waze_url, zoom_url: g.zoom_url, payment_url: g.payment_url,
+        payment_amount: g.payment_amount ?? '', meeting_weekday: g.meeting_weekday ?? '', meeting_time: g.meeting_time ?? '',
+      }) })
+      const d = await r.json()
+      if (r.ok) { setG(prev => prev ? { ...prev, ...d.group, next_meeting: d.next_meeting, schedule_set: d.group.meeting_weekday !== null } : prev); setMsg({ ok: true, text: t('ui.saved') }) }
+      else setMsg({ ok: false, text: d.error || 'Error' })
+    } finally { setSaving(false) }
+  }
+
+  const input = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400'
+  const label = 'text-xs font-medium text-gray-500 block mb-1'
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <h1 className="text-2xl font-bold text-gray-900">{t('ui.groupSettings')}</h1>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <p className="text-sm font-semibold text-gray-700">{t('ui.groupMeeting')}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={label}>{t('ui.meetingWeekday')}</label>
+            <select value={g.meeting_weekday ?? ''} onChange={e => set({ meeting_weekday: e.target.value === '' ? null : Number(e.target.value) })} className={input}>
+              <option value="">—</option>
+              {dayNames.map((n, i) => <option key={i} value={i}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={label}>{t('ui.meetingTime')}</label>
+            <input type="time" value={g.meeting_time ?? ''} onChange={e => set({ meeting_time: e.target.value || null })} dir="ltr" className={cn(input, LTR_INPUT)} />
+          </div>
+        </div>
+        <p className="text-xs text-gray-500">
+          {g.meeting_weekday === null ? t('ui.noWeekdayHint') : <>{t('ui.nextMeeting')}: <span dir="ltr" className="font-semibold text-gray-800">{g.next_meeting}</span></>}
+        </p>
+        <div>
+          <label className={label}>{t('ui.meetingAddress')}</label>
+          <input value={g.address} onChange={e => set({ address: e.target.value })} className={input} />
+        </div>
+        <div>
+          <label className={label}>{t('ui.wazeLink')}</label>
+          <input value={g.waze_url} onChange={e => set({ waze_url: e.target.value })} dir="ltr" placeholder="https://waze.com/ul/…" className={cn(input, LTR_INPUT)} />
+        </div>
+        <div>
+          <label className={label}>{t('ui.zoomLink')}</label>
+          <input value={g.zoom_url} onChange={e => set({ zoom_url: e.target.value })} dir="ltr" placeholder="https://zoom.us/j/…" className={cn(input, LTR_INPUT)} />
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <p className="text-sm font-semibold text-gray-700">{t('ui.groupPayment')}</p>
+        <div>
+          <label className={label}>{t('ui.paymentLink')}</label>
+          <input value={g.payment_url} onChange={e => set({ payment_url: e.target.value })} dir="ltr" placeholder="https://…" className={cn(input, LTR_INPUT)} />
+          <p className="text-xs text-gray-400 mt-1">{t('ui.paymentEmptyHint')}</p>
+        </div>
+        <div className="sm:w-48">
+          <label className={label}>{t('ui.paymentAmount')}</label>
+          <input value={g.payment_amount ?? ''} inputMode="numeric" dir="ltr"
+            onChange={e => set({ payment_amount: e.target.value === '' ? null : Number(e.target.value.replace(/\D/g, '')) })} className={cn(input, LTR_INPUT)} />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={save} disabled={saving}
+          className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-2" style={{ background: RED }}>
+          {saving && <Loader2 size={14} className="animate-spin" />} {t('ui.save')}
+        </button>
+        {msg && <span className={cn('text-sm', msg.ok ? 'text-green-600' : 'text-red-600')}>{msg.text}</span>}
+      </div>
+    </div>
+  )
+}
+
 // ─── WhatsApp connection window ──────────────────────────────────────────────
 
 type WahaInfo = {
@@ -3018,6 +3133,7 @@ export default function App() {
     voting:        <VotingSection />,
     'group-value': <GroupValueSection />,
     presentations: <PresentationsSection />,
+    'group-settings': <GroupSettingsSection />,
   }
 
   return (
