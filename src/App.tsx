@@ -149,6 +149,20 @@ async function api(path: string, opts?: RequestInit) {
   return res
 }
 
+// Authenticated file download: a plain <a href="/api/..."> cannot send the Bearer token.
+async function downloadFile(path: string, filename: string) {
+  const res = await api(path)
+  if (!res.ok) { alert(`HTTP ${res.status}`); return }
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
 function useIsMobile(maxWidth = 640) {
   const query = `(max-width: ${maxWidth}px)`
   const [mobile, setMobile] = useState(() => window.matchMedia(query).matches)
@@ -1457,12 +1471,12 @@ function GuestsSection() {
             {sendingCatalog ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             {t('guests.sendCatalog')}
           </button>
-          <a href="/api/pdf/list" target="_blank" className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
+          <button onClick={() => downloadFile('/api/pdf/list', 'guest-list.pdf')} className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
             <Download size={13} /> {t('guests.exportPdfList')}
-          </a>
-          <a href="/api/pdf/badges" target="_blank" className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
+          </button>
+          <button onClick={() => downloadFile('/api/pdf/badges', 'badges.pdf')} className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
             <Download size={13} /> {t('guests.exportPdfBadges')}
-          </a>
+          </button>
         </div>
       </div>
 
@@ -1757,10 +1771,10 @@ function MembersSection() {
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
               🌐 {t('ui.catalog')}
             </a>
-            <a href="/api/pdf/members" target="_blank"
+            <button onClick={() => downloadFile('/api/pdf/members', 'members.pdf')}
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
               <Download size={13} />
-            </a>
+            </button>
             <button onClick={() => setEditingMember(null)}
               className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5" style={{ background: RED }}>
               <Plus size={14} /> {t('members.addMember')}
@@ -2724,7 +2738,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
   // Auto-poll status every 3 s
   useEffect(() => {
     const id = setInterval(() => {
-      fetch('/api/waha/status')
+      api('/api/waha/status')
         .then(r => r.json())
         .then(d => {
           if (d.ok) {
@@ -2743,7 +2757,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
   useEffect(() => {
     if (success) return
     const id = setInterval(() => {
-      fetch('/api/waha/qr').then(r => r.json())
+      api('/api/waha/qr').then(r => r.json())
         .then(d => setQrData({ qr: d.qr || '', found: !!d.found }))
         .catch(() => {})
     }, 15000)
@@ -2753,7 +2767,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
   const manualCheck = async () => {
     setChecking(true)
     try {
-      const d = await fetch('/api/waha/status').then(r => r.json())
+      const d = await api('/api/waha/status').then(r => r.json())
       if (d.ok) { setSuccess(true); onConnected(); setTimeout(onClose, 2000) }
     } finally { setChecking(false) }
   }
@@ -2761,7 +2775,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
   const refreshQr = async () => {
     setRefreshing(true)
     try {
-      const d = await fetch('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
+      const d = await api('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
       setQrData({ qr: d.qr || '', found: !!d.found })
     } finally { setRefreshing(false) }
   }
@@ -2865,7 +2879,7 @@ export default function App() {
   useEffect(() => {
     if (!authed) return
     const check = () =>
-      fetch('/api/waha/status')
+      api('/api/waha/status')
         .then(r => r.json())
         .then(d => setWahaOk(!!d.ok))
         .catch(() => setWahaOk(false))
@@ -2882,9 +2896,9 @@ export default function App() {
   const handleWahaRestart = async () => {
     setWahaRestarting(true)
     try {
-      await fetch('/api/waha/restart', { method: 'POST' })
+      await api('/api/waha/restart', { method: 'POST' })
       await new Promise(resolve => setTimeout(resolve, 4000))
-      const d = await fetch('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
+      const d = await api('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
       setWahaQrData({ qr: d.qr || '', found: !!d.found })
       setWahaQrOpen(true)
     } catch { /* ignore */ } finally {

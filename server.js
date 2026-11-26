@@ -2,6 +2,12 @@
 
 require('dotenv').config();
 
+// Fail closed: the admin API must never run without a password.
+if (!process.env.ADMIN_PASSWORD) {
+  console.error('FATAL: ADMIN_PASSWORD is not set. Set it in .env and restart (the server will not start without it).');
+  process.exit(1);
+}
+
 const express              = require('express');
 const cors                 = require('cors');
 const path                 = require('path');
@@ -15,6 +21,7 @@ const whatsapp = require('./services/whatsapp');
 const mailIntake = require('./services/mailIntake');
 const { computeVisitCounts } = require('./services/visitCounts');
 const pdf      = require('./services/pdf');
+const authGuard = require('./services/authGuard');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -226,31 +233,28 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Admin auth ───────────────────────────────────────────────────────────────
 
 const crypto = require('crypto');
-
-function makeStaticToken(password) {
-  return crypto.createHmac('sha256', password + 'bni-synergy-salt').digest('hex');
-}
+const auth = authGuard.createAuth(process.env.ADMIN_PASSWORD);
+const adminAuth = auth.adminAuth;
+const loginLimiter = authGuard.createLoginLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 
 app.post('/api/admin/login', (req, res) => {
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bni2024';
-  const { password } = req.body;
-  if (password !== ADMIN_PASSWORD) {
+  const ip = authGuard.clientIp(req);
+  if (loginLimiter.isBlocked(ip)) {
+    res.set('Retry-After', String(loginLimiter.retryAfterSec(ip)));
+    return res.status(429).json({ error: 'Слишком много попыток входа. Попробуйте позже.' });
+  }
+  const { password } = req.body || {};
+  if (!auth.checkPassword(password)) {
+    loginLimiter.recordFailure(ip);
+    console.warn(`[Auth] failed admin login from ${ip}`);
     return res.status(401).json({ error: 'Неверный пароль' });
   }
-  const token = makeStaticToken(ADMIN_PASSWORD);
-  res.json({ token });
+  res.json({ token: auth.token });
 });
 
-function adminAuth(req, res, next) {
-  if (!process.env.ADMIN_PASSWORD) return next();
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bni2024';
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (token !== makeStaticToken(ADMIN_PASSWORD)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
-}
+// Default-deny: every /api route needs the admin token unless it is in
+// services/authGuard.js PUBLIC_ROUTES. Registered before all other /api routes.
+app.use('/api', auth.guard);
 
 // ─── HTML pages ───────────────────────────────────────────────────────────────
 
@@ -406,7 +410,15 @@ app.post('/api/register', async (req, res) => {
 
 // ─── PayBox webhook ───────────────────────────────────────────────────────────
 
+if (!process.env.PAYBOX_WEBHOOK_SECRET) {
+  console.warn('[PayBox] PAYBOX_WEBHOOK_SECRET is not set: payment webhook is unauthenticated');
+}
+
 app.post('/api/paybox-webhook', async (req, res) => {
+  if (!authGuard.webhookKeyOk(process.env.PAYBOX_WEBHOOK_SECRET, req.query.key)) {
+    console.warn(`[PayBox] webhook rejected: bad or missing key (ip ${authGuard.clientIp(req)})`);
+    return res.status(403).json({ error: 'forbidden' });
+  }
   const data = { ...req.query, ...req.body };
   console.log('[PayBox] Webhook:', JSON.stringify(data));
 
@@ -600,7 +612,7 @@ app.get('/api/members', (req, res) => {
   const members = active === 'true'
     ? db.getActiveMembers()
     : db.getAllMembers();
-  res.json(members);
+  res.json(auth.isAdminRequest(req) ? members : members.map(authGuard.publicMemberList));
 });
 
 app.post('/api/members', (req, res) => {
@@ -644,7 +656,7 @@ app.get('/api/members/count', (req, res) => {
 app.get('/api/members/:id', (req, res) => {
   const member = db.getMemberById(Number(req.params.id));
   if (!member) return res.status(404).json({ error: 'Участник не найден' });
-  res.json(member);
+  res.json(auth.isAdminRequest(req) ? member : authGuard.publicMemberProfile(member));
 });
 
 app.get('/api/members/:id/photo', (req, res) => {
@@ -670,7 +682,7 @@ app.post('/api/members/:id/photo', upload.single('photo'), (req, res) => {
 app.patch('/api/members/:id/profile', (req, res) => {
   const member = db.updateMemberProfile(Number(req.params.id), req.body);
   if (!member) return res.status(404).json({ error: 'Участник не найден' });
-  res.json({ success: true, member });
+  res.json({ success: true, member: auth.isAdminRequest(req) ? member : authGuard.publicMemberProfile(member) });
 });
 
 app.patch('/api/members/:id/activate', (req, res) => {
@@ -713,7 +725,7 @@ app.get('/api/guests/stats', (req, res) => {
 app.get('/api/catalog', (req, res) => {
   const members = db.getActiveMembers();
   const result  = members.map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
-  res.json(result);
+  res.json(auth.isAdminRequest(req) ? result : result.map(authGuard.publicCatalogMember));
 });
 
 // ─── PDF endpoints ────────────────────────────────────────────────────────────
@@ -751,7 +763,7 @@ app.patch('/api/settings/next-meeting', (req, res) => {
 });
 
 app.get('/api/settings', (req, res) => {
-  res.json(db.getAllSettings());
+  res.json(authGuard.filterSettings(db.getAllSettings(), auth.isAdminRequest(req)));
 });
 
 app.put('/api/settings', adminAuth, (req, res) => {
