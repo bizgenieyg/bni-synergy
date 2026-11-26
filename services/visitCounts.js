@@ -2,7 +2,7 @@
 
 // Visit counters for the guests table. Pure: takes guest rows, returns a Map
 // id -> { visits12m, visitsAll }. A guest is matched across records by the
-// normalized phone; counts are by records (no "attended" flag exists).
+// normalized phone; counts are distinct meeting dates (no "attended" flag exists); a record is a visit.
 
 // "DD/MM/YY" or "DD/MM/YYYY" -> UTC midnight timestamp, or null if unparseable
 // (including "DD/MM" without a year, where the year cannot be known).
@@ -31,9 +31,18 @@ function lowerBound(arr, x) { // first index with arr[i] >= x
   return lo;
 }
 
+function upperBound(arr, x) { // first index with arr[i] > x
+  let lo = 0, hi = arr.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] <= x) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+
+// A record is itself a visit. For a row R: visitsAll = number of DISTINCT meeting
+// dates of the same phone that are not later than R's date (R included);
+// visits12m = those not earlier than 12 months before R's date (inclusive).
 function computeVisitCounts(guests, normalize = require('./db').normalizePhone) {
   const result = new Map();
-  const groups = new Map(); // phone -> sorted array of timestamps
+  const dates = new Map(); // phone -> Set of timestamps
   const rows = [];
 
   for (const g of guests) {
@@ -41,16 +50,17 @@ function computeVisitCounts(guests, normalize = require('./db').normalizePhone) 
     const t = parseMeetingDate(g.meetingDate);
     if (!/^972\d{9}$/.test(phone) || t === null) continue; // unrecognised phone / date: no counter
     rows.push({ id: g.id, phone, t });
-    if (!groups.has(phone)) groups.set(phone, []);
-    groups.get(phone).push(t);
+    if (!dates.has(phone)) dates.set(phone, new Set());
+    dates.get(phone).add(t);
   }
-  for (const arr of groups.values()) arr.sort((a, b) => a - b);
+  const sorted = new Map();
+  for (const [phone, set] of dates) sorted.set(phone, [...set].sort((a, b) => a - b));
 
   for (const r of rows) {
-    const arr = groups.get(r.phone);
-    const before = lowerBound(arr, r.t);            // strictly earlier than this record's date
-    const from   = lowerBound(arr, twelveMonthsBefore(r.t)); // not earlier than 12 months back
-    result.set(r.id, { visits12m: Math.max(0, before - from), visitsAll: before });
+    const arr = sorted.get(r.phone);
+    const upto = upperBound(arr, r.t);                       // distinct dates <= R
+    const from = lowerBound(arr, twelveMonthsBefore(r.t));   // dates >= R - 12 months
+    result.set(r.id, { visits12m: upto - from, visitsAll: upto });
   }
   return result;
 }

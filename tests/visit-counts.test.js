@@ -17,9 +17,9 @@ test('one phone in different formats is one person', () => {
     g('b', '+972501234567', '15/06/26'),
     g('c', '972-50-123-4567', '30/06/26'),
   ]);
-  assert.deepEqual(m.get('a'), { visits12m: 0, visitsAll: 0 });
-  assert.deepEqual(m.get('b'), { visits12m: 1, visitsAll: 1 });
-  assert.deepEqual(m.get('c'), { visits12m: 2, visitsAll: 2 });
+  assert.deepEqual(m.get('a'), { visits12m: 1, visitsAll: 1 });
+  assert.deepEqual(m.get('b'), { visits12m: 2, visitsAll: 2 });
+  assert.deepEqual(m.get('c'), { visits12m: 3, visitsAll: 3 });
 });
 
 test('12 month boundary: exactly 12 months back is included, a day earlier is not', () => {
@@ -28,18 +28,18 @@ test('12 month boundary: exactly 12 months back is included, a day earlier is no
     g('old2', '0501234567', '30/11/25'), // exactly 12 months before
     g('cur',  '0501234567', '30/11/26'),
   ]);
-  assert.deepEqual(m.get('cur'), { visits12m: 1, visitsAll: 2 });
+  assert.deepEqual(m.get('cur'), { visits12m: 2, visitsAll: 3 }); // old2 (boundary) + cur; old1 only in all-time
 });
 
-test('second visit two months later = 1 (1); third with the second a year and a day ago = 1 (2)', () => {
+test('first = 1 (1); second two months later = 2 (2); third a year after the first = 2 (3)', () => {
   const m = computeVisitCounts([
     g('1', '0541111111', '05/01/25'),
     g('2', '0541111111', '05/03/25'),
     g('3', '0541111111', '04/03/26'),
   ]);
-  assert.deepEqual(m.get('1'), { visits12m: 0, visitsAll: 0 });
-  assert.deepEqual(m.get('2'), { visits12m: 1, visitsAll: 1 });
-  assert.deepEqual(m.get('3'), { visits12m: 1, visitsAll: 2 });
+  assert.deepEqual(m.get('1'), { visits12m: 1, visitsAll: 1 });
+  assert.deepEqual(m.get('2'), { visits12m: 2, visitsAll: 2 });
+  assert.deepEqual(m.get('3'), { visits12m: 2, visitsAll: 3 });
 });
 
 test('empty or unrecognised phone gets no counter', () => {
@@ -49,24 +49,24 @@ test('empty or unrecognised phone gets no counter', () => {
   assert.equal(m.size, 0);
 });
 
-test('current and later records are not counted', () => {
+test('later records are not counted; the record itself is', () => {
   const m = computeVisitCounts([
     g('past', '0502222222', '01/06/26'),
     g('now',  '0502222222', '08/06/26'),
     g('next', '0502222222', '15/06/26'),
   ]);
-  assert.deepEqual(m.get('now'),  { visits12m: 1, visitsAll: 1 });
-  assert.deepEqual(m.get('past'), { visits12m: 0, visitsAll: 0 });
+  assert.deepEqual(m.get('now'),  { visits12m: 2, visitsAll: 2 });
+  assert.deepEqual(m.get('past'), { visits12m: 1, visitsAll: 1 });
 });
 
-test('several records on the same date do not count as earlier', () => {
+test('several records on the same date are one visit', () => {
   const m = computeVisitCounts([
     g('a', '0503333333', '01/06/26'),
     g('b', '0503333333', '01/06/26'),
     g('c', '0503333333', '08/06/26'),
   ]);
-  assert.deepEqual(m.get('a'), { visits12m: 0, visitsAll: 0 });
-  assert.deepEqual(m.get('b'), { visits12m: 0, visitsAll: 0 });
+  assert.deepEqual(m.get('a'), { visits12m: 1, visitsAll: 1 });
+  assert.deepEqual(m.get('b'), { visits12m: 1, visitsAll: 1 });
   assert.deepEqual(m.get('c'), { visits12m: 2, visitsAll: 2 });
 });
 
@@ -76,5 +76,5 @@ test('date parsing: DD/MM/YY, DD/MM/YYYY; invalid and year-less are rejected; 29
   assert.equal(parseMeetingDate('30/11'), null);
   assert.equal(parseMeetingDate('31/02/26'), null);
   const m = computeVisitCounts([g('p', '0504444444', '28/02/27'), g('q', '0504444444', '29/02/28')]);
-  assert.deepEqual(m.get('q'), { visits12m: 1, visitsAll: 1 }); // 29/02/28 window starts 28/02/27
+  assert.deepEqual(m.get('q'), { visits12m: 2, visitsAll: 2 }); // 29/02/28 window starts 28/02/27 (included)
 });
