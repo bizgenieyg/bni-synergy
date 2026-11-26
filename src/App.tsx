@@ -179,6 +179,12 @@ function parseDateStr(str: string): number {
 // Phones, links and other LTR-only strings must not be reordered by the RTL (he) layout.
 // Inputs keep the page-side alignment: right in he, left in ru/en.
 const LTR_INPUT = 'rtl:text-right'
+// Previous/next arrow that points the right way in RTL (he): prev = ">", next = "<".
+function NavChevron({ dir, size }: { dir: 'prev' | 'next'; size: number }) {
+  const { i18n } = useTranslation()
+  const left = (dir === 'prev') !== (i18n.language === 'he')
+  return left ? <ChevronLeft size={size} /> : <ChevronRight size={size} />
+}
 function Ltr({ children, className }: { children: React.ReactNode; className?: string }) {
   return <span dir="ltr" className={cn('inline-block', className)}>{children}</span>
 }
@@ -443,9 +449,9 @@ function DatePickerInput({ value, onChange, placeholder = 'DD/MM/YY' }:
       {open && (
         <div className="absolute top-full right-0 mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-68">
           <div className="flex items-center justify-between mb-3">
-            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><ChevronLeft size={15} /></button>
+            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><NavChevron dir="prev" size={15} /></button>
             <span className="text-sm font-semibold text-gray-800">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><ChevronRight size={15} /></button>
+            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><NavChevron dir="next" size={15} /></button>
           </div>
           <div className="grid grid-cols-7 mb-1">
             {['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => (
@@ -992,7 +998,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
           <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, -7))}
             disabled={savingMeeting || !nextMeeting}
             className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
-            <ChevronLeft size={16} />
+            <NavChevron dir="prev" size={16} />
           </button>
           <span className="text-sm font-bold text-gray-900 min-w-[56px] text-center px-1">
             {nextMeeting ? nextMeeting.split('/').slice(0,2).join('/') : '—'}
@@ -1000,7 +1006,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
           <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, 7))}
             disabled={savingMeeting || !nextMeeting}
             className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors">
-            <ChevronRight size={16} />
+            <NavChevron dir="next" size={16} />
           </button>
         </div>
         <button onClick={() => saveMeeting(getNextMonday())} disabled={savingMeeting}
@@ -1469,7 +1475,7 @@ function GuestsSection() {
             disabled={meetings.indexOf(selectedDate) <= 0}
             className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
             title={t('ui.older')}>
-            <ChevronLeft size={15} />
+            <NavChevron dir="prev" size={15} />
           </button>
           <span className="text-sm font-semibold text-gray-900 min-w-[120px] text-center px-1">
             {selectedDate || '—'}
@@ -1481,7 +1487,7 @@ function GuestsSection() {
             disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
             className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
             title={t('ui.newer')}>
-            <ChevronRight size={15} />
+            <NavChevron dir="next" size={15} />
           </button>
         </div>
 
@@ -2597,11 +2603,11 @@ function PresentationsSection() {
         {/* Month navigation */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
           <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
-            <ChevronLeft size={18} />
+            <NavChevron dir="prev" size={18} />
           </button>
           <span className="font-semibold text-gray-800">{monthName(i18n.language, viewMonth, viewYear)} {viewYear}</span>
           <button onClick={nextMonthFn} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
-            <ChevronRight size={18} />
+            <NavChevron dir="next" size={18} />
           </button>
         </div>
 
