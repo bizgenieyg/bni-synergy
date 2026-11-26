@@ -230,7 +230,7 @@
 <body>
 
   <div class="logo-block">
-    <div class="logo-title">BNI <span>SYNERGY</span></div>
+    <div class="logo-title" data-group-logo="upper">BNI <span>SYNERGY</span></div>
     <div class="logo-sub">Нетворкинг &amp; Бизнес</div>
   </div>
 
@@ -242,7 +242,7 @@
       <div class="sub-banner" id="subBanner" style="display:none"></div>
 
       <div class="invite-info" id="inviteInfo">
-        <p>Группа BNI SYNERGY приглашает вас на утреннюю бизнес-встречу!</p>
+        <p>Группа <span data-group-name>BNI SYNERGY</span> приглашает вас на утреннюю бизнес-встречу!</p>
         <p>На встрече примут участие более 30 владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.</p>
         <p style="margin-bottom:0">Вас ждёт:</p>
         <ul>
@@ -342,6 +342,7 @@
     </div>
   </div>
 
+  <script src="/group.js"></script>
   <script>
     // Group data (payment link, amount, navigator) is injected by the server for the guest's group.
     const GROUP = window.__GROUP__ || {};
@@ -408,7 +409,7 @@
           const el = document.getElementById('meetingInfo');
           el.style.display = 'block';
           let html = '';
-          if (dateToShow) html += `📅 Следующая встреча: <strong>${dateToShow}</strong> в 7:30<br/>`;
+          if (dateToShow) html += `📅 Следующая встреча: <strong>${dateToShow}</strong>${data.meeting_time ? ' в ' + String(data.meeting_time).replace(/^0/, '') : ''}<br/>`;
           if (location)   html += `📍 ${location}`;
           el.innerHTML = html;
         }
@@ -521,7 +522,7 @@
       submitBtn.textContent = 'Отправляем…';
 
       try {
-        const resp = await fetch('/api/register', {
+        const resp = await fetch('/api/register' + groupQuery, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({

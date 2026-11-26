@@ -55,7 +55,8 @@ function oldDb(file) {
   g.run('g5', '972541000005', 'анна иванова', '23/11/26', now, 'Гость 5');           // different case: NOT guessed
   const s = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
   s.run('meeting_location', 'Rishon'); s.run('meeting_waze_url', 'https://waze.com/ul/x'); s.run('meeting_zoom_url', 'https://zoom.us/j/1');
-  s.run('next_meeting_date', '30/11/26'); s.run('voting_open', '0');
+  s.run('next_meeting_date', '30/11/26'); s.run('voting_open', '1'); s.run('meeting_type', 'zoom');
+  s.run('unconfirmed_notify_phone', '0501112233'); s.run('waha_last_problem:default', '{}');
   db.prepare("INSERT INTO presentations (meeting_date, member_name, change_description, member_id) VALUES ('30/11/26', 'Анна', '', 1)").run();
   db.prepare("INSERT INTO meeting_stats (meeting_date, referrals) VALUES ('30/11/26', 3)").run();
   db.prepare("INSERT INTO group_value (meeting_date, member_id, member_name) VALUES ('30/11/26', 1, 'Анна')").run();
@@ -96,12 +97,21 @@ test('migration on a copy of an old DB: groups, group_id, inviter ids, backup; s
   assert.equal(g.waha_session, 'default');
   assert.equal(g.payment_url, mig.LEGACY_PAYBOX_LINK);
   assert.equal(g.payment_amount, 80);
-  assert.equal(g.meeting_weekday, null);
-  assert.equal(g.meeting_time, null);
+  assert.equal(g.meeting_weekday, 1);       // the old messages hard-coded Monday 7:30: group 1 keeps exactly that
+  assert.equal(g.meeting_time, '07:30');
+  assert.equal(g.meeting_type, 'zoom');     // moved out of the global settings
+  assert.equal(g.default_language, 'ru');
   assert.equal(g.timezone, 'Asia/Jerusalem');
+  // state keys moved to group_settings of group 1 and are gone from the global settings
+  const gs = k => (db.prepare('SELECT value FROM group_settings WHERE group_id = 1 AND key = ?').get(k) || {}).value;
+  assert.equal(gs('next_meeting_date'), '30/11/26');
+  assert.equal(gs('voting_open'), '1');
+  assert.equal(gs('unconfirmed_notify_phone'), '0501112233');
+  const left = db.prepare('SELECT key FROM settings ORDER BY key').all().map(r => r.key);
+  assert.deepEqual(left, ['waha_last_problem:default']); // only system state stays global
 
   // group_id in all data tables, existing rows belong to group 1
-  for (const t of ['members', 'guests', 'votes', 'presentations', 'group_value', 'meeting_stats', 'mail_intake']) {
+  for (const t of ['members', 'guests', 'votes', 'presentations', 'group_value', 'meeting_stats', 'mail_intake', 'member_socials', 'member_positions']) {
     assert.ok(mig.hasColumn(db, t, 'group_id'), `${t}.group_id`);
   }
   assert.equal(db.prepare('SELECT COUNT(*) c FROM guests WHERE group_id = 1').get().c, 5);
@@ -193,18 +203,23 @@ const dbm = require('../services/db');
 const logs = [];
 const groups = createGroups(dbm, { now: () => d('2026-11-26T10:00:00Z'), log: m => logs.push(m) });
 
-test('fresh DB: group 1 exists; meeting date falls back to the old setting until a weekday is set', () => {
+test('fresh DB: group 1 has the Monday schedule; a group without weekday uses its own manual date, nothing invented', () => {
   assert.equal(groups.getGroup(1).slug, 'synergy');
-  dbm.setSetting('next_meeting_date', '30/11/26');
-  assert.equal(groups.scheduleIsSet(1), false);
-  assert.equal(groups.meetingDateFor(1), '30/11/26');
-  const r = groups.updateGroup(1, { meeting_weekday: 1, meeting_time: '19:30' });
-  assert.equal(r.group.meeting_weekday, 1);
   assert.equal(groups.scheduleIsSet(1), true);
   assert.equal(groups.meetingDateFor(1), '30/11/26'); // Thursday 26/11 -> Monday 30/11, computed
-  dbm.setSetting('next_meeting_date', '07/12/26');     // the old setting no longer wins
+  dbm.setGroupSetting(1, 'next_meeting_date', '07/12/26');   // the manual date does not win over the schedule
   assert.equal(groups.meetingDateFor(1), '30/11/26');
-  assert.equal(groups.meetingDateFor(2), '');          // another group without schedule: nothing invented
+  const g2 = groups.createGroup({ name: 'Second', slug: 'second' }).group;
+  assert.equal(g2.id, 2);
+  assert.equal(groups.scheduleIsSet(2), false);
+  assert.equal(groups.meetingDateFor(2), '');                // no weekday, no manual date: empty
+  dbm.setGroupSetting(2, 'next_meeting_date', '14/12/26');
+  assert.equal(groups.meetingDateFor(2), '14/12/26');
+  assert.equal(groups.meetingDateFor(1), '30/11/26');        // group 1 untouched
+  const r = groups.updateGroup(2, { meeting_weekday: 3, meeting_time: '19:30' });
+  assert.equal(r.group.meeting_weekday, 3);
+  assert.equal(groups.meetingDateFor(2), '02/12/26');        // Wednesday
+  assert.equal(groups.getGroup(1).meeting_weekday, 1);
 });
 
 test('updateGroup validates input', () => {
@@ -272,8 +287,11 @@ const POSITIONS = {
   ],
 };
 
+function clearPositions(db) { db.exec('DELETE FROM member_positions; DELETE FROM positions WHERE group_id = 1'); }
+
 test('positions seed matches members, logs the rest, and is idempotent', () => {
   const db = dbm.db;
+  clearPositions(db); // the real scripts/positions-he.json was already seeded at startup; this test uses its own data
   db.prepare("UPDATE members SET name_he = 'בוריס פטרוב' WHERE name = 'Борис Петров' AND group_id = 1").run();
   db.prepare("UPDATE members SET name_he = 'אנה איבנוב' WHERE name = 'Анна Смирнова' AND group_id = 1").run();
   const log = [];
@@ -307,7 +325,7 @@ test('unconfirmed-guests recipient: head of a position with notify_unconfirmed, 
   const bid = dbm.db.prepare("SELECT id FROM members WHERE name = 'Борис Петров' AND group_id = 1").get().id;
   const aid = dbm.db.prepare("SELECT id FROM members WHERE name = 'Анна Смирнова' AND group_id = 1").get().id;
   const [chair, vp] = groups.listPositions(1);
-  dbm.setSetting('unconfirmed_notify_phone', '972509999999');
+  dbm.setGroupSetting(1, 'unconfirmed_notify_phone', '972509999999');
   logs.length = 0;
   assert.equal(groups.unconfirmedNotifyPhone(1), '972509999999'); // nobody assigned yet -> old setting
   assert.ok(logs.some(l => l.includes('notify_unconfirmed')));

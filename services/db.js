@@ -231,10 +231,10 @@ function setGuestProfileStatus(id, status) {
   db.prepare('UPDATE guests SET profile_status = ? WHERE id = ?').run(status, id);
 }
 
-function claimMailIntake(messageId, rawPath = '') {
+function claimMailIntake(messageId, rawPath = '', groupId = DEFAULT_GROUP) {
   try {
-    db.prepare('INSERT INTO mail_intake (message_id, received_at, status, raw_path) VALUES (?, ?, ?, ?)')
-      .run(messageId, new Date().toISOString(), 'processing', rawPath);
+    db.prepare('INSERT INTO mail_intake (message_id, received_at, status, raw_path, group_id) VALUES (?, ?, ?, ?, ?)')
+      .run(messageId, new Date().toISOString(), 'processing', rawPath, groupId);
     return true;
   } catch (err) {
     if (String(err.message).includes('UNIQUE')) return false;
@@ -248,14 +248,14 @@ function finishMailIntake(messageId, { status, guestId = null, rawPath = '', par
 }
 
 // Was a message already sent for this guest (normalized phone + meeting date; name if the letter has no phone)?
-function findSentIntake({ phone, name, meetingDate, statuses }) {
+function findSentIntake({ phone, name, meetingDate, statuses, groupId = DEFAULT_GROUP }) {
   const field = phone ? 'phone' : 'name';
   const value = phone || name;
   if (!value) return null;
   const marks = statuses.map(() => '?').join(',');
   return db.prepare(
-    `SELECT id FROM mail_intake WHERE status IN (${marks}) AND json_extract(parsed_json, '$.${field}') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1`
-  ).get(...statuses, value, meetingDate) || null;
+    `SELECT id FROM mail_intake WHERE status IN (${marks}) AND group_id = ? AND json_extract(parsed_json, '$.${field}') = ? AND json_extract(parsed_json, '$.meetingDate') = ? LIMIT 1`
+  ).get(...statuses, groupId, value, meetingDate) || null;
 }
 
 function findDuplicateGuest(meetingDate, phone, name, groupId = DEFAULT_GROUP) {
@@ -371,9 +371,10 @@ function getGuestById(id) {
   return db.prepare('SELECT * FROM guests WHERE id = ?').get(id);
 }
 
-function findGuestByPhone(rawPhone) {
+function findGuestByPhone(rawPhone, groupId = null) {
   const target = normalizePhone(rawPhone);
-  const all    = db.prepare('SELECT * FROM guests').all();
+  const all    = groupId === null ? db.prepare('SELECT * FROM guests').all()
+                                  : db.prepare('SELECT * FROM guests WHERE group_id = ?').all(groupId);
   return all.find(g => normalizePhone(g.phone) === target) || null;
 }
 
@@ -508,21 +509,46 @@ db.exec(`
   );
 `);
 
-// Seed defaults
-db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('voting_open', '0')").run();
+// `settings` is SYSTEM-only (infrastructure state). Anything that belongs to a group lives in
+// `groups` / `group_settings`; touching such a key here is a bug, so it throws.
+const SYSTEM_SETTING_PREFIXES = ['waha_last_problem:'];
+const GROUP_ONLY_KEYS = new Set([...groupsMigration.GROUP_SETTING_KEYS, 'meeting_type', 'meeting_location',
+  'meeting_waze_url', 'meeting_zoom_url', 'meeting_weekday', 'meeting_time']);
+function assertSystemKey(key) {
+  if (GROUP_ONLY_KEYS.has(key)) throw new Error(`settings key "${key}" belongs to a group: use getGroupSetting/setGroupSetting`);
+}
 
 function getSetting(key) {
+  assertSystemKey(key);
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : null;
 }
 
 function setSetting(key, value) {
+  assertSystemKey(key);
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, String(value));
 }
 
 function getAllSettings() {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
+}
+
+// Per-group state/config. Reads fall back to the defaults of a fresh group.
+function getGroupSetting(groupId, key) {
+  const row = db.prepare('SELECT value FROM group_settings WHERE group_id = ? AND key = ?').get(groupId, key);
+  if (row) return row.value;
+  return key in groupsMigration.GROUP_SETTING_DEFAULTS ? groupsMigration.GROUP_SETTING_DEFAULTS[key] : null;
+}
+
+function setGroupSetting(groupId, key, value) {
+  if (!db.prepare('SELECT 1 FROM groups WHERE id = ?').get(groupId)) throw new Error(`group ${groupId} does not exist`);
+  db.prepare('INSERT OR REPLACE INTO group_settings (group_id, key, value) VALUES (?, ?, ?)').run(groupId, key, String(value));
+}
+
+function getGroupSettings(groupId) {
+  const rows = db.prepare('SELECT key, value FROM group_settings WHERE group_id = ?').all(groupId);
+  return { ...groupsMigration.GROUP_SETTING_DEFAULTS, ...Object.fromEntries(rows.map(r => [r.key, r.value])) };
 }
 
 // ─── Schema: votes ────────────────────────────────────────────────────────────
@@ -544,11 +570,11 @@ db.exec(`
 
 // ─── Votes CRUD ───────────────────────────────────────────────────────────────
 
-function hasVoted(meetingDate, rawPhone) {
+function hasVoted(meetingDate, rawPhone, groupId = DEFAULT_GROUP) {
   const phone = normalizePhone(rawPhone);
   return !!db.prepare(
-    'SELECT 1 FROM votes WHERE meetingDate = ? AND voterPhone = ?'
-  ).get(meetingDate, phone);
+    'SELECT 1 FROM votes WHERE meetingDate = ? AND voterPhone = ? AND group_id = ?'
+  ).get(meetingDate, phone, groupId);
 }
 
 function insertVote({ meetingDate, voterPhone, voterName, candidateId, candidateName, groupId = DEFAULT_GROUP }) {
@@ -561,10 +587,10 @@ function insertVote({ meetingDate, voterPhone, voterName, candidateId, candidate
   return id;
 }
 
-function hasVotedByIp(meetingDate, ip) {
+function hasVotedByIp(meetingDate, ip, groupId = DEFAULT_GROUP) {
   return !!db.prepare(
-    'SELECT 1 FROM votes WHERE meetingDate = ? AND voterPhone = ?'
-  ).get(meetingDate, ip);
+    'SELECT 1 FROM votes WHERE meetingDate = ? AND voterPhone = ? AND group_id = ?'
+  ).get(meetingDate, ip, groupId);
 }
 
 function insertVoteByIp({ meetingDate, voterIp, candidateId, candidateName, groupId = DEFAULT_GROUP }) {
@@ -630,13 +656,15 @@ function getMemberSocials(memberId) {
 function setMemberSocials(memberId, socials) {
   const del = db.prepare('DELETE FROM member_socials WHERE member_id = ?');
   const ins = db.prepare(
-    `INSERT INTO member_socials (id, member_id, platform, url, label, sort_order)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO member_socials (id, member_id, platform, url, label, sort_order, group_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
+  const owner = db.prepare('SELECT group_id FROM members WHERE id = ?').get(memberId);
+  const gid = owner ? owner.group_id : DEFAULT_GROUP;
   db.transaction(() => {
     del.run(memberId);
     socials.forEach((s, i) => {
-      ins.run(randomUUID(), memberId, s.platform, s.url.trim(), (s.label || '').trim(), i);
+      ins.run(randomUUID(), memberId, s.platform, s.url.trim(), (s.label || '').trim(), i, gid);
     });
   })();
 }
@@ -1007,7 +1035,7 @@ const migrationResult = groupsMigration.runMigration(db, {
   backupsDir: process.env.BACKUP_DIR || path.join(dir, '..', 'backups'),
   backup: dbFileExisted,
 });
-groupsMigration.seedPositionsFromFile(db, path.join(__dirname, '..', 'scripts', 'positions_he.json'));
+groupsMigration.seedPositionsFromFile(db, path.join(__dirname, '..', 'scripts', 'positions-he.json'));
 
 module.exports = {
   DEFAULT_GROUP,
@@ -1057,6 +1085,9 @@ module.exports = {
   getSetting,
   setSetting,
   getAllSettings,
+  getGroupSetting,
+  setGroupSetting,
+  getGroupSettings,
   // votes
   hasVoted,
   insertVote,

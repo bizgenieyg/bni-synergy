@@ -36,15 +36,35 @@ const groups = groupsService.createGroups(db, { log: m => console.warn(m) });
 const GROUP1 = db.DEFAULT_GROUP;
 const meetingDateFor = gid => groups.meetingDateFor(gid);
 const waFor = gid => { const g = groups.getGroup(gid); return whatsapp.forSession(g && g.waha_session); };
-const votingKey = gid => (gid === GROUP1 ? 'voting_open' : `voting_open:${gid}`);
+const PUBLIC_BASE = (process.env.PUBLIC_BASE_URL || 'https://bnisynergy.biz').replace(/\/$/, '');
+const groupName = gid => (groups.getGroup(gid) || {}).name || 'BNI';
+// Links that the system sends out always carry the group.
+const groupLink = (gid, p, extra = '') => {
+  const g = groups.getGroup(gid);
+  return `${PUBLIC_BASE}${p}?${extra ? extra + '&' : ''}group=${encodeURIComponent(g ? g.slug : '')}`;
+};
+const WEEKDAYS_RU = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+// "<weekday>, <date> в <time>": the weekday comes from the date, the time from the group (no time set = no time shown)
+function meetingWhen(ddmmyy, time) {
+  const p = String(ddmmyy || '').split('/').map(Number);
+  let day = '';
+  if (p.length >= 2 && p[0] && p[1]) {
+    const y = p[2] ? 2000 + p[2] : new Date().getFullYear();
+    day = WEEKDAYS_RU[new Date(Date.UTC(y, p[1] - 1, p[0])).getUTCDay()] + ', ';
+  }
+  return `${day}${formatMeetingDate(ddmmyy)}${time ? ' в ' + String(time).replace(/^0/, '') : ''}`;
+}
 
 // Settings as the message builders and the admin UI know them: global settings plus the group's
 // address / Waze / Zoom (which moved from `settings` to `groups`).
 function settingsFor(gid) {
   const g = groups.getGroup(gid);
-  const all = db.getAllSettings();
+  const all = { ...db.getAllSettings(), ...db.getGroupSettings(gid) };
   if (!g) return all;
   return { ...all, meeting_location: g.address, meeting_waze_url: g.waze_url, meeting_zoom_url: g.zoom_url,
+    meeting_type: g.meeting_type, meeting_time: g.meeting_time || '',
+    meeting_weekday: g.meeting_weekday === null ? '' : String(g.meeting_weekday), group_name: g.name, group_slug: g.slug,
+    default_language: g.default_language,
     payment_url: g.payment_url, payment_amount: g.payment_amount == null ? '' : String(g.payment_amount) };
 }
 
@@ -54,33 +74,6 @@ function paymentBlock(gid) {
   if (!g || !g.payment_url) return '';
   return `💳 Оплата участия${g.payment_amount ? ` (${g.payment_amount}₪)` : ''}:\n${g.payment_url}\n\n`;
 }
-
-// NEXT_MEETING_DATE: DB value takes priority over .env
-// If DB has nothing yet, seed it from .env so future edits persist in DB.
-const _envDate = process.env.NEXT_MEETING_DATE || '';
-if (db.getSetting('next_meeting_date') === null && _envDate) {
-  db.setSetting('next_meeting_date', _envDate);
-}
-let NEXT_MEETING_DATE = db.getSetting('next_meeting_date') ?? _envDate;
-
-// Migrate NEXT_MEETING_DATE from DD/MM to DD/MM/YY if needed
-if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
-  const _parts = NEXT_MEETING_DATE.split('/');
-  const _dd = parseInt(_parts[0], 10), _mm = parseInt(_parts[1], 10);
-  const _today = new Date(); _today.setHours(0, 0, 0, 0);
-  const _curY = _today.getFullYear();
-  const _isMon = (y) => new Date(y, _mm - 1, _dd).getDay() === 1;
-  let _year = _isMon(_curY) ? _curY : _isMon(_curY - 1) ? _curY - 1
-    : (new Date(_curY, _mm - 1, _dd) > _today ? _curY - 1 : _curY);
-  NEXT_MEETING_DATE = `${String(_dd).padStart(2,'0')}/${String(_mm).padStart(2,'0')}/${String(_year).slice(2)}`;
-  db.setSetting('next_meeting_date', NEXT_MEETING_DATE);
-}
-
-if (db.getSetting('unconfirmed_notify_phone') === null) db.setSetting('unconfirmed_notify_phone', '');
-if (db.getSetting('mail_intake_notify_phone') === null) db.setSetting('mail_intake_notify_phone', '972523695741');
-if (db.getSetting('mail_intake_auto_register') === null) db.setSetting('mail_intake_auto_register', '0');
-if (db.getSetting('mail_intake_mode') === null) db.setSetting('mail_intake_mode', 'test');
-
 
 // ─── Multer (photo uploads) ───────────────────────────────────────────────────
 
@@ -113,15 +106,10 @@ function formatMeetingDate(ddmmyy) {
   return `${dd} ${months[mm - 1]} ${yy}`;
 }
 
-function getTodayStr() {
-  // Today in Asia/Jerusalem as DD/MM/YY (independent of the server's own timezone)
-  const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).split('-');
-  return `${d}/${m}/${y.slice(2)}`;
-}
 
 // Approved invitation text, identical to the registration form (public/guest.html)
-const INVITE_BLOCK_1 =
-  `Группа BNI SYNERGY приглашает вас на утреннюю бизнес-встречу!\n\n` +
+const inviteBlock1 = name =>
+  `Группа ${name} приглашает вас на утреннюю бизнес-встречу!\n\n` +
   `На встрече примут участие более 30 владельцев бизнеса, и у вас будет возможность представить свой бизнес с целью создания связей и активного сотрудничества.`;
 const INVITE_BLOCK_2 =
   `Вас ждёт:\n` +
@@ -154,11 +142,11 @@ function confirmationPlaceBlock(settings) {
 function buildConfirmationMessage(guest, settings) {
   const place = confirmationPlaceBlock(settings);
   return `Здравствуйте, ${whatsapp.getFirstName(guest.name)}! 👋\n\n` +
-    `Напоминаем, что вы приглашены на встречу BNI Synergy 🤝\n\n` +
+    `Напоминаем, что вы приглашены на встречу ${settings.group_name || 'BNI'} 🤝\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
-    `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
+    `✅ ${PUBLIC_BASE}/confirm?id=${guest.id}&group=${encodeURIComponent(settings.group_slug || '')}\n\n` +
     (place ? `${place}\n\n` : '') +
-    `BNI Synergy`;
+    `${settings.group_name || 'BNI'}`;
 }
 
 // BNI Connect letter: invitation (to the guest, or for the inviting member to forward)
@@ -166,12 +154,12 @@ function buildMailInviteMessage({ name, meetingDate }, settings) {
   const first = name && whatsapp.getFirstName(name);
   const place = confirmationPlaceBlock(settings);
   return `Здравствуйте${first ? ', ' + first : ''}! 👋\n\n` +
-    `Вас пригласили на встречу BNI Synergy:\n` +
-    `📅 Понедельник, ${formatMeetingDate(meetingDate)} в 7:30\n\n` +
+    `Вас пригласили на встречу ${settings.group_name || 'BNI'}:\n` +
+    `📅 ${meetingWhen(meetingDate, settings.meeting_time)}\n\n` +
     (place ? `${place}\n\n` : '') +
     `Пожалуйста, зарегистрируйтесь по ссылке:\n` +
-    `✅ https://bnisynergy.biz/guest\n\n` +
-    `BNI Synergy`;
+    `✅ ${PUBLIC_BASE}/guest?group=${encodeURIComponent(settings.group_slug || '')}\n\n` +
+    `${settings.group_name || 'BNI'}`;
 }
 
 // BNI Connect letter without a usable guest number: ask the inviting member to forward the invitation
@@ -185,16 +173,16 @@ function buildMailMemberRequest({ memberName, guestName }) {
 function buildIntakeInviteMessage(guest, settings, presenter = null) {
   const firstName = (guest.name || '').trim().split(/\s+/)[0];
   return `Здравствуйте${firstName ? ', ' + firstName : ''}! 👋\n\n` +
-    `Вас пригласили на встречу BNI Synergy:\n` +
-    `📅 Понедельник, ${formatMeetingDate(guest.meetingDate)} в 7:30\n\n` +
+    `Вас пригласили на встречу ${settings.group_name || 'BNI'}:\n` +
+    `📅 ${meetingWhen(guest.meetingDate, settings.meeting_time)}\n\n` +
     `${meetingLocationLine(settings)}${speakerLine(presenter)}\n\n` +
     `Напишите, пожалуйста, ваше имя, профессию и как вас представить.\n\n` +
     `Пожалуйста, подтвердите участие:\n` +
-    `✅ https://bnisynergy.biz/confirm?id=${guest.id}\n\n` +
-    `BNI Synergy`;
+    `✅ ${PUBLIC_BASE}/confirm?id=${guest.id}&group=${encodeURIComponent(settings.group_slug || '')}\n\n` +
+    `${settings.group_name || 'BNI'}`;
 }
 
-function buildGuestGuideMessage(guest) {
+function buildGuestGuideMessage(guest, name = 'BNI') {
   return [
     '📋 ПАМЯТКА ДЛЯ ГОСТЕЙ',
     '',
@@ -222,7 +210,7 @@ function buildGuestGuideMessage(guest) {
     '4️⃣ После встречи',
     'Подойдите к участникам, которые вас заинтересовали, познакомьтесь и обменяйтесь контактами. А если хочется поговорить подробнее — договоритесь о встрече 1:1, чтобы спокойно узнать больше о бизнесе друг друга.',
     '',
-    'Команда BNI SYNERGY',
+    `Команда ${name}`,
   ].join('\n');
 }
 
@@ -233,19 +221,19 @@ function pickVariant(arr) {
 }
 
 const VOTING_VARIANTS = [
-  (name, link) => `${name}, спасибо что были на встрече BNI SYNERGY! 🙏\nПроголосуйте пожалуйста:\n${link}`,
+  (name, link, org) => `${name}, спасибо что были на встрече ${org}! 🙏\nПроголосуйте пожалуйста:\n${link}`,
   (name, link) => `Шалом, ${name}! 👋 Ваш голос важен — голосование BNI открыто:\n${link}`,
   (name, link) => `${name}, встреча прошла отлично! 🎯 Ваш голос решает:\n${link}`,
-  (name, link) => `Привет, ${name}! Поддержите лучшего участника BNI SYNERGY 🏆\n${link}`,
+  (name, link, org) => `Привет, ${name}! Поддержите лучшего участника ${org} 🏆\n${link}`,
   (name, link) => `${name}, один клик — ваш голос засчитан ✅\nГолосование:\n${link}`,
-  (name, link) => `Дорогой(ая) ${name}, голосование BNI SYNERGY ждёт вас! 🗳️\n${link}`,
-  (name, link) => `${name}, спасибо за визит! Выберите лучшего участника BNI 🌟\n${link}`,
+  (name, link, org) => `Дорогой(ая) ${name}, голосование ${org} ждёт вас! 🗳️\n${link}`,
+  (name, link) => `${name}, спасибо за визит! Выберите лучшего участника 🌟\n${link}`,
 ];
 
 const CONTACTS_VARIANTS = [
-  (name, contacts) => `${name}, вот контакты участников группы BNI SYNERGY:\n\n${contacts}\n\nБудем рады видеть вас снова! 🤝`,
+  (name, contacts, org) => `${name}, вот контакты участников группы ${org}:\n\n${contacts}\n\nБудем рады видеть вас снова! 🤝`,
   (name, contacts) => `Шалом, ${name}! 👋 Контакты наших специалистов BNI:\n\n${contacts}`,
-  (name, contacts) => `${name}, спасибо за визит в BNI SYNERGY! 🙌\nПолезные контакты:\n\n${contacts}`,
+  (name, contacts, org) => `${name}, спасибо за визит в ${org}! 🙌\nПолезные контакты:\n\n${contacts}`,
   (name, contacts) => `Привет, ${name}! Держите контакты группы BNI 📇\n\n${contacts}`,
   (name, contacts) => `${name}, рады были познакомиться! Контакты BNI:\n\n${contacts}`,
 ];
@@ -283,17 +271,27 @@ app.post('/api/admin/login', (req, res) => {
 // services/authGuard.js PUBLIC_ROUTES. Registered before all other /api routes.
 app.use('/api', auth.guard);
 
-// Which group a request works on: admin ?group_id=, anyone ?group=<slug>, otherwise group 1.
+// Which group a request works on: ?group=<slug> (anyone) or ?group_id=<n> (admin only).
+// An unknown group is an error (404), never silently replaced by group 1.
+// A request with NO group parameter is a legacy link/page from before groups existed and means group 1;
+// every link the system sends out carries ?group=<slug>.
 app.use('/api', (req, res, next) => {
-  let gid = GROUP1;
-  if (req.query.group) {
-    const g = groups.getGroupBySlug(req.query.group);
-    if (g) gid = g.id;
-  } else if (req.query.group_id && auth.isAdminRequest(req)) {
-    const g = groups.getGroup(Number(req.query.group_id));
-    if (g) gid = g.id;
+  const q = req.query;
+  if (q.group !== undefined) {
+    const g = groups.getGroupBySlug(q.group);
+    if (!g) return res.status(404).json({ error: 'group not found' });
+    req.groupId = g.id;
+    return next();
   }
-  req.groupId = gid;
+  if (q.group_id !== undefined && auth.isAdminRequest(req)) {
+    if (!/^\d+$/.test(String(q.group_id))) return res.status(400).json({ error: 'group_id must be a number' });
+    const g = groups.getGroup(Number(q.group_id));
+    if (!g) return res.status(404).json({ error: 'group not found' });
+    req.groupId = g.id;
+    return next();
+  }
+  req.groupId = GROUP1;       // legacy: no group in the request
+  req.groupImplicit = true;
   next();
 });
 
@@ -306,13 +304,17 @@ app.get('/guest', (req, res) => {
     const m = db.db.prepare('SELECT name FROM members WHERE id = ?').get(Number(ref));
     if (m) invitedByName = m.name;
   }
-  let gid = GROUP1;
-  if (/^\d+$/.test(ref)) gid = groups.groupOfMember(Number(ref)) || GROUP1;
-  else if (req.query.group) gid = (groups.getGroupBySlug(req.query.group) || { id: GROUP1 }).id;
+  let gid = GROUP1; // legacy link without group/ref means group 1
+  if (/^\d+$/.test(ref) && groups.groupOfMember(Number(ref))) gid = groups.groupOfMember(Number(ref));
+  else if (req.query.group !== undefined) {
+    const g = groups.getGroupBySlug(req.query.group);
+    if (!g) return res.status(404).type('text').send('Group not found');
+    gid = g.id;
+  }
   const pub = groups.publicGroup(groups.getGroup(gid)) || {};
   const html = fs.readFileSync(path.join(__dirname, 'public', 'guest.html'), 'utf8');
   const injected = html.replace('<script>', `<script>window.__REF_NAME__=${JSON.stringify(invitedByName)};\n` +
-    `window.__GROUP__=${JSON.stringify({ slug: pub.slug, waze_url: pub.waze_url, payment_url: pub.payment_url, payment_amount: pub.payment_amount }).replace(/</g, '\\u003c')};\n`);
+    `window.__GROUP__=${JSON.stringify({ slug: pub.slug, name: pub.name, waze_url: pub.waze_url, payment_url: pub.payment_url, payment_amount: pub.payment_amount, default_language: pub.default_language }).replace(/</g, '\\u003c')};\n`);
   res.type('html').send(injected);
 });
 app.get('/admin',           (req, res) => {
@@ -340,6 +342,7 @@ app.get('/api/test', (req, res) => {
     totalGuests:      db.getTotalCount(req.groupId),
     meeting_location: s.meeting_location || '',
     meeting_type:     s.meeting_type     || 'offline',
+    meeting_time:     s.meeting_time     || '',
   });
 });
 
@@ -393,7 +396,7 @@ app.post('/api/register', async (req, res) => {
 
   // 2. Google Sheets — non-blocking
   const paymentMethod = isSub ? `замена за ${invitedBy || '—'}` : 'онлайн';
-  sheets.appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod, email: email || '' })
+  sheets.appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod, email: email || '', sheetId: (groups.getGroup(gid) || {}).sheet_id })
     .then(sheetRow => { if (sheetRow) db.updateSheetRow(id, sheetRow); })
     .catch(err => console.error('[Sheets] appendGuest failed:', err.message));
 
@@ -411,18 +414,18 @@ app.post('/api/register', async (req, res) => {
   if (isSub) {
     waText =
       `Шалом, ${firstName}! 👋\n\n` +
-      `Вы зарегистрированы как замена на встречу BNI SYNERGY 🤝\n\n` +
-      `${INVITE_BLOCK_1}\n\n${INVITE_BLOCK_2}\n\n` +
-      `📅 ${meetingDate} в 7:30\n` +
+      `Вы зарегистрированы как замена на встречу ${settings.group_name} 🤝\n\n` +
+      `${inviteBlock1(settings.group_name)}\n\n${INVITE_BLOCK_2}\n\n` +
+      `📅 ${meetingWhen(meetingDate, settings.meeting_time)}\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
       `🗺️ Навигатор:\n${settings.meeting_waze_url || ''}\n\n` +
       `Спасибо, что поддерживаете группу! 🙌`;
   } else {
     waText =
       `Шалом, ${firstName}! 👋\n\n` +
-      `Вы зарегистрированы на встречу BNI SYNERGY 🤝\n\n` +
-      `${INVITE_BLOCK_1}\n\n${INVITE_BLOCK_2}\n\n` +
-      `📅 ${meetingDate} в 7:30\n` +
+      `Вы зарегистрированы на встречу ${settings.group_name} 🤝\n\n` +
+      `${inviteBlock1(settings.group_name)}\n\n${INVITE_BLOCK_2}\n\n` +
+      `📅 ${meetingWhen(meetingDate, settings.meeting_time)}\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
       paymentBlock(gid) +
       `🗺️ Навигатор:\n${settings.meeting_waze_url || ''}\n\n` +
@@ -485,7 +488,7 @@ app.post('/api/paybox-webhook', async (req, res) => {
       db.markPaid(guest.id);
       console.log(`[PayBox] Marked paid: ${guest.name}`);
       if (guest.sheetRow) {
-        sheets.markPaid(guest.meetingDate, guest.sheetRow)
+        sheets.markPaid(guest.meetingDate, guest.sheetRow, (groups.getGroup(guest.group_id) || {}).sheet_id)
           .catch(err => console.error('[Sheets] markPaid failed:', err.message));
       }
     } else if (!guest) {
@@ -515,6 +518,7 @@ function onIntakeGuestCreated(g) {
   sheets.appendGuest({
     name: g.name, phone: g.phone, specialty: g.specialty, invitedBy: g.invitedBy, meetingDate: g.meetingDate,
     paymentMethod: g.isSub ? `замена за ${g.invitedBy || '—'}` : 'онлайн', email: g.email,
+    sheetId: (groups.getGroup(GROUP1) || {}).sheet_id,
   })
     .then(sheetRow => { if (sheetRow) db.updateSheetRow(g.id, sheetRow); })
     .catch(err => console.error('[Sheets] appendGuest (mail intake) failed:', err.message));
@@ -554,9 +558,10 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
       db,
       nextMeetingDate: () => meetingDateFor(GROUP1),
       afterCreate: onIntakeGuestCreated,
-      autoRegister: () => db.getSetting('mail_intake_auto_register') === '1',
-      mode: () => db.getSetting('mail_intake_mode'),
-      notifyPhone: () => db.getSetting('mail_intake_notify_phone'),
+      groupId: GROUP1, // mail for other groups needs its own mailbox/link; until then every letter is group 1's
+      autoRegister: () => db.getGroupSetting(GROUP1, 'mail_intake_auto_register') === '1',
+      mode: () => db.getGroupSetting(GROUP1, 'mail_intake_mode'),
+      notifyPhone: () => db.getGroupSetting(GROUP1, 'mail_intake_notify_phone') || '972523695741',
       checkWhatsApp: (...a) => waFor(GROUP1).checkNumberExists(...a),
       sendSequence: (...a) => waFor(GROUP1).sendSequence(...a),
       isPast: isMeetingInPast,
@@ -599,7 +604,7 @@ app.put('/api/guests/:id/paid', (req, res) => {
   db.markPaid(guest.id);
 
   if (guest.sheetRow) {
-    sheets.markPaid(guest.meetingDate, guest.sheetRow)
+    sheets.markPaid(guest.meetingDate, guest.sheetRow, (groups.getGroup(guest.group_id) || {}).sheet_id)
       .catch(err => console.error('[Sheets] markPaid failed:', err.message));
   }
 
@@ -635,6 +640,7 @@ app.get('/api/guests/:id/public', (req, res) => {
     meetingDate: guest.meetingDate,
     confirmed:   guest.confirmed || 0,
     meetingType: settings.meeting_type || 'offline',
+    meetingTime: settings.meeting_time || '',
     location:    settings.meeting_location || '',
     zoomUrl:     settings.meeting_zoom_url || '',
   });
@@ -649,7 +655,7 @@ app.post('/api/guests/:id/confirm', (req, res) => {
   } else {
     db.markConfirmed(guest.id);
     if (guest.wa_enabled && guest.phone && db.claimGuideSent(guest.id)) {
-      waFor(guest.group_id).sendMessage(guest.phone, buildGuestGuideMessage(guest))
+      waFor(guest.group_id).sendMessage(guest.phone, buildGuestGuideMessage(guest, groupName(guest.group_id)))
         .catch(err => {
           console.error('[GuestGuide] send failed:', err.message);
           db.releaseGuideSent(guest.id);
@@ -811,11 +817,10 @@ app.get('/api/settings/next-meeting', (req, res) => {
 
 app.patch('/api/settings/next-meeting', (req, res) => {
   if (groups.scheduleIsSet(req.groupId)) return res.status(409).json({ error: 'Дата рассчитывается по расписанию группы' });
-  if (req.groupId !== GROUP1) return res.status(409).json({ error: 'Задайте день встречи в настройках группы' });
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date обязателен' });
   const trimmed = String(date).trim();
-  db.setSetting('next_meeting_date', trimmed);
+  db.setGroupSetting(req.groupId, 'next_meeting_date', trimmed);
   res.json({ success: true, date: trimmed });
 });
 
@@ -825,7 +830,8 @@ app.get('/api/settings', (req, res) => {
 });
 
 // Address / Waze / Zoom moved to the group: writes of the old keys go there.
-const GROUP_SETTING_KEYS = { meeting_location: 'address', meeting_waze_url: 'waze_url', meeting_zoom_url: 'zoom_url' };
+const GROUP_SETTING_KEYS = { meeting_location: 'address', meeting_waze_url: 'waze_url', meeting_zoom_url: 'zoom_url', meeting_type: 'meeting_type' };
+const GROUP_STATE_KEYS = new Set(require('./services/groupsMigration').GROUP_SETTING_KEYS);
 app.put('/api/settings', adminAuth, (req, res) => {
   const { key, value } = req.body;
   if (!key) return res.status(400).json({ error: 'key обязателен' });
@@ -834,8 +840,8 @@ app.put('/api/settings', adminAuth, (req, res) => {
     if (r.error) return res.status(400).json({ error: r.error });
     return res.json({ success: true });
   }
-  db.setSetting(key, value ?? '');
-  res.json({ success: true });
+  if (GROUP_STATE_KEYS.has(key)) { db.setGroupSetting(req.groupId, key, value ?? ''); return res.json({ success: true }); }
+  return res.status(400).json({ error: `unknown setting key "${key}"` });
 });
 
 // ─── Group settings & positions (admin) ───────────────────────────────────────
@@ -850,6 +856,7 @@ app.get('/api/group', (req, res) => {
 app.put('/api/group', (req, res) => {
   const r = groups.updateGroup(req.groupId, req.body || {});
   if (r.error) return res.status(400).json({ error: r.error });
+  wavesCache.delete(req.groupId); catalogCache.delete(req.groupId); // they hold the WhatsApp session of the group
   res.json({ success: true, group: r.group, next_meeting: meetingDateFor(req.groupId) });
 });
 
@@ -923,7 +930,7 @@ app.post('/api/members/:id/wish-birthday', async (req, res) => {
 
   const msg =
     `🎂 С Днём рождения, ${member.name.split(' ')[0]}!\n\n` +
-    `Вся группа BNI SYNERGY поздравляет вас с праздником! 🎉\n` +
+    `Вся группа ${groupName(member.group_id)} поздравляет вас с праздником! 🎉\n` +
     `Желаем процветания бизнесу и здоровья! 🥂`;
 
   try {
@@ -943,7 +950,7 @@ app.post('/api/voting', (req, res) => {
   }
 
   const gid = req.groupId;
-  if (db.getSetting(votingKey(gid)) !== '1') {
+  if (db.getGroupSetting(gid, 'voting_open') !== '1') {
     return res.status(403).json({ error: 'voting_closed' });
   }
   // the candidate must be a member of this group
@@ -957,7 +964,7 @@ app.post('/api/voting', (req, res) => {
   const voteCount = db.getVoteCount(meetingDate, gid);
   const expected  = db.getActiveMembers(gid).length + db.getGuestsByDate(meetingDate, gid).filter(g => g.wa_enabled !== 0).length;
   if (expected > 0 && voteCount >= expected) {
-    db.setSetting(votingKey(gid), '0');
+    db.setGroupSetting(gid, 'voting_open', '0');
   }
 
   res.json({ success: true });
@@ -978,7 +985,7 @@ app.get('/api/voting/results', (req, res) => {
 app.get('/api/voting/status', (req, res) => {
   const gid         = req.groupId;
   const meetingDate = meetingDateFor(gid);
-  const open        = db.getSetting(votingKey(gid)) === '1';
+  const open        = db.getGroupSetting(gid, 'voting_open') === '1';
   const voteCount   = db.getVoteCount(meetingDate, gid);
   const expected    = db.getActiveMembers(gid).length + db.getGuestsByDate(meetingDate, gid).filter(g => g.wa_enabled !== 0).length;
   res.json({ open, voteCount, expected, meetingDate });
@@ -987,11 +994,12 @@ app.get('/api/voting/status', (req, res) => {
 app.post('/api/voting/open', (req, res) => {
   const gid = req.groupId;
   const meetingDate = meetingDateFor(gid);
-  db.setSetting(votingKey(gid), '1');
+  db.setGroupSetting(gid, 'voting_open', '1');
   db.deleteVotesByDate(meetingDate, gid);
   res.json({ success: true });
 
-  const votingMsg = `🗳️ Голосование открыто!\n\nВыберите лучшую презентацию встречи BNI SYNERGY:\nhttps://bnisynergy.biz/voting`;
+  const votingUrl = groupLink(gid, '/voting');
+  const votingMsg = `🗳️ Голосование открыто!\n\nВыберите лучшую презентацию встречи ${groupName(gid)}:\n${votingUrl}`;
 
   const guestsForVoting = db.getGuestsByDate(meetingDate, gid).filter(g => g.wa_enabled === 1 && g.waSent === 1);
   if (guestsForVoting.length) {
@@ -999,10 +1007,10 @@ app.post('/api/voting/open', (req, res) => {
       .catch(err => console.error('[Voting/open] individual notify failed:', err.message));
   }
 
-  const groupId = process.env.WAHA_GROUP_ID || '';
-  if (groupId) {
-    waFor(gid).sendGroupMessage(groupId,
-      `🗳️ *Голосование открыто!*\n\nВыберите лучшую презентацию встречи BNI SYNERGY:\nhttps://bnisynergy.biz/voting`
+  const chatId = (groups.getGroup(gid) || {}).whatsapp_chat_id || '';
+  if (chatId) {
+    waFor(gid).sendGroupMessage(chatId,
+      `🗳️ *Голосование открыто!*\n\nВыберите лучшую презентацию встречи ${groupName(gid)}:\n${votingUrl}`
     ).catch(err => console.error('[Voting/open] group notify failed:', err.message));
   }
 });
@@ -1012,7 +1020,7 @@ app.get('/api/voting/winners', (req, res) => {
 });
 
 app.post('/api/voting/close', (req, res) => {
-  db.setSetting(votingKey(req.groupId), '0');
+  db.setGroupSetting(req.groupId, 'voting_open', '0');
   res.json({ success: true });
 });
 
@@ -1030,13 +1038,13 @@ app.post('/api/send-voting', async (req, res) => {
   }
 
   const guests  = db.getGuestsByDate(date, req.groupId).filter(g => g.wa_enabled === 1);
-  const groupId = process.env.WAHA_GROUP_ID || '';
+  const chatId  = (groups.getGroup(req.groupId) || {}).whatsapp_chat_id || '';
 
-  res.json({ success: true, total: guests.length, groupSent: !!groupId, message: 'Рассылка запущена' });
+  res.json({ success: true, total: guests.length, groupSent: !!chatId, message: 'Рассылка запущена' });
 
   // Individual messages to guests (random variant per message)
   waFor(req.groupId).sendWithDelay(guests, g =>
-    pickVariant(VOTING_VARIANTS)(whatsapp.getFirstName(g.name), votingLink)
+    pickVariant(VOTING_VARIANTS)(whatsapp.getFirstName(g.name), votingLink, groupName(req.groupId))
   ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
 });
 
@@ -1050,7 +1058,7 @@ app.post('/api/send-contacts', async (req, res) => {
   res.json({ success: true, total: guests.length, message: 'Рассылка запущена' });
 
   waFor(req.groupId).broadcast(guests, g =>
-    pickVariant(CONTACTS_VARIANTS)((g.name || '').split(' ')[0], contactsText)
+    pickVariant(CONTACTS_VARIANTS)((g.name || '').split(' ')[0], contactsText, groupName(req.groupId))
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
 });
 
@@ -1061,7 +1069,7 @@ app.post('/api/whatsapp/send-catalog', async (req, res) => {
   const guests = db.getGuestsByDate(meeting_date, req.groupId).filter(g => g.wa_enabled !== 0);
   res.json({ sent: guests.length });
 
-  catalog.sendManual(meeting_date)
+  catalogFor(req.groupId).sendManual(meeting_date)
     .catch(err => console.error('[Broadcast] send-catalog error:', err.message));
 });
 
@@ -1071,8 +1079,8 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
 
   const guests = db.getGuestsByDate(meeting_date, req.groupId).filter(g => g.wa_enabled === 1 && !g.confirmed);
   const settings = settingsFor(req.groupId);
-  db.setSetting('confirmation_sent_for', meeting_date);
-  db.setSetting('confirmation_round1_for', meeting_date); // manual send enables the 30-second confirmation for late registrations
+  db.setGroupSetting(req.groupId, 'confirmation_sent_for', meeting_date);
+  db.setGroupSetting(req.groupId, 'confirmation_round1_for', meeting_date); // manual send enables the 30-second confirmation for late registrations
   res.json({ sent: guests.length });
 
   waFor(req.groupId).sendWithDelay(guests, g => buildConfirmationMessage(g, settings))
@@ -1094,13 +1102,16 @@ const wahaRecovery = wahaSession.createAutoRecovery({
   log: msg => console.log(msg),
   onProblem: (name, p) => { try { db.setSetting(`waha_last_problem:${name}`, JSON.stringify(p)); } catch {} },
 });
-try {
-  const saved = db.getSetting(`waha_last_problem:${DEFAULT_WAHA_SESSION}`);
-  if (saved) wahaRecovery.setLastProblem(DEFAULT_WAHA_SESSION, JSON.parse(saved));
-} catch {}
+for (const name of new Set(groups.listGroups().map(g => g.waha_session))) {
+  try {
+    const saved = db.getSetting(`waha_last_problem:${name}`);
+    if (saved) wahaRecovery.setLastProblem(name, JSON.parse(saved));
+  } catch {}
+}
 
 function wahaSessionName(req, res) {
-  const name = String(req.query.session || (req.body && req.body.session) || DEFAULT_WAHA_SESSION);
+  const groupSession = (groups.getGroup(req.groupId) || {}).waha_session;
+  const name = String(req.query.session || (req.body && req.body.session) || groupSession || DEFAULT_WAHA_SESSION);
   if (!wahaSession.isValidSession(name)) { res.status(400).json({ error: 'bad session name' }); return null; }
   return name;
 }
@@ -1166,11 +1177,14 @@ app.post('/api/waha/request-code', async (req, res) => {
 // Background check every 60 s: restart a FAILED / STOPPED session at most once per 5 minutes.
 function startWahaWatchdog() {
   const tick = async () => {
-    try {
-      const { status } = await waha.getSession(DEFAULT_WAHA_SESSION);
-      await wahaRecovery.check(DEFAULT_WAHA_SESSION, status);
-    } catch (err) {
-      console.error('[WAHA] watchdog:', err.message);
+    const sessions = [...new Set(groups.listGroups().map(g => g.waha_session))];
+    for (const name of sessions) {
+      try {
+        const { status } = await waha.getSession(name);
+        await wahaRecovery.check(name, status);
+      } catch (err) {
+        console.error(`[WAHA] watchdog ${name}:`, err.message); // one session failing never stops the others
+      }
     }
   };
   setTimeout(tick, 15_000);
@@ -1329,75 +1343,87 @@ app.delete('/api/meeting-stats/:id', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Birthday auto-congratulations ───────────────────────────────────────────
+// ─── Background jobs: one scheduler, every group in its own time zone ─────────
+// A job is due relative to the group's meeting weekday (Monday group: waves on Thursday 10:00 and Sunday 18:00,
+// the unconfirmed list an hour after each wave, the catalog on the meeting day 10:00) plus a daily birthday job.
+// Each group has its own WAHA session, notify recipient and state (group_settings); a failure in one group is
+// caught inside its job, logged with the group id, and the other groups carry on.
 
-function checkBirthdays() {
-  const today    = new Date();
-  const todayStr = String(today.getDate()).padStart(2, '0') + '/' +
-                   String(today.getMonth() + 1).padStart(2, '0');
-
-  const members = db.getMembersBirthday(todayStr);
-
-  for (const member of members) {
-    if (!member.phone) continue;
-
-    const yearPart = member.birthday.split('/')[2];
-    // eslint-disable-next-line no-unused-vars
-    const age = yearPart
-      ? new Date().getFullYear() - parseInt('19' + yearPart.slice(-2), 10)
-      : '';
-
-    const msg =
-      `🎂 С Днём рождения, ${member.name.split(' ')[0]}!\n\n` +
-      `Вся группа BNI SYNERGY поздравляет вас с праздником! 🎉\n` +
-      `Желаем процветания бизнесу и здоровья! 🥂`;
-
-    waFor(member.group_id).sendMessage(member.phone, msg)
-      .then(() => console.log(`[Birthday] Sent to ${member.name}`))
-      .catch(err => console.error(`[Birthday] Failed for ${member.name}:`, err.message));
+const wavesCache = new Map();
+const catalogCache = new Map();
+const todayIn = gid => {
+  const tz = (groups.getGroup(gid) || {}).timezone || 'Asia/Jerusalem';
+  const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: tz }).split('-');
+  return `${d}/${m}/${y.slice(2)}`;
+};
+function wavesFor(gid) {
+  if (!wavesCache.has(gid)) {
+    wavesCache.set(gid, require('./services/confirmationWaves').createWaves({
+      db, whatsapp: waFor(gid), buildConfirmationMessage, getTodayStr: () => todayIn(gid), formatMeetingDate,
+      getNextMeeting: () => meetingDateFor(gid),
+      groupId: gid,
+      getSettings: () => settingsFor(gid),
+      getGroupName: () => groupName(gid),
+      getNotifyPhone: () => groups.unconfirmedNotifyPhone(gid), // head of the notifying position; the group's own setting as fallback
+    }));
   }
-
-  if (members.length) {
-    console.log(`[Birthday] Checked ${todayStr}: ${members.length} birthday(s)`);
+  return wavesCache.get(gid);
+}
+function catalogFor(gid) {
+  if (!catalogCache.has(gid)) {
+    catalogCache.set(gid, require('./services/catalogBroadcast').createCatalog({
+      db, whatsapp: waFor(gid), getTodayStr: () => todayIn(gid), groupId: gid,
+      getSessionStatus: () => waFor(gid).getSessionStatus(),
+      getMessageOptions: () => {
+        const g = groups.getGroup(gid) || {};
+        return { groupName: g.name, catalogUrl: groupLink(gid, '/members-catalog'), facebookUrl: g.facebook_url };
+      },
+    }));
   }
+  return catalogCache.get(gid);
 }
 
-setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
-checkBirthdays();
+function checkBirthdaysForGroup(group) {
+  const today = zonedToday(group.timezone);
+  const todayStr = `${String(today.d).padStart(2, '0')}/${String(today.m).padStart(2, '0')}`;
+  const stamp = `${todayStr}/${today.y}`;
+  if (db.getGroupSetting(group.id, 'birthday_sent_for') === stamp) return; // once per day per group
+  db.setGroupSetting(group.id, 'birthday_sent_for', stamp);
 
-// ─── Cron: confirmation waves (Asia/Jerusalem) ────────────────────────────────
-// Wave 1: Thursday 10:00, list to the manager at 11:00.  Wave 2: Sunday 18:00, list at 19:00.
-// Each wave keeps its own state so "already sent today" never blocks the other one.
+  const members = db.getMembersBirthday(todayStr, group.id);
+  for (const member of members) {
+    if (!member.phone) continue;
+    const msg =
+      `🎂 С Днём рождения, ${member.name.split(' ')[0]}!\n\n` +
+      `Вся группа ${group.name} поздравляет вас с праздником! 🎉\n` +
+      `Желаем процветания бизнесу и здоровья! 🥂`;
+    waFor(group.id).sendMessage(member.phone, msg)
+      .then(() => console.log(`[Birthday] group ${group.id}: sent to ${member.name}`))
+      .catch(err => console.error(`[Birthday] group ${group.id}: failed for ${member.name}:`, err.message));
+  }
+  if (members.length) console.log(`[Birthday] group ${group.id}: checked ${todayStr}: ${members.length} birthday(s)`);
+}
+function zonedToday(tz) { const { y, m, d } = groupsService.zonedParts(new Date(), tz); return { y, m, d }; }
 
-// ─── Cron: confirmation waves — Thu 10:00 (list 11:00) and Sun 18:00 (list 19:00), Asia/Jerusalem ─
-
-const catalog = require('./services/catalogBroadcast').createCatalog({
-  db, whatsapp: waFor(GROUP1), getTodayStr, getSessionStatus: () => waFor(GROUP1).getSessionStatus(),
+const scheduler = require('./services/groupScheduler').createGroupScheduler({
+  listGroups: () => groups.listGroups(),
+  jobs: [
+    { name: 'confirmation-wave-1',   offsetDays: 3, time: '10:00', run: g => wavesFor(g.id).runConfirmationWave(1) },
+    { name: 'unconfirmed-list-1',    offsetDays: 3, time: '11:00', run: g => wavesFor(g.id).sendUnconfirmedList(1) },
+    { name: 'confirmation-wave-2',   offsetDays: 6, time: '18:00', run: g => wavesFor(g.id).runConfirmationWave(2) },
+    { name: 'unconfirmed-list-2',    offsetDays: 6, time: '19:00', run: g => wavesFor(g.id).sendUnconfirmedList(2) },
+    { name: 'members-catalog',       offsetDays: 0, time: '10:00', run: g => catalogFor(g.id).runMeetingDayCron() },
+    { name: 'birthdays',             daily: true,   time: '09:00', run: g => checkBirthdaysForGroup(g) },
+  ],
+  log: m => console.log(m),
+  logError: m => console.error(m),
 });
-const waves = require('./services/confirmationWaves').createWaves({
-  db, whatsapp: waFor(GROUP1), buildConfirmationMessage, getTodayStr, formatMeetingDate,
-  getNextMeeting: () => meetingDateFor(GROUP1),
-  groupId: GROUP1,
-  getNotifyPhone: () => groups.unconfirmedNotifyPhone(GROUP1), // head of the notifying position; old setting as fallback
-});
-const { runConfirmationWave, sendUnconfirmedList } = waves;
-
-cron.schedule('0 10 * * 4', () => runConfirmationWave(1), { timezone: 'Asia/Jerusalem' });
-cron.schedule('0 11 * * 4', () => sendUnconfirmedList(1), { timezone: 'Asia/Jerusalem' });
-cron.schedule('0 18 * * 0', () => runConfirmationWave(2), { timezone: 'Asia/Jerusalem' });
-cron.schedule('0 19 * * 0', () => sendUnconfirmedList(2), { timezone: 'Asia/Jerusalem' });
-
-// ─── Cron: Monday 10:00 — send members catalog link to guests of today's meeting ─
-
-cron.schedule('0 10 * * 1', () => {
-  console.log('[Cron] Понедельник 10:00 — рассылка каталога участников');
-  catalog.runMondayCron().catch(err => console.error('[Cron] Каталог:', err.message));
-}, { timezone: 'Asia/Jerusalem' });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   startWahaWatchdog();
+  scheduler.start();
   console.log(`\n🟢 BNI SYNERGY server running on http://localhost:${PORT}`);
   console.log(`   Guest form   : http://localhost:${PORT}/guest`);
   console.log(`   Member form  : http://localhost:${PORT}/member`);

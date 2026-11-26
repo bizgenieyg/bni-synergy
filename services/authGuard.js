@@ -131,7 +131,7 @@ function clientIp(req) {
 
 // ─── Public data shaping ──────────────────────────────────────────────────────
 
-const PUBLIC_SETTING_KEYS = ['meeting_location', 'meeting_waze_url', 'meeting_type'];
+const PUBLIC_SETTING_KEYS = ['meeting_location', 'meeting_waze_url', 'meeting_type', 'meeting_time', 'meeting_weekday', 'group_name', 'default_language'];
 
 function filterSettings(all, isAdmin) {
   if (isAdmin) return all;

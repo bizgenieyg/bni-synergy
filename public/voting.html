@@ -105,7 +105,7 @@
 <body>
 
 <div class="header">
-  <div class="logo-title">BNI <span>SYNERGY — Голосование</span></div>
+  <div class="logo-title" data-group-logo="upper" data-suffix=" — Голосование">BNI <span>SYNERGY — Голосование</span></div>
 </div>
 
 <div class="card" id="formCard">
@@ -122,7 +122,7 @@
 <div class="card result-card" id="successCard">
   <div class="emoji">🎉</div>
   <h2>Спасибо! Ваш голос принят</h2>
-  <p>Результаты будут объявлены на следующей встрече BNI SYNERGY</p>
+  <p>Результаты будут объявлены на следующей встрече <span data-group-name>BNI SYNERGY</span></p>
 </div>
 
 <div class="card result-card" id="alreadyCard">
@@ -137,6 +137,7 @@
   <p>Голосование на этой встрече ещё не открыто или уже завершено</p>
 </div>
 
+<script src="/group.js"></script>
 <script>
   let selectedCandidateId   = null;
   let selectedCandidateName = null;

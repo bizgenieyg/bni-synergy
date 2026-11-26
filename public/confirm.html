@@ -133,7 +133,7 @@
 </head>
 <body>
   <div class="logo-block">
-    <div class="logo-title">BNI <span>SYNERGY</span></div>
+    <div class="logo-title" data-group-logo="upper">BNI <span>SYNERGY</span></div>
     <div class="logo-sub">Business Network International</div>
   </div>
 
@@ -141,7 +141,8 @@
     <div class="loading" id="loading">Загрузка…</div>
   </div>
 
-  <script>
+  <script src="/group.js"></script>
+<script>
     const params  = new URLSearchParams(location.search);
     const guestId = params.get('id');
 
@@ -160,6 +161,8 @@
       const app = document.getElementById('app');
       const firstName = (data.name || 'Гость').trim().split(' ')[0];
       const dateStr = formatDate(data.meetingDate);
+      const wd = (data.meetingDate || '').split('/').map(Number);
+      const weekdayName = wd.length >= 3 && wd[0] ? ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'][new Date(Date.UTC(2000 + wd[2], wd[1] - 1, wd[0])).getUTCDay()] : '';
 
       let locationHtml;
       if (data.meetingType === 'zoom') {
@@ -175,7 +178,7 @@
         <div class="greeting">Здравствуйте, ${firstName}! 👋</div>
         <div class="subtitle">Подтвердите участие во встрече</div>
         <div class="divider"></div>
-        <div class="info-row"><span class="icon">📅</span><span><b>Понедельник, ${dateStr}</b> в 7:30</span></div>
+        <div class="info-row"><span class="icon">📅</span><span><b>${weekdayName ? weekdayName + ', ' : ''}${dateStr}</b>${data.meetingTime ? ' в ' + String(data.meetingTime).replace(/^0/, '') : ''}</span></div>
         ${locationHtml}
         <div class="divider"></div>
         <button class="btn btn-yes" id="btn-yes">✅ Я приду!</button>

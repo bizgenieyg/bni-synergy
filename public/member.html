@@ -182,12 +182,12 @@
 <body>
 
   <div class="logo">
-    <div class="logo-title">BNI <span>SYNERGY</span></div>
+    <div class="logo-title" data-group-logo="upper">BNI <span>SYNERGY</span></div>
     <div class="logo-sub">Генератор ссылок</div>
   </div>
 
   <div class="card">
-    <h1>Пригласить на встречу BNI SYNERGY</h1>
+    <h1>Пригласить на встречу <span data-group-name>BNI SYNERGY</span></h1>
 
     <div class="form-group">
       <label for="memberSelect">Ваше имя</label>
@@ -227,7 +227,8 @@
     </div>
   </div>
 
-  <script>
+  <script src="/group.js"></script>
+<script>
     // Load active members into dropdown
     fetch('/api/members?active=true')
       .then(r => r.json())
@@ -261,8 +262,8 @@
 
       // WhatsApp share link
       const waText = type === 'sub'
-        ? `Привет! Я ищу замену на встречу BNI SYNERGY. Зарегистрируйся по ссылке:\n${generatedUrl}`
-        : `Привет! Приглашаю тебя на встречу BNI SYNERGY. Зарегистрируйся:\n${generatedUrl}`;
+        ? `Привет! Я ищу замену на встречу ${window.GROUP_NAME || 'BNI'}. Зарегистрируйся по ссылке:\n${generatedUrl}`
+        : `Привет! Приглашаю тебя на встречу ${window.GROUP_NAME || 'BNI'}. Зарегистрируйся:\n${generatedUrl}`;
 
       document.getElementById('waBtn').href =
         `https://wa.me/?text=${encodeURIComponent(waText)}`;

@@ -45,12 +45,34 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
     return r ? r.group_id : null;
   };
 
-  const URL_FIELDS = ['waze_url', 'zoom_url', 'payment_url'];
+  const URL_FIELDS = ['waze_url', 'zoom_url', 'payment_url', 'facebook_url'];
   function updateGroup(id, body) {
     const cur = getGroup(id);
     if (!cur) return { error: 'group not found' };
     const next = { ...cur };
+    if (body.name !== undefined) {
+      const n = String(body.name).trim();
+      if (!n || n.length > 80) return { error: 'name: 1..80 characters' };
+      next.name = n;
+    }
     if (body.address !== undefined) next.address = String(body.address).trim();
+    if (body.meeting_type !== undefined) {
+      if (!['offline', 'zoom'].includes(body.meeting_type)) return { error: 'meeting_type: offline or zoom' };
+      next.meeting_type = body.meeting_type;
+    }
+    if (body.default_language !== undefined) {
+      if (!['ru', 'en', 'he'].includes(body.default_language)) return { error: 'default_language: ru, en or he' };
+      next.default_language = body.default_language;
+    }
+    if (body.timezone !== undefined) {
+      try { new Intl.DateTimeFormat('en-US', { timeZone: String(body.timezone) }); } catch { return { error: 'timezone: unknown IANA zone' }; }
+      next.timezone = String(body.timezone);
+    }
+    if (body.waha_session !== undefined) {
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(body.waha_session))) return { error: 'waha_session: letters, digits, - and _' };
+      next.waha_session = String(body.waha_session);
+    }
+    for (const f of ['whatsapp_chat_id', 'sheet_id']) if (body[f] !== undefined) next[f] = String(body[f]).trim();
     for (const f of URL_FIELDS) {
       if (body[f] === undefined) continue;
       const v = String(body[f]).trim();
@@ -75,8 +97,10 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
       else if (/^\d{1,6}$/.test(String(a))) next.payment_amount = Number(a);
       else return { error: 'payment_amount: whole number or empty' };
     }
-    db.prepare(`UPDATE groups SET address=?, waze_url=?, zoom_url=?, payment_url=?, payment_amount=?, meeting_weekday=?, meeting_time=? WHERE id=?`)
-      .run(next.address, next.waze_url, next.zoom_url, next.payment_url, next.payment_amount, next.meeting_weekday, next.meeting_time, id);
+    db.prepare(`UPDATE groups SET name=?, address=?, waze_url=?, zoom_url=?, payment_url=?, payment_amount=?, meeting_weekday=?, meeting_time=?,
+                meeting_type=?, default_language=?, timezone=?, waha_session=?, whatsapp_chat_id=?, sheet_id=?, facebook_url=? WHERE id=?`)
+      .run(next.name, next.address, next.waze_url, next.zoom_url, next.payment_url, next.payment_amount, next.meeting_weekday, next.meeting_time,
+        next.meeting_type, next.default_language, next.timezone, next.waha_session, next.whatsapp_chat_id, next.sheet_id, next.facebook_url, id);
     return { group: getGroup(id) };
   }
 
@@ -85,13 +109,30 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
   function meetingDateFor(groupId = DEFAULT_GROUP_ID) {
     const g = getGroup(groupId);
     if (g && g.meeting_weekday !== null) return nextMeetingDate(now(), g.meeting_weekday, g.meeting_time, g.timezone);
-    return groupId === DEFAULT_GROUP_ID ? (dbm.getSetting('next_meeting_date') || '') : '';
+    return dbm.getGroupSetting(groupId, 'next_meeting_date') || '';
   }
   const scheduleIsSet = groupId => { const g = getGroup(groupId); return !!g && g.meeting_weekday !== null; };
 
   // The part of a group that public pages may see (no session, no timezone, no internals).
   const publicGroup = g => g && ({ slug: g.slug, name: g.name, address: g.address, waze_url: g.waze_url,
-    payment_url: g.payment_url, payment_amount: g.payment_amount });
+    payment_url: g.payment_url, payment_amount: g.payment_amount, default_language: g.default_language });
+
+  // "Monday, 30 November 2026 at 07:30" pieces for message texts, from the group's own schedule.
+  // time is '' when the group has not set one (the text then simply has no time).
+  const meetingTime = groupId => { const g = getGroup(groupId); return (g && g.meeting_time) || ''; };
+
+  // New empty group with defaults. Copies nothing from other groups.
+  function createGroup({ name, slug, wahaSession = null }) {
+    const n = String(name || '').trim();
+    const sl = String(slug || '').trim().toLowerCase();
+    if (!n) return { error: 'name is required' };
+    if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(sl)) return { error: 'slug: latin letters, digits and -, 2..41 characters' };
+    if (getGroupBySlug(sl)) return { error: `slug "${sl}" is already taken` };
+    const session = wahaSession || sl;
+    const r = db.prepare('INSERT INTO groups (name, slug, waha_session, created_at) VALUES (?, ?, ?, ?)')
+      .run(n, sl, session, new Date().toISOString());
+    return { group: getGroup(r.lastInsertRowid) };
+  }
 
   // ─── Positions ──────────────────────────────────────────────────────────────
 
@@ -121,8 +162,8 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
     }
     db.transaction(() => {
       db.prepare('DELETE FROM member_positions WHERE member_id = ?').run(memberId);
-      const ins = db.prepare('INSERT INTO member_positions (member_id, position_id, is_head) VALUES (?, ?, ?)');
-      for (const c of clean) ins.run(memberId, c.position_id, c.is_head);
+      const ins = db.prepare('INSERT INTO member_positions (member_id, position_id, group_id, is_head) VALUES (?, ?, ?, ?)');
+      for (const c of clean) ins.run(memberId, c.position_id, gid, c.is_head);
     })();
     return { positions: clean };
   }
@@ -137,9 +178,9 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
       WHERE p.group_id = ? AND m.group_id = ? AND p.notify_unconfirmed = 1 AND mp.is_head = 1 AND m.active = 1 AND TRIM(m.phone) != ''
       ORDER BY p.id, m.id LIMIT 1`).get(groupId, groupId);
     if (row) return row.phone;
-    const legacy = groupId === DEFAULT_GROUP_ID ? dbm.getSetting('unconfirmed_notify_phone') : '';
+    const legacy = dbm.getGroupSetting(groupId, 'unconfirmed_notify_phone');
     if (legacy) {
-      log(`[Groups] group ${groupId}: no head of a position with notify_unconfirmed, using the old unconfirmed_notify_phone setting`);
+      log(`[Groups] group ${groupId}: no head of a position with notify_unconfirmed, using the group's unconfirmed_notify_phone setting`);
       return legacy;
     }
     log(`[Groups] group ${groupId}: nobody to notify about unconfirmed guests`);
@@ -147,9 +188,9 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
   }
 
   return {
-    getGroup, getGroupBySlug, listGroups, groupOfMember, updateGroup, meetingDateFor, scheduleIsSet, publicGroup,
+    getGroup, getGroupBySlug, listGroups, groupOfMember, updateGroup, createGroup, meetingTime, meetingDateFor, scheduleIsSet, publicGroup,
     listPositions, memberPositionsMap, setMemberPositions, unconfirmedNotifyPhone,
   };
 }
 
-module.exports = { nextMeetingDate, createGroups, DEFAULT_GROUP_ID };
+module.exports = { nextMeetingDate, createGroups, zonedParts, DEFAULT_GROUP_ID };

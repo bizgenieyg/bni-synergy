@@ -3,9 +3,11 @@
 // Multi-group foundation (task 17). Idempotent, runs in one transaction, preceded by a
 // consistent backup of the DB file. Pure with respect to the app: takes a better-sqlite3 handle.
 //
-// Tables with group_id: members, guests, votes, presentations, group_value, meeting_stats, mail_intake.
-// Not scoped: member_socials (belongs to a member, so it follows the member's group), settings (global,
-// except the per-group fields that moved to `groups`).
+// Every data table has group_id: members, guests, votes, presentations, group_value, meeting_stats,
+// mail_intake, member_socials, positions, member_positions, group_settings.
+// `settings` is system-only (infrastructure state such as the last WAHA problem per session): every
+// group-level key moved to `groups` (address, links, schedule, language, meeting type, ...) or to
+// `group_settings(group_id, key, value)` (state of the group: voting, waves, catalog, mail intake).
 
 const fs = require('fs');
 const path = require('path');
@@ -16,6 +18,25 @@ const SCHEMA_VERSION = 17;
 // Payment link that used to be a constant in server.js; kept here only to seed group 1.
 const LEGACY_PAYBOX_LINK = 'https://links.payboxapp.com/7SB6P3stE6b';
 const LEGACY_PAYMENT_AMOUNT = 80;
+// These used to be hard-coded in the messages (Monday, 7:30, Facebook group): they seed group 1 only.
+const LEGACY_WEEKDAY = 1;
+const LEGACY_TIME = '07:30';
+const LEGACY_FACEBOOK = 'https://www.facebook.com/share/g/1PXaN6Uxgg/';
+
+// Keys of the old global `settings` table that are state/config of ONE group.
+const GROUP_SETTING_KEYS = [
+  'voting_open', 'next_meeting_date',
+  'confirmation_sent_date', 'confirmation_sent_for',
+  'confirmation_round1_for', 'confirmation_round1_date', 'confirmation_round2_for', 'confirmation_round2_date',
+  'catalog_sent_for',
+  'mail_intake_auto_register', 'mail_intake_mode', 'mail_intake_notify_phone', 'unconfirmed_notify_phone',
+];
+// Keys that became columns of `groups`.
+const GROUP_COLUMN_KEYS = { meeting_location: 'address', meeting_waze_url: 'waze_url', meeting_zoom_url: 'zoom_url', meeting_type: 'meeting_type' };
+// Defaults of a fresh group (no data copied from group 1).
+const GROUP_SETTING_DEFAULTS = {
+  voting_open: '0', mail_intake_auto_register: '0', mail_intake_mode: 'test',
+};
 
 const hasTable = (db, t) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(t);
 const columns = (db, t) => db.prepare(`PRAGMA table_info(${t})`).all();
@@ -87,6 +108,11 @@ function createCoreTables(db) {
       zoom_url        TEXT NOT NULL DEFAULT '',
       payment_url     TEXT NOT NULL DEFAULT '',
       payment_amount  INTEGER,
+      meeting_type    TEXT NOT NULL DEFAULT 'offline',
+      default_language TEXT NOT NULL DEFAULT 'ru',
+      whatsapp_chat_id TEXT NOT NULL DEFAULT '',
+      sheet_id        TEXT NOT NULL DEFAULT '',
+      facebook_url    TEXT NOT NULL DEFAULT '',
       created_at      TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS positions (
@@ -103,8 +129,15 @@ function createCoreTables(db) {
     CREATE TABLE IF NOT EXISTS member_positions (
       member_id   INTEGER NOT NULL,
       position_id INTEGER NOT NULL,
+      group_id    INTEGER NOT NULL DEFAULT 1,
       is_head     INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (member_id, position_id)
+    );
+    CREATE TABLE IF NOT EXISTS group_settings (
+      group_id INTEGER NOT NULL,
+      key      TEXT NOT NULL,
+      value    TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (group_id, key)
     );
     CREATE INDEX IF NOT EXISTS idx_member_positions_pos ON member_positions(position_id);
   `);
@@ -118,18 +151,39 @@ function seedGroupOne(db, { wahaSession, paymentUrl, paymentAmount }) {
     return r ? r.value : null;
   };
   // Weekday/time are NOT invented: taken from existing settings if they exist, else NULL.
+  // Group 1 gets the schedule that the messages used to hard-code (Monday 7:30), so nothing changes for it.
   const wd = s('meeting_weekday');
-  const weekday = wd !== null && /^[0-6]$/.test(String(wd).trim()) ? Number(wd) : null;
+  const weekday = wd !== null && /^[0-6]$/.test(String(wd).trim()) ? Number(wd) : LEGACY_WEEKDAY;
   const tm = s('meeting_time');
-  const time = tm !== null && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(tm).trim()) ? String(tm).trim() : null;
+  const time = tm !== null && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(tm).trim()) ? String(tm).trim() : LEGACY_TIME;
+  const mt = s('meeting_type');
   db.prepare(`
     INSERT INTO groups (id, name, slug, waha_session, timezone, meeting_weekday, meeting_time,
-                        address, waze_url, zoom_url, payment_url, payment_amount, created_at)
-    VALUES (?, 'BNI Synergy', 'synergy', ?, 'Asia/Jerusalem', ?, ?, ?, ?, ?, ?, ?, ?)
+                        address, waze_url, zoom_url, payment_url, payment_amount,
+                        meeting_type, default_language, whatsapp_chat_id, sheet_id, facebook_url, created_at)
+    VALUES (?, 'BNI Synergy', 'synergy', ?, 'Asia/Jerusalem', ?, ?, ?, ?, ?, ?, ?, ?, 'ru', ?, ?, ?, ?)
   `).run(DEFAULT_GROUP_ID, wahaSession, weekday, time,
     s('meeting_location') || '', s('meeting_waze_url') || '', s('meeting_zoom_url') || '',
-    paymentUrl, paymentAmount, new Date().toISOString());
+    paymentUrl, paymentAmount, mt === 'zoom' ? 'zoom' : 'offline',
+    process.env.WAHA_GROUP_ID || '', process.env.GOOGLE_SHEET_ID || '', LEGACY_FACEBOOK, new Date().toISOString());
   return true;
+}
+
+// Group-level keys leave the global `settings` table: state keys go to group_settings of group 1,
+// address/links/meeting type live in `groups` (already seeded). Idempotent.
+function moveSettingsToGroup(db) {
+  if (!hasTable(db, 'settings')) return 0;
+  const get = db.prepare('SELECT value FROM settings WHERE key = ?');
+  const put = db.prepare('INSERT OR IGNORE INTO group_settings (group_id, key, value) VALUES (?, ?, ?)');
+  const del = db.prepare('DELETE FROM settings WHERE key = ?');
+  let moved = 0;
+  for (const k of GROUP_SETTING_KEYS) {
+    const r = get.get(k);
+    if (r) { put.run(DEFAULT_GROUP_ID, k, r.value); moved++; }
+    del.run(k);
+  }
+  for (const k of [...Object.keys(GROUP_COLUMN_KEYS), 'meeting_weekday', 'meeting_time']) del.run(k);
+  return moved;
 }
 
 // Exact (trimmed) match of guests.invitedBy to members.name inside the guest's group.
@@ -166,7 +220,11 @@ function runMigration(db, opts = {}) {
 
       if (hasTable(db, 'members') && !hasColumn(db, 'members', 'group_id')) rebuildWithGroup(db, 'members', ['group_id', 'name']);
       if (hasTable(db, 'meeting_stats') && !hasColumn(db, 'meeting_stats', 'group_id')) rebuildWithGroup(db, 'meeting_stats', ['group_id', 'meeting_date']);
-      for (const t of ['guests', 'votes', 'presentations', 'group_value', 'mail_intake']) addGroupColumn(db, t);
+      for (const t of ['guests', 'votes', 'presentations', 'group_value', 'mail_intake', 'member_socials']) addGroupColumn(db, t);
+      addGroupColumn(db, 'member_positions');
+      if (hasTable(db, 'member_socials')) db.exec('UPDATE member_socials SET group_id = COALESCE((SELECT group_id FROM members WHERE members.id = member_socials.member_id), group_id)');
+      db.exec('UPDATE member_positions SET group_id = COALESCE((SELECT group_id FROM members WHERE members.id = member_positions.member_id), group_id)');
+      moveSettingsToGroup(db);
       db.exec('CREATE INDEX IF NOT EXISTS idx_members_group ON members(group_id)');
       db.exec('CREATE INDEX IF NOT EXISTS idx_meeting_stats_group ON meeting_stats(group_id)');
 
@@ -196,23 +254,26 @@ function runMigration(db, opts = {}) {
 
 // ─── Positions seed (idempotent) ──────────────────────────────────────────────
 //
-// scripts/positions_he.json:
-// { "positions":   [{ "code", "name_he", "name_ru", "name_en", "grants_admin", "notify_unconfirmed" }],
-//   "assignments": [{ "position": "<code>", "name_he": "...", "name_ru_hint": "...", "is_head": 1 }] }
+// scripts/positions-he.json:
+// { "positions":   [{ "key", "he", "ru", "en", "grants_admin", "notify_unconfirmed" }],
+//   "assignments": [{ "position": "<key>", "name_he": "...", "name_ru_hint": "...", "is_head": true }] }
+// (the older field names code / name_he / name_ru / name_en are accepted too)
 
-const norm = s => String(s || '').replace(/[֑-ׇ]/g, '').replace(/["'״׳]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const TITLES = new Set(['דר', 'עוד', 'פרופ', 'מר', 'גב']);
+const norm = s => String(s || '').replace(/[֑-ׇ]/g, '').replace(/["'״׳.]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  .split(' ').filter(w => !TITLES.has(w)).join(' ');
 
 function seedPositions(db, data, { groupId = DEFAULT_GROUP_ID, log = console.log } = {}) {
   const out = { positions: 0, assigned: 0, unmatched: [] };
   if (!data || !Array.isArray(data.positions)) return out;
   const insPos = db.prepare(`INSERT OR IGNORE INTO positions (group_id, code, name_he, name_ru, name_en, grants_admin, notify_unconfirmed)
                              VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const insAssign = db.prepare('INSERT OR IGNORE INTO member_positions (member_id, position_id, is_head) VALUES (?, ?, ?)');
+  const insAssign = db.prepare('INSERT OR IGNORE INTO member_positions (member_id, position_id, group_id, is_head) VALUES (?, ?, ?, ?)');
   const members = db.prepare('SELECT id, name, name_he FROM members WHERE group_id = ?').all(groupId);
 
   db.transaction(() => {
     for (const p of data.positions) {
-      out.positions += insPos.run(groupId, p.code, p.name_he || '', p.name_ru || '', p.name_en || '',
+      out.positions += insPos.run(groupId, p.key || p.code, p.he || p.name_he || '', p.ru || p.name_ru || '', p.en || p.name_en || '',
         p.grants_admin ? 1 : 0, p.notify_unconfirmed ? 1 : 0).changes;
     }
     for (const a of data.assignments || []) {
@@ -221,7 +282,7 @@ function seedPositions(db, data, { groupId = DEFAULT_GROUP_ID, log = console.log
       const byRu = a.name_ru_hint ? members.filter(m => norm(m.name) === norm(a.name_ru_hint)) : [];
       const found = byHe.length === 1 ? byHe[0] : (byHe.length === 0 && byRu.length === 1 ? byRu[0] : null);
       if (!pos || !found) { out.unmatched.push({ ...a, reason: !pos ? 'unknown position' : (byHe.length > 1 || byRu.length > 1 ? 'ambiguous' : 'no member') }); continue; }
-      out.assigned += insAssign.run(found.id, pos.id, a.is_head ? 1 : 0).changes;
+      out.assigned += insAssign.run(found.id, pos.id, groupId, a.is_head ? 1 : 0).changes;
     }
   })();
   if (out.unmatched.length) {
@@ -236,6 +297,6 @@ function seedPositionsFromFile(db, file, opts = {}) {
 }
 
 module.exports = {
-  DEFAULT_GROUP_ID, SCHEMA_VERSION, LEGACY_PAYBOX_LINK, runMigration, needsMigration, backupBeforeMigration,
+  DEFAULT_GROUP_ID, SCHEMA_VERSION, LEGACY_PAYBOX_LINK, GROUP_SETTING_KEYS, GROUP_SETTING_DEFAULTS, moveSettingsToGroup, runMigration, needsMigration, backupBeforeMigration,
   seedPositions, seedPositionsFromFile, fillInvitedByIds, hasColumn, hasTable,
 };

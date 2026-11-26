@@ -168,7 +168,7 @@ async function sendInvitations(f, deps) {
   const manager = (deps.notifyPhone && deps.notifyPhone()) || DEFAULT_NOTIFY_PHONE;
 
   const { phone } = pickPhone(f.phones, db);
-  const inviter = matchInviter(f.invitedBy, db.getActiveMembers().filter(m => m.name_he));
+  const inviter = matchInviter(f.invitedBy, db.getActiveMembers(deps.groupId || 1).filter(m => m.name_he));
   let meetingDate = f.meetingDates[0] || '';
   const dateFallback = !meetingDate;
   if (dateFallback) meetingDate = deps.nextMeetingDate();
@@ -183,7 +183,7 @@ async function sendInvitations(f, deps) {
     return { status: 'skipped_past', reason: 'meeting date is in the past', parsedJson: JSON.stringify(base) };
   }
   const sentStatuses = mode === 'test' ? ['sent_test'] : ['sent_guest', 'sent_member', 'sent_fallback'];
-  if (db.findSentIntake({ phone, name: f.name, meetingDate, statuses: sentStatuses })) {
+  if (db.findSentIntake({ phone, name: f.name, meetingDate, statuses: sentStatuses, groupId: deps.groupId || 1 })) {
     return { status: 'duplicate', reason: 'already sent for this guest', parsedJson: JSON.stringify(base) };
   }
 
@@ -248,7 +248,7 @@ async function processGuestMail(parsed, deps) {
   const phone = phoneRaw ? db.normalizePhone(phoneRaw) : '';
   if (!phone) needsReview = true;
 
-  const inviter = matchInviter(f.invitedBy, db.getActiveMembers().filter(m => m.name_he));
+  const inviter = matchInviter(f.invitedBy, db.getActiveMembers(deps.groupId || 1).filter(m => m.name_he));
   const invitedBy = inviter ? inviter.name : f.invitedBy;
   if (!inviter) needsReview = true;
 
@@ -276,7 +276,9 @@ async function processGuestMail(parsed, deps) {
     source: 'bni_email',
     needsReview,
     invitedByMemberId: inviter ? inviter.id : null,
+    groupId: inviter ? inviter.group_id : (deps.groupId || 1),
   });
+  if (!inviter) console.warn(`[MailIntake] inviter "${invitedBy}" not found: guest stored in group ${deps.groupId || 1} (nothing guessed)`);
   if (deps.afterCreate) {
     try {
       Promise.resolve(deps.afterCreate({ id, name, phone, specialty, invitedBy, meetingDate, email, isSub, waEnabled: phone ? 1 : 0 }))
@@ -292,7 +294,7 @@ async function handleIncomingMail(raw, deps) {
   const { db } = deps;
   const parsed = await simpleParser(raw);
   const messageId = (parsed.messageId || '').trim() || 'sha256:' + crypto.createHash('sha256').update(raw).digest('hex');
-  if (!db.claimMailIntake(messageId)) {
+  if (!db.claimMailIntake(messageId, '', deps.groupId || 1)) {
     console.log(`[MailIntake] duplicate ${messageId}, skipped`);
     return { status: 'duplicate' };
   }

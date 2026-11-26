@@ -1,0 +1,83 @@
+{
+  "source": "BNI Connect leadership list (pasted by Yuri, 2026-11-26)",
+  "notes": [
+    "name_he is as shown on BNI; match to members by name_he (ignore titles: ד\"ר, עו\"ד, עוד, quotes), then by Russian name from scripts/members_he.json; report any unmatched.",
+    "One member may hold several positions (e.g. Darian Roitman).",
+    "grants_admin positions give the group-admin role; is_head marks the head of a team (first in the BNI list).",
+    "Only these 4 positions are used (confirmed by Yuri 2026-11-26): chair, vice_chair, treasurer = group admins; hospitality = receives the report about guests who did not confirm attendance (sent to the head, is_head). Other BNI committees are intentionally not stored."
+  ],
+  "positions": [
+    {
+      "key": "chair",
+      "he": "יו\"ר/ית",
+      "ru": "Глава группы",
+      "en": "Chair",
+      "grants_admin": true
+    },
+    {
+      "key": "vice_chair",
+      "he": "סגן/ית יו\"ר",
+      "ru": "Заместитель главы",
+      "en": "Vice Chair",
+      "grants_admin": true
+    },
+    {
+      "key": "treasurer",
+      "he": "גזבר/ית",
+      "ru": "Казначей",
+      "en": "Treasurer",
+      "grants_admin": true
+    },
+    {
+      "key": "hospitality",
+      "he": "צוות אירוח",
+      "ru": "Команда гостеприимства",
+      "en": "Hospitality team",
+      "grants_admin": false,
+      "notify_unconfirmed": true
+    }
+  ],
+  "assignments": [
+    {
+      "position": "chair",
+      "name_he": "יוליה טרונזה",
+      "name_ru_hint": "Юля Тронза"
+    },
+    {
+      "position": "vice_chair",
+      "name_he": "ארתור בלאייר",
+      "name_ru_hint": "Артур Блаер"
+    },
+    {
+      "position": "treasurer",
+      "name_he": "אלכסנדר קודינוב",
+      "name_ru_hint": "Александр Кудинов"
+    },
+    {
+      "position": "hospitality",
+      "name_he": "אולגה גספרט",
+      "name_ru_hint": "Ольга Гасперт",
+      "is_head": true
+    },
+    {
+      "position": "hospitality",
+      "name_he": "אירנה קרול",
+      "name_ru_hint": "Ирина Кроль"
+    },
+    {
+      "position": "hospitality",
+      "name_he": "יורי גולד",
+      "name_ru_hint": "Юрий Голд"
+    },
+    {
+      "position": "hospitality",
+      "name_he": "לורה בלנטר",
+      "name_ru_hint": "Лора Блантер"
+    },
+    {
+      "position": "hospitality",
+      "name_he": "נטליה זוק",
+      "name_ru_hint": "Натали Жук"
+    }
+  ]
+}

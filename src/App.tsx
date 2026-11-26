@@ -276,7 +276,7 @@ function LangSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   ]
   const changeLang = (lang: string) => {
     i18n.changeLanguage(lang)
-    localStorage.setItem('lang', lang)
+    try { localStorage.setItem('lang', lang) } catch { /* private mode: the choice lasts until reload */ }
     document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr'
     document.documentElement.lang = lang
   }
@@ -2745,6 +2745,7 @@ function PresentationsSection() {
 interface GroupInfo {
   id: number; name: string; address: string; waze_url: string; zoom_url: string; payment_url: string
   payment_amount: number | null; meeting_weekday: number | null; meeting_time: string | null
+  meeting_type: 'offline' | 'zoom'; default_language: 'ru' | 'en' | 'he'; facebook_url: string
   next_meeting: string; schedule_set: boolean
 }
 
@@ -2765,6 +2766,7 @@ function GroupSettingsSection() {
     setSaving(true); setMsg(null)
     try {
       const r = await api('/api/group', { method: 'PUT', body: JSON.stringify({
+        name: g.name, meeting_type: g.meeting_type, default_language: g.default_language, facebook_url: g.facebook_url,
         address: g.address, waze_url: g.waze_url, zoom_url: g.zoom_url, payment_url: g.payment_url,
         payment_amount: g.payment_amount ?? '', meeting_weekday: g.meeting_weekday ?? '', meeting_time: g.meeting_time ?? '',
       }) })
@@ -2779,6 +2781,32 @@ function GroupSettingsSection() {
   return (
     <div className="space-y-5 max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-900">{t('ui.groupSettings')}</h1>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <div>
+          <label className={label}>{t('ui.groupName')}</label>
+          <input value={g.name} onChange={e => set({ name: e.target.value })} className={input} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={label}>{t('ui.defaultLanguage')}</label>
+            <select value={g.default_language} onChange={e => set({ default_language: e.target.value as GroupInfo['default_language'] })} className={input}>
+              <option value="ru">Русский</option><option value="en">English</option><option value="he">עברית</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">{t('ui.defaultLanguageHint')}</p>
+          </div>
+          <div>
+            <label className={label}>{t('ui.meetingFormat')}</label>
+            <select value={g.meeting_type} onChange={e => set({ meeting_type: e.target.value as GroupInfo['meeting_type'] })} className={input}>
+              <option value="offline">{t('ui.offline')}</option><option value="zoom">Zoom</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className={label}>{t('ui.facebookLink')}</label>
+          <input value={g.facebook_url} onChange={e => set({ facebook_url: e.target.value })} dir="ltr" placeholder="https://facebook.com/…" className={cn(input, LTR_INPUT)} />
+        </div>
+      </div>
 
       <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
         <p className="text-sm font-semibold text-gray-700">{t('ui.groupMeeting')}</p>
@@ -3081,6 +3109,17 @@ export default function App() {
   const { t, i18n } = useTranslation()
   const isRtl = i18n.language === 'he'
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('admin_token'))
+  // The interface language is the user's own choice, stored in THIS browser only. The group's default
+  // language is used only when the browser has no choice yet (a new visitor); it is never written back.
+  useEffect(() => {
+    if (!authed) return
+    let saved: string | null = null
+    try { saved = localStorage.getItem('lang') } catch { /* no storage */ }
+    if (saved) return
+    api('/api/group').then(r => r.json()).then(g => {
+      if (g && ['ru', 'en', 'he'].includes(g.default_language) && g.default_language !== i18n.language) i18n.changeLanguage(g.default_language)
+    }).catch(() => {})
+  }, [authed])
   const [section, setSection] = useState<Section>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [inviteForDashboard, setInviteForDashboard] = useState(false)

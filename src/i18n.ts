@@ -11,7 +11,6 @@ const resources = {
         daysAgo: '{{n}}d ago',
         nextMeeting: 'Next meeting:',
         auto: 'Auto',
-        meetingFormat: 'Meeting format',
         offline: 'In person',
         meetingAddress: 'Meeting address…',
         notifications: 'Notifications',
@@ -80,6 +79,11 @@ const resources = {
         wazeLink: 'Waze link',
         zoomLink: 'Zoom link',
         groupPayment: 'Participation payment',
+        groupName: 'Group name',
+        defaultLanguage: 'Default language',
+        defaultLanguageHint: "Used for new visitors who have not chosen a language yet. Each person's own choice stays in their browser.",
+        meetingFormat: 'Meeting format',
+        facebookLink: 'Facebook group link',
         paymentLink: 'Payment link',
         paymentAmount: 'Amount (₪)',
         paymentEmptyHint: 'If the link is empty, the payment block is not shown to guests.',
@@ -313,7 +317,6 @@ const resources = {
         daysAgo: '{{n}} дн. назад',
         nextMeeting: 'Следующая встреча:',
         auto: 'Авто',
-        meetingFormat: 'Формат встречи',
         offline: 'Офлайн',
         meetingAddress: 'Адрес встречи…',
         notifications: 'Уведомления',
@@ -382,6 +385,11 @@ const resources = {
         wazeLink: 'Ссылка Waze',
         zoomLink: 'Ссылка Zoom',
         groupPayment: 'Оплата участия',
+        groupName: 'Название группы',
+        defaultLanguage: 'Язык по умолчанию',
+        defaultLanguageHint: 'Для новых посетителей, которые ещё не выбирали язык. Выбор каждого человека хранится только в его браузере.',
+        meetingFormat: 'Формат встречи',
+        facebookLink: 'Ссылка на группу Facebook',
         paymentLink: 'Ссылка на оплату',
         paymentAmount: 'Сумма (₪)',
         paymentEmptyHint: 'Если ссылка пустая, блок оплаты гостям не показывается.',
@@ -684,6 +692,10 @@ const resources = {
         wazeLink: 'קישור Waze',
         zoomLink: 'קישור Zoom',
         groupPayment: 'תשלום השתתפות',
+        groupName: 'שם הקבוצה',
+        defaultLanguage: 'שפת ברירת מחדל',
+        defaultLanguageHint: 'למבקרים חדשים שעוד לא בחרו שפה. הבחירה של כל אדם נשמרת בדפדפן שלו בלבד.',
+        facebookLink: 'קישור לקבוצת פייסבוק',
         paymentLink: 'קישור לתשלום',
         paymentAmount: 'סכום (₪)',
         paymentEmptyHint: 'אם הקישור ריק, בלוק התשלום לא יוצג לאורחים.',
@@ -910,8 +922,13 @@ const resources = {
   },
 };
 
+// Language lives in the user's browser only (never on the server); storage may be unavailable.
+function readLang(): string | null {
+  try { return localStorage.getItem('lang') } catch { return null }
+}
+
 i18n.use(initReactI18next).init({
-  lng: localStorage.getItem('lang') || 'ru',
+  lng: readLang() || 'ru',
   fallbackLng: 'en',
   resources,
   interpolation: { escapeValue: false },
@@ -924,7 +941,7 @@ i18n.on('languageChanged', (lng) => {
 });
 
 // Apply on initial load
-const initLang = localStorage.getItem('lang') || 'ru';
+const initLang = readLang() || 'ru';
 document.documentElement.dir = initLang === 'he' ? 'rtl' : 'ltr';
 document.documentElement.lang = initLang;
 

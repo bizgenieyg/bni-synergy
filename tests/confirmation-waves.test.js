@@ -24,7 +24,7 @@ const waves = createWaves({
   buildConfirmationMessage: g => `CONFIRM ${g.id}`,
   getTodayStr: () => today,
   formatMeetingDate: d => d,
-  getNextMeeting: () => db.getSetting('next_meeting_date'),
+  getNextMeeting: () => db.getGroupSetting(1, 'next_meeting_date'),
 });
 
 const add = (name, phone, extra = {}) => {
@@ -33,8 +33,8 @@ const add = (name, phone, extra = {}) => {
   return id;
 };
 
-db.setSetting('next_meeting_date', MEETING);
-db.setSetting('unconfirmed_notify_phone', '0501112233');
+db.setGroupSetting(1, 'next_meeting_date', MEETING);
+db.setGroupSetting(1, 'unconfirmed_notify_phone', '0501112233');
 const a = add('Alice A', '0541000001');
 const b = add('Bob B', '0541000002', { confirmed: true });
 add('Carl C', '0541000003', { waEnabled: 0 });
@@ -44,9 +44,9 @@ add('Eve E', '0541000005', { meetingDate: '27/10/26' });
 test('wave 1: only unconfirmed guests with WhatsApp of the next meeting, own state keys', async () => {
   await waves.runConfirmationWave(1);
   assert.deepEqual(sent.map(x => x[1]).sort(), [`CONFIRM ${a}`, `CONFIRM ${d}`].sort());
-  assert.equal(db.getSetting('confirmation_round1_for'), MEETING);
-  assert.equal(db.getSetting('confirmation_round1_date'), today);
-  assert.equal(db.getSetting('confirmation_round2_date'), null);
+  assert.equal(db.getGroupSetting(1, 'confirmation_round1_for'), MEETING);
+  assert.equal(db.getGroupSetting(1, 'confirmation_round1_date'), today);
+  assert.equal(db.getGroupSetting(1, 'confirmation_round2_date'), null);
 });
 
 test('wave 1 does not repeat on the same day', async () => {
@@ -62,8 +62,8 @@ test('wave 2 is not blocked by wave 1 and targets everyone still unconfirmed', a
   await waves.runConfirmationWave(2);
   const texts = sent.slice(n).map(x => x[1]).sort();
   assert.deepEqual(texts, [`CONFIRM ${d}`, `CONFIRM ${late}`].sort());
-  assert.equal(db.getSetting('confirmation_round2_for'), MEETING);
-  assert.equal(db.getSetting('confirmation_round2_date'), today);
+  assert.equal(db.getGroupSetting(1, 'confirmation_round2_for'), MEETING);
+  assert.equal(db.getGroupSetting(1, 'confirmation_round2_date'), today);
 });
 
 test('manager list after a wave: unconfirmed only, greeting by wave, skipped if wave did not run today', async () => {

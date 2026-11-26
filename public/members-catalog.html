@@ -347,12 +347,12 @@
 <section class="hero">
   <div class="hero-content">
     <div class="hero-eyebrow">Business Network International</div>
-    <div class="hero-logo">BNI <span class="synergy">Synergy</span></div>
+    <div class="hero-logo" data-group-logo="" data-span-class="synergy">BNI <span class="synergy">Synergy</span></div>
     <div class="hero-divider"></div>
-    <div class="hero-sub">Бизнес-группа в Нес Ционе</div>
+    <div class="hero-sub">Бизнес-группа</div>
     <div class="hero-pills">
-      <div class="pill"><span>📅</span> Понедельники</div>
-      <div class="pill"><span>⏰</span> 7:30</div>
+      <div class="pill"><span>📅</span> <span data-meeting-weekday></span></div>
+      <div class="pill"><span>⏰</span> <span data-meeting-time></span></div>
       <div class="pill"><span>📍</span> <span id="address-pill"></span></div>
     </div>
   </div>
@@ -372,11 +372,12 @@
 
 <!-- ── Footer ── -->
 <footer>
-  <div class="footer-logo">BNI <span class="s">Synergy</span></div>
+  <div class="footer-logo" data-group-name>BNI Synergy</div>
   © <span id="year"></span> &nbsp;·&nbsp;
   <a href="/guest">Зарегистрироваться на встречу →</a>
 </footer>
 
+<script src="/group.js"></script>
 <script>
   document.getElementById('year').textContent = new Date().getFullYear();
 

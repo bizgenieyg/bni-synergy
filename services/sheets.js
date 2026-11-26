@@ -2,7 +2,7 @@
 
 const { google } = require('googleapis');
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+// The spreadsheet belongs to a group (groups.sheet_id); every function takes it as a parameter.
 
 // Column order — DO NOT change headers
 // A = ВСТРЕЧА | B = Способ оплаты | C = № | D = Имя и Фамилия
@@ -38,8 +38,8 @@ async function getSheetsClient() {
 
 // ─── Tab management ───────────────────────────────────────────────────────────
 
-async function getAllTabs(sheets) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+async function getAllTabs(sheets, sheetId) {
+  const res = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
   return res.data.sheets || [];
 }
 
@@ -70,24 +70,24 @@ function getMostRecentDateTab(tabs) {
  * Create a new sheet tab and initialise it with headers copied from the most
  * recent existing date tab (or the fallback header list).
  */
-async function createTab(sheets, tabTitle) {
+async function createTab(sheets, tabTitle, sheetId) {
   // 1. Add sheet
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_ID,
+    spreadsheetId: sheetId,
     requestBody: {
       requests: [{ addSheet: { properties: { title: tabTitle } } }],
     },
   });
 
   // 2. Find headers to copy from most recent tab
-  const tabs    = await getAllTabs(sheets);
+  const tabs    = await getAllTabs(sheets, sheetId);
   const recent  = getMostRecentDateTab(tabs.filter(t => t.properties.title !== tabTitle));
   let headers   = FALLBACK_HEADERS;
 
   if (recent) {
     try {
       const res = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
+        spreadsheetId: sheetId,
         range: `'${recent.properties.title}'!A1:I1`,
       });
       if (res.data.values?.[0]?.length) {
@@ -102,7 +102,7 @@ async function createTab(sheets, tabTitle) {
 
   // 3. Write headers
   await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
+    spreadsheetId: sheetId,
     range: `'${tabTitle}'!A1:I1`,
     valueInputOption: 'RAW',
     requestBody: { values: [headers] },
@@ -117,10 +117,10 @@ async function createTab(sheets, tabTitle) {
  * Return the next sequential number for column C in the given tab.
  * Reads column C (skipping header row), finds the max numeric value.
  */
-async function getNextRowNumber(sheets, tabTitle) {
+async function getNextRowNumber(sheets, tabTitle, sheetId) {
   try {
     const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
+      spreadsheetId: sheetId,
       range: `'${tabTitle}'!C2:C`,
     });
     const values = res.data.values || [];
@@ -142,26 +142,27 @@ async function getNextRowNumber(sheets, tabTitle) {
  * Creates the tab if it doesn't exist.
  * Returns the 1-based sheet row index that was written.
  */
-async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн', email = '' }) {
+async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, paymentMethod = 'онлайн', email = '', sheetId }) {
+  if (!sheetId) { console.warn('[Sheets] group has no sheet_id: guest not written to a spreadsheet'); return null; }
   const sheets = await getSheetsClient();
 
   // Tab name is always DD/MM (strip year if present in meetingDate DD/MM/YY)
   const tabTitle = meetingDate.split('/').slice(0, 2).join('/');
 
   // Ensure the tab exists
-  const tabs = await getAllTabs(sheets);
+  const tabs = await getAllTabs(sheets, sheetId);
   if (!tabs.find(t => t.properties.title === tabTitle)) {
-    await createTab(sheets, tabTitle);
+    await createTab(sheets, tabTitle, sheetId);
   }
 
-  const rowNum   = await getNextRowNumber(sheets, tabTitle);
+  const rowNum   = await getNextRowNumber(sheets, tabTitle, sheetId);
   const fullName = name;
 
   // A=ВСТРЕЧА(empty) B=Способ оплаты C=№ D=Имя и Фамилия E=Профессия F=Телефон G=Кто пригласил H=Заметки(empty) I=Email
   const row = ['', paymentMethod, rowNum, fullName, specialty || '', phone, invitedBy || '', '', email || ''];
 
   const res = await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
+    spreadsheetId: sheetId,
     range: `'${tabTitle}'!A:I`,
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
@@ -180,8 +181,8 @@ async function appendGuest({ name, phone, specialty, invitedBy, meetingDate, pay
 /**
  * Update column B of a guest's row to "опл,{DD/MM}" (e.g. "опл,09/03").
  */
-async function markPaid(meetingDate, sheetRow) {
-  if (!meetingDate || !sheetRow) return;
+async function markPaid(meetingDate, sheetRow, sheetId) {
+  if (!meetingDate || !sheetRow || !sheetId) return;
 
   // Tab name is always DD/MM (strip year if present)
   const sheetTab = meetingDate.split('/').slice(0, 2).join('/');
@@ -189,7 +190,7 @@ async function markPaid(meetingDate, sheetRow) {
   const value    = `опл,${sheetTab}`;
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
+    spreadsheetId: sheetId,
     range: `'${sheetTab}'!B${sheetRow}`,
     valueInputOption: 'RAW',
     requestBody: { values: [[value]] },
