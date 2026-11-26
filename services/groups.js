@@ -122,15 +122,16 @@ function createGroups(dbm, { now = () => new Date(), log = console.warn } = {}) 
   const meetingTime = groupId => { const g = getGroup(groupId); return (g && g.meeting_time) || ''; };
 
   // New empty group with defaults. Copies nothing from other groups.
-  function createGroup({ name, slug, wahaSession = null }) {
+  function createGroup({ name, slug, wahaSession = null, language = 'he' }) {
     const n = String(name || '').trim();
     const sl = String(slug || '').trim().toLowerCase();
     if (!n) return { error: 'name is required' };
     if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(sl)) return { error: 'slug: latin letters, digits and -, 2..41 characters' };
     if (getGroupBySlug(sl)) return { error: `slug "${sl}" is already taken` };
     const session = wahaSession || sl;
-    const r = db.prepare('INSERT INTO groups (name, slug, waha_session, created_at) VALUES (?, ?, ?, ?)')
-      .run(n, sl, session, new Date().toISOString());
+    if (!['ru', 'en', 'he'].includes(language)) return { error: 'language: ru, en or he' };
+    const r = db.prepare('INSERT INTO groups (name, slug, waha_session, default_language, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(n, sl, session, language, new Date().toISOString());
     return { group: getGroup(r.lastInsertRowid) };
   }
 

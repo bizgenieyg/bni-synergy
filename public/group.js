@@ -1,7 +1,14 @@
 // Public pages: the group of the page URL (?group=<slug>) is carried into every /api call, and the
 // page shows the group's own name, meeting day and time instead of fixed text.
 // A page opened without ?group= is a legacy link and talks to group 1 (the server decides that).
-(function () {
+// Language: group 1 is Russian, other groups default to Hebrew (right-to-left). The pages have Russian
+// text only for now: tr() returns a translation when one exists and the Russian text otherwise, never an empty key.
+var GROUP_PAGE_TEXT = { he: {} };   // { he: { 'Русский текст': 'עברית' } } - filled when the pages are translated
+function tr(lang, ru) { var d = GROUP_PAGE_TEXT[lang]; return (d && Object.prototype.hasOwnProperty.call(d, ru) && d[ru]) ? d[ru] : ru; }
+function dirFor(lang) { return lang === 'he' ? 'rtl' : 'ltr'; }
+if (typeof module !== 'undefined') module.exports = { tr: tr, dirFor: dirFor };
+
+if (typeof window !== 'undefined') (function () {
   var g = new URLSearchParams(location.search).get('group');
   if (g) {
     var orig = window.fetch;
@@ -21,6 +28,9 @@
     .then(function (cfg) {
       var name = cfg.group_name || '';
       window.GROUP_NAME = name;
+      var lang = cfg.default_language || 'ru';
+      document.documentElement.dir = dirFor(lang);
+      document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = tr(lang, el.getAttribute('data-i18n') || el.textContent); });
       function apply() {
         if (name) {
           document.querySelectorAll('[data-group-logo]').forEach(function (el) {
@@ -30,7 +40,7 @@
             el.innerHTML = m ? esc(m[1]) + ' <span' + cls + '>' + esc(up ? m[2].toUpperCase() : m[2]) + esc(suffix) + '</span>' : esc(up ? name.toUpperCase() : name) + esc(suffix);
           });
           document.querySelectorAll('[data-group-name]').forEach(function (el) { el.textContent = name; });
-          document.title = document.title.replace(/BNI\s*SYNERGY/i, name);
+          document.title = document.title.replace(/^BNI\b/, name);
         }
         var hasW = cfg.meeting_weekday !== undefined && cfg.meeting_weekday !== null && cfg.meeting_weekday !== '';
         document.querySelectorAll('[data-meeting-weekday]').forEach(function (el) {

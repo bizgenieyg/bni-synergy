@@ -99,57 +99,18 @@ db.exec(`
 
 // ─── Seed members ─────────────────────────────────────────────────────────────
 
-const seedMembers = [
-  { name: 'Виктория Колтун',      profession: 'Мега Макс Перевозки',                                    phone: '0546815561', birthday: '01/01/1978' },
-  { name: 'Юля Тронза',           profession: 'Агентство недвижимости Явне',                            phone: '0544757547', birthday: '03/01'      },
-  { name: 'Мила Рассказов Чирков',profession: 'Кейтеринг/Фуршеты/Торты/Мастер классы',                 phone: '0526765562', birthday: '20/01/1983' },
-  { name: 'Лена Смолкин',         profession: 'Стилист и владелица ателье',                             phone: '0544744053', birthday: '27/01'      },
-  { name: 'Юрий Голд',            profession: 'Интернет-маркетинг, SEO и AI',                           phone: '0535390080', birthday: '31/01'      },
-  { name: 'Игорь Лупинский',      profession: 'Бухгалтерия',                                            phone: '0505812236', birthday: '03/02'      },
-  { name: 'Марта Штайнберг',      profession: 'Пастилатье, витаминные роллы ручной работы',             phone: '0526074257', birthday: '03/02'      },
-  { name: 'Натали Жук',           profession: 'Шеф-повар домашней кухни',                               phone: '0587958060', birthday: '06/02/1968' },
-  { name: 'Даниель Биленсон',     profession: 'Адвокат по возмещению ущерба',                           phone: '0546444999', birthday: '19/02/1984' },
-  { name: 'Андрей Скиба',         profession: 'Диджей',                                                 phone: '0547602162', birthday: '25/02/1974' },
-  { name: 'Тэнзиля Коренберг',    profession: 'Парикмахер стилист',                                     phone: '0534453912', birthday: '02/03/1980' },
-  { name: 'Антон Михеев',         profession: 'Автоматизация маркетинга',                               phone: '0586443182', birthday: '07/03/1985' },
-  { name: 'Сабина Эренштейн',     profession: '',                                                        phone: '',           birthday: '12/03'      },
-  { name: 'Шарон Соколовски',     profession: '',                                                        phone: '',           birthday: '20/03'      },
-  { name: 'Михаил Ткач',          profession: 'Риэлтор Беэр-Шева и Южный округ',                       phone: '0545619163', birthday: '22/03/1976' },
-  { name: 'Виктория Фогель',      profession: 'Адвокат по недвижимости',                                phone: '0525681177', birthday: '29/03/1978' },
-  { name: 'Лора Блантер',         profession: 'Бутик Cartel',                                           phone: '0548041987', birthday: '09/04/1987' },
-  { name: 'Ирина Заманская',      profession: 'Аквагример',                                             phone: '0585040567', birthday: '21/04/1967' },
-  { name: 'Олег Волох',           profession: 'Консультант по ипотекам',                                phone: '0546690524', birthday: '05/05/1979' },
-  { name: 'Евгений Сидельский',   profession: 'Типография',                                             phone: '0546554221', birthday: '27/05'      },
-  { name: 'Дариен Ройтман',       profession: 'Специалист по психологии продаж и AI видео',             phone: '0545919330', birthday: '14/07'      },
-  { name: 'Александр Кудинов',    profession: 'Консультант по семейным финансам',                       phone: '0549019324', birthday: '14/08/1972' },
-  { name: 'Артур Блаер',          profession: '',                                                        phone: '',           birthday: '23/08/1976' },
-  { name: 'Людмила Губарева',     profession: 'Коуч + НЛП',                                             phone: '0534882340', birthday: '27/08/1974' },
-  { name: 'Дарья Марис',          profession: 'Художник-декоратор интерьера',                           phone: '0587060973', birthday: '06/09/1973' },
-  { name: 'Дмитрий Мельгорский',  profession: 'AI-видео контент, графический дизайн и сайты',          phone: '0539290639', birthday: '11/09/1978' },
-  { name: 'Татьяна Лев',          profession: 'Бизнес-наставник и нейро-коуч',                         phone: '0526331457', birthday: '01/10/1974' },
-  { name: 'Александр Коско',      profession: 'Ведущий тренингов по голосу и ораторскому искусству',   phone: '0528966740', birthday: '02/10'      },
-  { name: 'Евгения Писман',       profession: 'Копирайтер',                                             phone: '0503204861', birthday: '07/10'      },
-  { name: 'Татьяна Вайс',         profession: 'Адвокат по дорожному и уголовному праву',               phone: '0546960404', birthday: '04/11/1980' },
-  { name: 'Ольга Гасперт',        profession: 'Флорист',                                                phone: '0528191040', birthday: '08/11'      },
-  { name: 'Ирина Кроль',          profession: 'Груммер',                                                phone: '0523986032', birthday: '09/11/1960' },
-  { name: 'Алексей Поповских',    profession: 'Массажный терапевт',                                    phone: '0522751187', birthday: '11/11/1981' },
-  { name: 'Рита Хазанович',       profession: 'Аудитор',                                                phone: '0545809092', birthday: '16/11'      },
-  { name: 'Сергей Фишбах',        profession: 'Съемка торжеств и мероприятий',                         phone: '0502714814', birthday: '20/11/1971' },
-  { name: 'Диана Шаривкер',       profession: 'Страховое агентство',                                   phone: '0503399829', birthday: '01/12'      },
-  { name: 'Ольга Грановская',     profession: 'Интернет-маркетинг, SEO и AI',                          phone: '0535390080', birthday: '02/12/1972' },
-  { name: 'Марина Кондратьев',    profession: 'Косметолог',                                             phone: '0509887199', birthday: '10/12/1988' },
-  { name: 'Леонид Лурия',         profession: 'Разработчик и производитель косметики',                 phone: '0544956734', birthday: '25/12'      },
-  { name: 'Игорь Бутин',          profession: '',                                                        phone: '',           birthday: ''           },
-  { name: 'Степан Минькович',     profession: 'Автоматизация маркетинга',                               phone: '0586443182', birthday: ''           },
-];
+// Initial members of a brand-new DB come from a data file (not from code), and only while the table is empty.
+const SEED_MEMBERS_FILE = path.join(__dirname, '..', 'scripts', 'seed-members-group1.json');
+const seedMembers = (() => {
+  try { return JSON.parse(fs.readFileSync(SEED_MEMBERS_FILE, 'utf8')); } catch { return []; }
+})();
 
 const stmtSeedMember = db.prepare(
   `INSERT OR IGNORE INTO members (name, profession, phone, birthday, active, createdAt)
    VALUES (?, ?, ?, ?, 1, datetime('now'))`
 );
-// Always run seeds — INSERT OR IGNORE means existing rows are safely skipped.
-// Also re-runs if the table was wiped (count = 0).
 const seedAll = db.transaction(() => {
+  if (db.prepare('SELECT COUNT(*) c FROM members').get().c > 0) return;
   for (const m of seedMembers) {
     stmtSeedMember.run(m.name, m.profession, m.phone, m.birthday);
   }
@@ -750,35 +711,6 @@ if (!groupsMigration.hasColumn(db, 'presentations', 'group_id')) {
 if (!groupsMigration.hasColumn(db, 'presentations', 'group_id')) {
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pres_date_unique ON presentations(meeting_date)'); } catch {}
 }
-
-// Seed upcoming schedule — INSERT OR IGNORE skips existing dates
-;(function seedPresentations() {
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO presentations (meeting_date, member_name, change_description, notes) VALUES (?, ?, '', '')"
-  );
-  db.transaction(() => {
-    [
-      ['27/04/26', ''],
-      ['04/05/26', 'Диана Шаривкер'],
-      ['11/05/26', 'Ирина Кроль'],
-      ['18/05/26', 'Натали Жук'],
-      ['25/05/26', 'Марина Кондратьев'],
-      ['01/06/26', 'Даниэль Белинсон'],
-      ['08/06/26', 'Людмила Губарев'],
-      ['15/06/26', 'Сергей Фишбах'],
-      ['22/06/26', 'Лора Блантер'],
-      ['29/06/26', 'Рита Хазанович'],
-      ['06/07/26', 'Ольга Грановская'],
-      ['13/07/26', 'Таня Вайс'],
-      ['20/07/26', 'Дарья Глушкова'],
-      ['27/07/26', 'Александр Кудинов'],
-      ['03/08/26', 'Сабина Эренштейн'],
-      ['10/08/26', 'Юлия Тронза'],
-      ['17/08/26', 'Шарон Соколовски'],
-      ['24/08/26', 'Андрей Скиба'],
-    ].forEach(([date, name]) => stmt.run(date, name));
-  })();
-}());
 
 // Match member_id from members table by name (idempotent, runs every startup)
 db.exec(`

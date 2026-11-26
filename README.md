@@ -49,7 +49,7 @@ Open:
 
 ## Step 2 — Share Google Sheet
 
-1. Open your Google Sheet: `https://docs.google.com/spreadsheets/d/1QIDMcAeMupan0oGjsQwMgi4vB5oeTgfOV-ovrxd5C6s`
+1. Open the group's Google Sheet
 2. Click **Share** (top-right)
 3. Paste the service account email (from step 1)
 4. Set role: **Editor**
@@ -118,12 +118,11 @@ WAHA_SESSION=bni-synergy
 |---|---|
 | `PORT` | Server port (default: `3000`) |
 | `NEXT_MEETING_DATE` | Current meeting date in `DD/MM` format (e.g. `09/03`) |
-| `GOOGLE_SHEET_ID` | Google Sheets document ID |
+| `GOOGLE_SHEET_ID` | Read once by the DB migration into group 1 (`groups.sheet_id`); afterwards the sheet is a group setting |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email |
 | `GOOGLE_PRIVATE_KEY` | Private key from service account JSON |
 | `WAHA_URL` | WAHA server URL (default: `http://localhost:3001`) |
-| `WAHA_SESSION` | WAHA session name (default: `bni-synergy`) |
-| `PAYBOX_SECRET` | Optional PayBox webhook secret |
+| `WAHA_SESSION` | WAHA session name (default: `default`) |
 | `DB_PATH` | SQLite file path (default: `./data/guests.db`) |
 
 ---
@@ -136,7 +135,6 @@ WAHA_SESSION=bni-synergy
 |---|---|---|
 | `GET` | `/guest?ref=Name` | Guest registration form |
 | `POST` | `/api/register` | Register a guest |
-| `POST/GET` | `/api/paybox-webhook` | PayBox payment callback |
 | `GET` | `/api/test` | Health check |
 
 ### Admin

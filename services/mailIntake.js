@@ -125,7 +125,6 @@ function logOtherMail(parsed) {
   for (const l of lines.slice(0, 20)) console.log(`[MailIntake]   ${l.slice(0, 500)}`);
 }
 
-const DEFAULT_NOTIFY_PHONE = '972523695741';
 const ISRAEL_PHONE_RE = /(?<!\d)(?:\+?972[\s-]?|0)(?:5\d|7\d|[2-489])[\s-]?\d{3}[\s-]?\d{4}(?!\d)/g;
 
 function normalizeIsraelPhone(raw, db) {
@@ -165,7 +164,7 @@ function serviceLine({ prefix, target, info }) {
 async function sendInvitations(f, deps) {
   const { db } = deps;
   const mode = deps.mode && deps.mode() === 'prod' ? 'prod' : 'test';
-  const manager = (deps.notifyPhone && deps.notifyPhone()) || DEFAULT_NOTIFY_PHONE;
+  const manager = (deps.notifyPhone && deps.notifyPhone()) || '';
 
   const { phone } = pickPhone(f.phones, db);
   const inviter = matchInviter(f.invitedBy, db.getActiveMembers(deps.groupId || 1).filter(m => m.name_he));
@@ -222,6 +221,10 @@ async function sendInvitations(f, deps) {
     status = branch === 'A' ? 'sent_guest' : 'sent_member';
   }
 
+  if (!to) {
+    console.error('[MailIntake] no manager phone configured for this group (mail_intake_notify_phone): nothing sent');
+    return { status: 'send_failed', branch, reason: 'no manager phone configured', parsedJson };
+  }
   try {
     await deps.sendSequence(to, texts);
   } catch (err) {

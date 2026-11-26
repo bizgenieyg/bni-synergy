@@ -75,7 +75,7 @@ function setupFonts(doc) {
  * @param {Array} guests
  * @param {string} date  - DD/MM format
  */
-function generateGuestList(res, guests, date) {
+function generateGuestList(res, guests, date, groupName = '') {
   const paidCount = guests.filter(g => g.paid).length;
   const subCount  = guests.filter(g => g.guest_type === 'sub').length;
   const label = `Встреча: ${date} | Гостей: ${guests.length - subCount} | Замен: ${subCount} | Оплатили: ${paidCount}`;
@@ -123,7 +123,7 @@ function generateGuestList(res, guests, date) {
 
   // ── Page header ──
   doc.font(F.bold).fontSize(18).fillColor('#C41230')
-     .text('BNI SYNERGY', TL, 22, { width: TW, align: 'center', lineBreak: false });
+     .text(String(groupName).toUpperCase(), TL, 22, { width: TW, align: 'center', lineBreak: false });
   doc.font(F.regular).fontSize(11).fillColor('#333333')
      .text(label, TL, 46, { width: TW, align: 'center', lineBreak: false });
 
@@ -181,7 +181,7 @@ function generateGuestList(res, guests, date) {
 /**
  * Write badges PDF (2 cols × 5 rows per A4 page) to the response stream.
  */
-function generateBadges(res, guests, date) {
+function generateBadges(res, guests, date, groupName = '') {
   const doc = new PDFDocument({ margin: 0, size: 'A4' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="badges-${date.replace('/', '-')}.pdf"`);
@@ -215,7 +215,7 @@ function generateBadges(res, guests, date) {
     doc.rect(x, y, BADGE_W, BAR_H).fillColor('#C41230').fill();
 
     doc.font(F.bold).fontSize(8).fillColor('#FFFFFF')
-       .text('BNI SYNERGY', x, y + 8, { width: BADGE_W, align: 'center', lineBreak: false });
+       .text(String(groupName).toUpperCase(), x, y + 8, { width: BADGE_W, align: 'center', lineBreak: false });
 
     // ── Full name (large, centred) ──
     const fullName = g.name || '';
@@ -283,7 +283,7 @@ function memberInitials(name) {
  * Card top  (red, ~58%): circular photo left + name centered + divider + professions RU/HE
  * Card bottom (white, ~42%): social items — colored circle icon + label text
  */
-function generateMembersCatalog(res, members, uploadsDir) {
+function generateMembersCatalog(res, members, uploadsDir, groupName = '') {
   const RED    = '#C41230';
   const PW     = 595;
   const PH     = 842;
@@ -309,13 +309,13 @@ function generateMembersCatalog(res, members, uploadsDir) {
 
   const F = setupFonts(doc);
 
-  // ─── Page header: "Члены группы"  |  BNI SYNERGY ─────────────────────────
+  // ─── Page header: "Члены группы"  |  group name ─────────────────────────
   function drawPageHeader() {
     const hy = MY + 4;
     doc.font(F.bold).fontSize(22).fillColor('#111111')
        .text('Участники группы', MX, hy, { lineBreak: false });
     doc.font(F.bold).fontSize(22).fillColor(RED)
-       .text('BNI SYNERGY', MX, hy, { width: CARD_W, align: 'right', lineBreak: false });
+       .text(String(groupName).toUpperCase(), MX, hy, { width: CARD_W, align: 'right', lineBreak: false });
     // Thin underline
     doc.moveTo(MX, MY + 30).lineTo(MX + CARD_W, MY + 30)
        .strokeColor('#e5e7eb').lineWidth(0.5).stroke();
@@ -454,7 +454,7 @@ function generateMembersCatalog(res, members, uploadsDir) {
     doc.switchToPage(p);
     doc.font(F.regular).fontSize(7).fillColor('#9ca3af')
        .text(
-         `BNI SYNERGY — Каталог участников | ${new Date().toLocaleDateString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
+         `${groupName} — Каталог участников | ${new Date().toLocaleDateString('ru-RU')} | Стр. ${p + 1} из ${pageCount}`,
          MX, PH - 16, { width: CARD_W, align: 'center' },
        );
   }

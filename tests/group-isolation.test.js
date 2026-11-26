@@ -45,16 +45,52 @@ test('GUARD: the global settings table keeps no group-level key; touching one th
   assert.equal(dbm.getSetting('waha_last_problem:x'), '{}');
 });
 
-test('GUARD: no hard-coded meeting time or brand link in message builders / public pages', () => {
-  const files = ['server.js', 'services/catalogBroadcast.js', 'services/confirmationWaves.js', 'services/mailIntake.js',
-    ...fs.readdirSync(path.join(ROOT, 'public')).filter(f => f.endsWith('.html')).map(f => 'public/' + f)];
+// Values that belong to group 1 (or to the old PayBox/Sheets setup). They may live in the DB and, as one-time
+// migration seeds, in services/groupsMigration.js; they must never appear in code, templates or pages.
+const FORBIDDEN_LITERALS = [
+  'BNI SYNERGY', 'BNI Synergy', 'Ришон', 'Нес Цион', 'נס ציונה', 'השריון',
+  'hsv8txufjn', '82828722073', '1PXaN6Uxgg', '7SB6P3stE6b', 'payboxapp',
+  '972523695741', '972528191040', '1QIDMcAeMupan0oGjsQwMgi4vB5oeTgfOV', 'Тронза', 'в 7:30', '>7:30<',
+];
+// Not scanned: the one-time seed of group 1, the legacy admin.html fallback (served only when the React build
+// is missing), message texts that task 19 turns into templates are NOT excluded - they carry no group data.
+const SCAN_SKIP = new Set(['services/groupsMigration.js', 'public/admin.html']);
+
+function codeFiles() {
+  const out = ['server.js', 'src/App.tsx', 'src/i18n.ts'];
+  for (const dir of ['services', 'public']) {
+    for (const f of fs.readdirSync(path.join(ROOT, dir))) {
+      if (/\.(js|html)$/.test(f)) out.push(`${dir}/${f}`);
+    }
+  }
+  return out.filter(f => !SCAN_SKIP.has(f));
+}
+
+test('GUARD: no group data (names, addresses, links, phones, meeting time) is hard-coded in code or templates', () => {
+  const bad = [];
+  for (const f of codeFiles()) {
+    const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    for (const lit of FORBIDDEN_LITERALS) if (text.includes(lit)) bad.push(`${f}: "${lit}"`);
+    if (/process\.env\.(WAHA_GROUP_ID|GOOGLE_SHEET_ID)/.test(text)) bad.push(`${f}: group data from env`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('the PayBox webhook and its secrets are gone from the repository', () => {
+  const files = [...codeFiles(), 'README.md', 'services/groupsMigration.js', 'scripts/import-guests.js'];
   const bad = [];
   for (const f of files) {
     const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    if (/в 7:30|>7:30</.test(text)) bad.push(`${f}: fixed meeting time`);
-    if (/process\.env\.WAHA_GROUP_ID|process\.env\.GOOGLE_SHEET_ID/.test(text) && f !== 'services/groupsMigration.js') bad.push(`${f}: group data from env`);
+    if (/paybox-webhook|PAYBOX_WEBHOOK_SECRET|PAYBOX_SECRET|webhookKeyOk/i.test(text)) bad.push(f);
   }
   assert.deepEqual(bad, []);
+  assert.ok(!require('../services/authGuard').PUBLIC_ROUTES.some(r => /paybox/i.test(r.path)));
+});
+
+test('Google Sheets is still called by registration, so it stays; its ID is only a group setting (no hard-coded sheet)', () => {
+  const imp = fs.readFileSync(path.join(ROOT, 'scripts/import-guests.js'), 'utf8');
+  assert.ok(!/1QIDMc/.test(imp));
+  assert.match(fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8'), /sheets\.appendGuest/);
 });
 
 // ─── Settings isolation ───────────────────────────────────────────────────────
@@ -80,6 +116,7 @@ test('settings: changing every setting of group A leaves group B untouched', () 
 
 test('a fresh group starts empty: defaults only, nothing copied from group 1', () => {
   const g = groups.createGroup({ name: 'Third', slug: 'third' }).group;
+  assert.equal(g.default_language, 'he');   // groups other than group 1 are Hebrew-speaking by default
   assert.equal(g.address, ''); assert.equal(g.payment_url, ''); assert.equal(g.meeting_weekday, null);
   assert.equal(g.waha_session, 'third');
   assert.equal(dbm.getGroupSetting(g.id, 'voting_open'), '0');
@@ -278,6 +315,12 @@ test('scripts/create-group.js creates an empty group and refuses a duplicate slu
   const ok = run(['Rehovot Group', 'rehovot']);
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /slug=rehovot/);
+  assert.match(ok.stdout, /default_language=he/);
+  const Database = require('better-sqlite3');
+  const sdb = new Database(env.DB_PATH, { readonly: true });
+  assert.equal(sdb.prepare("SELECT default_language l FROM groups WHERE slug = 'rehovot'").get().l, 'he');
+  assert.equal(sdb.prepare("SELECT default_language l FROM groups WHERE id = 1").get().l, 'ru');
+  sdb.close();
   const dup = run(['Again', 'rehovot']);
   assert.notEqual(dup.status, 0);
   assert.match(dup.stderr, /already taken/);
@@ -309,4 +352,48 @@ test('positions-he.json: real file format seeds positions and assignments, idemp
   assert.equal(head.name_he, data.assignments.find(a => a.position === 'hospitality' && a.is_head).name_he);
   const again = mig.seedPositionsFromFile(dbm.db, file, { groupId: g.id, log: () => {} });
   assert.equal(again.positions, 0); assert.equal(again.assigned, 0);
+});
+
+// ─── Hebrew groups: right-to-left, Russian fallback ───────────────────────────
+
+test('public pages for a Hebrew group: rtl, and a missing translation falls back to the Russian text', () => {
+  const gi = require('../public/group.js');
+  assert.equal(gi.dirFor('he'), 'rtl');
+  assert.equal(gi.dirFor('ru'), 'ltr');
+  assert.equal(gi.tr('he', 'Зарегистрироваться'), 'Зарегистрироваться');   // no translation yet: Russian, not a key, not empty
+  assert.equal(gi.tr('ru', 'Зарегистрироваться'), 'Зарегистрироваться');
+  assert.equal(gi.tr('en', 'x'), 'x');
+  for (const f of fs.readdirSync(path.join(ROOT, 'public')).filter(x => x.endsWith('.html') && x !== 'admin.html')) {
+    assert.ok(!/data-i18n=""/.test(fs.readFileSync(path.join(ROOT, 'public', f), 'utf8')), `${f}: empty i18n key`);
+  }
+});
+
+test('server: the guest page of a Hebrew group still renders (Russian text) and tells the page its language', async () => {
+  // started in the earlier server test; restart a short-lived one here because that test stopped it
+  const p2 = 39900 + Math.floor(Math.random() * 90);
+  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(p2), ADMIN_PASSWORD: 'iso-test-pw', WAHA_URL: 'http://127.0.0.1:1', MAIL_INTAKE_SECRET: '' }, stdio: 'ignore' });
+  try {
+    for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://127.0.0.1:${p2}/api/test`)).ok) break; } catch {} await new Promise(r => setTimeout(r, 250)); }
+    const r = await fetch(`http://127.0.0.1:${p2}/guest?group=seedgrp`);
+    const html = await r.text();
+    assert.equal(r.status, 200);
+    assert.match(html, /"default_language":"he"/);
+    assert.match(html, /Регистрация|Зарегистрироваться|регистр/i);   // Russian text is there
+    assert.match(html, /src="\/group\.js"/);
+  } finally { srv.kill(); }
+});
+
+// ─── list-unmatched-inviters.js ───────────────────────────────────────────────
+
+test('list-unmatched-inviters.js: counts, hints, and it writes nothing', () => {
+  dbm.insertGuest({ name: 'Free Text 1', phone: '0547000001', invitedBy: 'Anna Alfa', meetingDate: '30/11/26', groupId: A });
+  dbm.insertGuest({ name: 'Free Text 2', phone: '0547000002', invitedBy: 'Anna Alfa', meetingDate: '30/11/26', groupId: A });
+  dbm.insertGuest({ name: 'Free Text 3', phone: '0547000003', invitedBy: 'Nobody Known', meetingDate: '30/11/26', groupId: A });
+  const nullBefore = dbm.db.prepare('SELECT COUNT(*) c FROM guests WHERE invited_by_member_id IS NULL').get().c;
+  const r = spawnSync(process.execPath, ['scripts/list-unmatched-inviters.js', '1'], { cwd: ROOT, env: { ...process.env, DB_PATH: process.env.DB_PATH }, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Anna Alfa\s*\n\s+closest: Anna Alpha/);       // hint only
+  assert.match(r.stdout, /   2  Anna Alfa/);                           // two guests with this spelling
+  assert.match(r.stdout, /distinct spellings/);
+  assert.equal(dbm.db.prepare('SELECT COUNT(*) c FROM guests WHERE invited_by_member_id IS NULL').get().c, nullBefore);   // nothing written
 });

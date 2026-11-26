@@ -245,7 +245,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       <div className="bg-white rounded-2xl shadow-xl p-10 w-full max-w-sm">
         <div className="text-center mb-8">
           <span className="font-black text-3xl tracking-wider" style={{ color: RED }}>BNI</span>
-          <p className="text-xs font-semibold text-gray-400 tracking-widest uppercase mt-1">SYNERGY ADMIN</p>
+          <p className="text-xs font-semibold text-gray-400 tracking-widest uppercase mt-1">ADMIN</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
@@ -266,6 +266,19 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
 // ─── Language Switcher ───────────────────────────────────────────────────────
+
+// Name of the group the admin works with (from the group's settings, never fixed in the code).
+let groupNameCache = ''
+function useGroupName(): string {
+  const [name, setName] = useState(groupNameCache)
+  useEffect(() => {
+    if (groupNameCache) return
+    api('/api/group').then(r => r.json()).then(g => { groupNameCache = g?.name || ''; setName(groupNameCache) }).catch(() => {})
+  }, [])
+  return name
+}
+
+function GroupNameLabel() { return <>{useGroupName()}</> }
 
 function LangSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   const { i18n } = useTranslation()
@@ -301,6 +314,7 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk, onWa
   { section: Section; collapsed: boolean; onNav: (s: Section) => void; onCollapse: () => void; onLogout: () => void; wahaOk?: boolean | null; onWaha?: () => void }) {
   const { t, i18n } = useTranslation()
   const isRtl = i18n.language === 'he'
+  const groupName = useGroupName()
 
   const NAV: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard',     label: 'Dashboard',              icon: <LayoutDashboard size={18} /> },
@@ -320,7 +334,7 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk, onWa
         {!collapsed && (
           <div>
             <span className="font-black text-xl tracking-wider" style={{ color: RED }}>BNI</span>
-            <p className="text-[10px] font-semibold text-white/40 tracking-widest uppercase mt-0.5">SYNERGY</p>
+            <p className="text-[10px] font-semibold text-white/40 tracking-widest uppercase mt-0.5">{groupName}</p>
           </div>
         )}
         <button onClick={onCollapse} className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 ml-auto">
@@ -802,7 +816,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   const encoded = member ? String(member.id) : ''
   const phoneDigits = phone.replace(/\D/g, '').replace(/^0/, '972')
   const link = member
-    ? `https://bnisynergy.biz/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}${phoneDigits ? `&phone=${phoneDigits}` : ''}`
+    ? `${window.location.origin}/guest?ref=${encoded}&date=${date}&type=${type === 'substitute' ? 'sub' : 'guest'}${phoneDigits ? `&phone=${phoneDigits}` : ''}`
     : ''
   const text = `Для регистрации перейдите, пожалуйста, по ссылке ниже и укажите имя и фамилию, а также название бизнеса, как вы хотели бы, чтобы вас представили на русском языке.\nПосле регистрации вы получите ссылку на оплату и ссылку для навигатора. Регистрация позволит заранее подготовить для вас бейдж, правильно представить вас на встрече, а после встречи — получить контакты всех участников группы.\n\n${link}\n\nБудем рады видеть вас на встрече!`
   const copy = () => link && navigator.clipboard.writeText(text)
@@ -873,6 +887,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
 
 function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
   const { t } = useTranslation()
+  const groupName = useGroupName()
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const wish = async () => {
@@ -891,7 +906,7 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
         </span></p>
       </div>
       {phone && (
-        <a href={`https://wa.me/${phone}?text=${encodeURIComponent(`🎂 Happy Birthday, ${member.name.split(' ')[0]}!\n\nThe entire BNI SYNERGY group congratulates you! 🎉`)}`}
+        <a href={`https://wa.me/${phone}?text=${encodeURIComponent(`🎂 Happy Birthday, ${member.name.split(' ')[0]}!\n\nThe entire ${groupName} group congratulates you! 🎉`)}`}
           target="_blank" rel="noopener noreferrer"
           className="p-1.5 rounded-lg bg-green-100 text-green-600 hover:bg-green-200 flex-shrink-0" title="Congratulate in WA">
           <MessageCircle size={14} />
@@ -3184,7 +3199,7 @@ export default function App() {
               <Menu size={20} />
             </button>
             <span className="font-black tracking-wider" style={{ color: RED }}>BNI</span>
-            <span className="text-[10px] font-semibold text-white/40 tracking-widest uppercase">SYNERGY</span>
+            <span className="text-[10px] font-semibold text-white/40 tracking-widest uppercase"><GroupNameLabel /></span>
           </div>
           {drawerOpen && (
             <>

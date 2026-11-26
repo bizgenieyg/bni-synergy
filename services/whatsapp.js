@@ -5,7 +5,7 @@ const fs    = require('fs');
 const path  = require('path');
 
 const WAHA_URL     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
-const DEFAULT_SESSION = process.env.WAHA_SESSION || 'bni-synergy';
+const DEFAULT_SESSION = process.env.WAHA_SESSION || 'default';
 const WAHA_API_KEY = process.env.WAHA_API_KEY  || '';
 
 const WAHA_HEADERS = WAHA_API_KEY ? { 'X-Api-Key': WAHA_API_KEY } : {};

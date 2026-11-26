@@ -3,7 +3,7 @@
 // Использует те же env-переменные, что и сервер:
 //   GOOGLE_SERVICE_ACCOUNT_EMAIL
 //   GOOGLE_PRIVATE_KEY
-//   GOOGLE_SHEET_ID  (опционально — или хардкод ниже)
+//   GOOGLE_SHEET_ID  (обязательно для этого разового скрипта; в приложении ID таблицы хранится в группе)
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -12,7 +12,8 @@ const Database = require('better-sqlite3');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
-const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID || '1QIDMcAeMupan0oGjsQwMgi4vB5oeTgfOV-ovrxd5C6s';
+const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
+if (!SPREADSHEET_ID) { console.error('GOOGLE_SHEET_ID is required'); process.exit(2); }
 
 function createAuthClient() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;

@@ -464,47 +464,6 @@ app.post('/api/register', async (req, res) => {
   return res.json({ success: true, id, name, isSub });
 });
 
-// ─── PayBox webhook ───────────────────────────────────────────────────────────
-
-if (!process.env.PAYBOX_WEBHOOK_SECRET) {
-  console.warn('[PayBox] PAYBOX_WEBHOOK_SECRET is not set: payment webhook is unauthenticated');
-}
-
-app.post('/api/paybox-webhook', async (req, res) => {
-  if (!authGuard.webhookKeyOk(process.env.PAYBOX_WEBHOOK_SECRET, req.query.key)) {
-    console.warn(`[PayBox] webhook rejected: bad or missing key (ip ${authGuard.clientIp(req)})`);
-    return res.status(403).json({ error: 'forbidden' });
-  }
-  const data = { ...req.query, ...req.body };
-  console.log('[PayBox] Webhook:', JSON.stringify(data));
-
-  const rawPhone = data.pg_user_phone || data.phone || data.user_phone || '';
-  const result   = String(data.pg_result ?? data.result ?? '');
-  const isPaid   = result === '1' || result.toLowerCase() === 'success';
-
-  if (isPaid && rawPhone) {
-    const guest = db.findGuestByPhone(rawPhone);
-    if (guest && !guest.paid) {
-      db.markPaid(guest.id);
-      console.log(`[PayBox] Marked paid: ${guest.name}`);
-      if (guest.sheetRow) {
-        sheets.markPaid(guest.meetingDate, guest.sheetRow, (groups.getGroup(guest.group_id) || {}).sheet_id)
-          .catch(err => console.error('[Sheets] markPaid failed:', err.message));
-      }
-    } else if (!guest) {
-      console.warn(`[PayBox] No guest found for phone "${rawPhone}"`);
-    }
-  }
-
-  res.set('Content-Type', 'text/xml; charset=utf-8');
-  res.send('<?xml version="1.0" encoding="utf-8"?><response><result>ok</result></response>');
-});
-
-app.get('/api/paybox-webhook', (req, res) => {
-  res.set('Content-Type', 'text/xml; charset=utf-8');
-  res.send('<?xml version="1.0" encoding="utf-8"?><response><result>ok</result></response>');
-});
-
 // ─── Mail intake (BNI Connect "guest registered" emails, piped in by Postfix) ──
 
 function isMeetingInPast(ddmmyy) {
@@ -561,7 +520,7 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
       groupId: GROUP1, // mail for other groups needs its own mailbox/link; until then every letter is group 1's
       autoRegister: () => db.getGroupSetting(GROUP1, 'mail_intake_auto_register') === '1',
       mode: () => db.getGroupSetting(GROUP1, 'mail_intake_mode'),
-      notifyPhone: () => db.getGroupSetting(GROUP1, 'mail_intake_notify_phone') || '972523695741',
+      notifyPhone: () => db.getGroupSetting(GROUP1, 'mail_intake_notify_phone') || '',
       checkWhatsApp: (...a) => waFor(GROUP1).checkNumberExists(...a),
       sendSequence: (...a) => waFor(GROUP1).sendSequence(...a),
       isPast: isMeetingInPast,
@@ -794,18 +753,18 @@ app.get('/api/catalog', (req, res) => {
 app.get('/api/pdf/list', (req, res) => {
   const date   = req.query.date || meetingDateFor(req.groupId);
   const guests = db.getGuestsByDate(date, req.groupId);
-  pdf.generateGuestList(res, guests, date);
+  pdf.generateGuestList(res, guests, date, groupName(req.groupId));
 });
 
 app.get('/api/pdf/badges', (req, res) => {
   const date   = req.query.date || meetingDateFor(req.groupId);
   const guests = db.getGuestsByDate(date, req.groupId);
-  pdf.generateBadges(res, guests, date);
+  pdf.generateBadges(res, guests, date, groupName(req.groupId));
 });
 
 app.get('/api/pdf/members', (req, res) => {
   const members = db.getActiveMembers(req.groupId).map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
-  pdf.generateMembersCatalog(res, members, UPLOADS_DIR);
+  pdf.generateMembersCatalog(res, members, UPLOADS_DIR, groupName(req.groupId));
 });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -1424,7 +1383,7 @@ const scheduler = require('./services/groupScheduler').createGroupScheduler({
 app.listen(PORT, () => {
   startWahaWatchdog();
   scheduler.start();
-  console.log(`\n🟢 BNI SYNERGY server running on http://localhost:${PORT}`);
+  console.log(`\n🟢 BNI server running on http://localhost:${PORT}`);
   console.log(`   Guest form   : http://localhost:${PORT}/guest`);
   console.log(`   Member form  : http://localhost:${PORT}/member`);
   console.log(`   Voting       : http://localhost:${PORT}/voting`);

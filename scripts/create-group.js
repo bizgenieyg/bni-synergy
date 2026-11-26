@@ -10,19 +10,20 @@ const groupsService = require('../services/groups');
 const dbm = require('../services/db');
 
 const [name, slug, session] = process.argv.slice(2);
+// New groups are Hebrew-speaking (right-to-left pages); group 1 (Russian) is created by the migration.
 if (!name || !slug) {
   console.error('usage: node scripts/create-group.js "<name>" <slug> [waha-session]');
   process.exit(2);
 }
 
 const groups = groupsService.createGroups(dbm);
-const r = groups.createGroup({ name, slug, wahaSession: session || null });
+const r = groups.createGroup({ name, slug, wahaSession: session || null, language: 'he' });
 if (r.error) {
   console.error('error: ' + r.error);
   process.exit(1);
 }
 const g = r.group;
-console.log(`Group created: id=${g.id} slug=${g.slug} name="${g.name}" waha_session=${g.waha_session}`);
+console.log(`Group created: id=${g.id} slug=${g.slug} name="${g.name}" waha_session=${g.waha_session} default_language=${g.default_language}`);
 console.log(`  guest form : /guest?group=${g.slug}`);
 console.log(`  voting     : /voting?group=${g.slug}`);
 console.log(`  catalog    : /members-catalog?group=${g.slug}`);

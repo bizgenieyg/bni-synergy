@@ -64,7 +64,7 @@ const PUBLIC = [
   ['POST', '/api/members/7/photo'], ['GET', '/api/members/7/socials'], ['PUT', '/api/members/7/socials'],
   ['PATCH', '/api/members/7/profile'],
   ['GET', '/api/presentations/30%2F11%2F26'],
-  ['GET', '/api/settings'], ['POST', '/api/paybox-webhook'], ['GET', '/api/paybox-webhook'],
+  ['GET', '/api/settings'],
 ];
 
 test('public routes pass without a token', () => {
@@ -143,16 +143,6 @@ test('client IP: X-Real-IP only from the local proxy, never from a remote peer',
   assert.equal(g.clientIp(local), '5.5.5.5');
   const remote = { socket: { remoteAddress: '8.8.8.8' }, headers: { 'x-real-ip': '5.5.5.5' } };
   assert.equal(g.clientIp(remote), '8.8.8.8');
-});
-
-test('PayBox webhook key: optional, constant-time', () => {
-  assert.equal(g.webhookKeyOk(undefined, undefined), true);
-  assert.equal(g.webhookKeyOk('', 'x'), true);
-  assert.equal(g.webhookKeyOk('s3cret', 's3cret'), true);
-  assert.equal(g.webhookKeyOk('s3cret', 's3creT'), false);
-  assert.equal(g.webhookKeyOk('s3cret', undefined), false);
-  assert.equal(g.webhookKeyOk('s3cret', ''), false);
-  assert.equal(g.webhookKeyOk('s3cret', ['s3cret']), false);
 });
 
 // ─── Static checks against the real files ─────────────────────────────────────

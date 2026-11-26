@@ -31,9 +31,6 @@ const PUBLIC_ROUTES = [
   ['PATCH', '/api/members/:num/profile'],
   // guest.html shows the presentation of the day
   ['GET',  '/api/presentations/:date'],
-  // payment provider callback (optionally protected by PAYBOX_WEBHOOK_SECRET)
-  ['POST', '/api/paybox-webhook'],
-  ['GET',  '/api/paybox-webhook'],
 ].map(([method, path]) => ({
   method,
   path,
@@ -148,15 +145,8 @@ const publicMemberList    = m => pick(m, ['id', 'name', 'profession', 'photo']);
 const publicMemberProfile = m => pick(m, ['id', 'name', 'profession', 'phone', 'birthday', 'photo']);
 const publicCatalogMember = m => pick(m, ['id', 'name', 'profession', 'phone', 'photo', 'socials']);
 
-// ─── Webhook key ──────────────────────────────────────────────────────────────
-
-function webhookKeyOk(secret, provided) {
-  if (!secret) return true;
-  return typeof provided === 'string' && provided !== '' && safeEqual(provided, secret);
-}
-
 module.exports = {
   PUBLIC_ROUTES, isPublicRoute, normalizePath, makeStaticToken, createAuth, createLoginLimiter,
   clientIp, PUBLIC_SETTING_KEYS, filterSettings,
-  publicMemberList, publicMemberProfile, publicCatalogMember, webhookKeyOk,
+  publicMemberList, publicMemberProfile, publicCatalogMember,
 };
