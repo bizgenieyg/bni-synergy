@@ -22,6 +22,7 @@ const mailIntake = require('./services/mailIntake');
 const { computeVisitCounts } = require('./services/visitCounts');
 const pdf      = require('./services/pdf');
 const authGuard = require('./services/authGuard');
+const wahaSession = require('./services/wahaSession');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -989,58 +990,98 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
 
 // ─── WAHA status / reconnect ─────────────────────────────────────────────────
 
-app.post('/api/waha/restart', async (req, res) => {
-  const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
-  const wahaSession = process.env.WAHA_SESSION  || 'default';
-  const wahaApiKey  = process.env.WAHA_API_KEY  || 'bni123';
-  const headers     = { 'X-Api-Key': wahaApiKey, 'Content-Type': 'application/json' };
-  try {
-    // Stop existing session (ignore errors — may already be stopped)
-    await fetch(`${wahaUrl}/api/sessions/${wahaSession}`,
-      { method: 'DELETE', headers, signal: AbortSignal.timeout(5000) }).catch(() => {});
-    // Start fresh session
-    await fetch(`${wahaUrl}/api/sessions/start`, {
-      method: 'POST', headers,
-      body: JSON.stringify({ name: wahaSession }),
-      signal: AbortSignal.timeout(8000),
-    });
-    res.json({ status: 'STARTING' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// ─── WAHA session control (admin only; session name is a parameter) ───────────
 
-app.get('/api/waha/qr', adminAuth, async (req, res) => {
-  const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
-  const wahaSession = process.env.WAHA_SESSION  || 'default';
-  const wahaApiKey  = process.env.WAHA_API_KEY  || 'bni123';
-  try {
-    const response = await fetch(`${wahaUrl}/api/${wahaSession}/auth/qr`, {
-      headers: { 'X-Api-Key': wahaApiKey },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) throw new Error(`WAHA ответил ${response.status}`);
-    const buffer  = Buffer.from(await response.arrayBuffer());
-    const dataUrl = `data:image/png;base64,${buffer.toString('base64')}`;
-    res.json({ qr: dataUrl, found: true });
-  } catch (err) {
-    res.json({ qr: '', found: false, error: err.message });
-  }
+const DEFAULT_WAHA_SESSION = process.env.WAHA_SESSION || 'default';
+const waha = wahaSession.createWahaClient({ url: process.env.WAHA_URL, apiKey: process.env.WAHA_API_KEY || '' });
+
+const wahaRecovery = wahaSession.createAutoRecovery({
+  restart: name => waha.restart(name),
+  log: msg => console.log(msg),
+  onProblem: (name, p) => { try { db.setSetting(`waha_last_problem:${name}`, JSON.stringify(p)); } catch {} },
 });
+try {
+  const saved = db.getSetting(`waha_last_problem:${DEFAULT_WAHA_SESSION}`);
+  if (saved) wahaRecovery.setLastProblem(DEFAULT_WAHA_SESSION, JSON.parse(saved));
+} catch {}
+
+function wahaSessionName(req, res) {
+  const name = String(req.query.session || (req.body && req.body.session) || DEFAULT_WAHA_SESSION);
+  if (!wahaSession.isValidSession(name)) { res.status(400).json({ error: 'bad session name' }); return null; }
+  return name;
+}
 
 app.get('/api/waha/status', async (req, res) => {
-  const wahaUrl     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
-  const wahaSession = process.env.WAHA_SESSION  || 'default';
-  const wahaApiKey  = process.env.WAHA_API_KEY  || 'bni123';
+  const name = wahaSessionName(req, res); if (!name) return;
+  const { status, me } = await waha.getSession(name);
+  res.json({
+    session: name, status, ok: status === 'WORKING', state: wahaSession.pickWindowState(status), me,
+    lastProblem: wahaRecovery.lastProblem(name), paused: wahaRecovery.isPaused(name),
+  });
+});
+
+app.get('/api/waha/qr', async (req, res) => {
+  const name = wahaSessionName(req, res); if (!name) return;
+  // WAHA has a QR only in SCAN_QR_CODE (422 in every other status): check the status first
+  const { status } = await waha.getSession(name);
+  if (status !== 'SCAN_QR_CODE') return res.json({ qr: '', found: false, status });
   try {
-    const response = await fetch(`${wahaUrl}/api/sessions/${wahaSession}`,
-      { headers: { 'X-Api-Key': wahaApiKey }, signal: AbortSignal.timeout(5000) });
-    const data = await response.json();
-    res.json({ status: data.status, ok: data.status === 'WORKING' });
-  } catch (err) {
-    res.json({ status: 'UNAVAILABLE', ok: false });
+    const qr = await waha.getQr(name);
+    res.json({ qr: qr || '', found: !!qr, status });
+  } catch {
+    res.json({ qr: '', found: false, status: 'UNAVAILABLE' });
   }
 });
+
+app.post('/api/waha/restart', async (req, res) => {
+  const name = wahaSessionName(req, res); if (!name) return;
+  try {
+    wahaRecovery.resume(name);
+    await waha.restart(name);
+    res.json({ status: 'STARTING' });
+  } catch (err) {
+    res.status(502).json({ error: `WAHA: ${err.message}` });
+  }
+});
+
+app.post('/api/waha/logout', async (req, res) => {
+  const name = wahaSessionName(req, res); if (!name) return;
+  try {
+    wahaRecovery.pause(name); // deliberate disconnect: do not auto-restart
+    await waha.disconnect(name);
+    console.log(`[WAHA] session "${name}" disconnected by admin`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(502).json({ error: `WAHA: ${err.message}` });
+  }
+});
+
+app.post('/api/waha/request-code', async (req, res) => {
+  const name = wahaSessionName(req, res); if (!name) return;
+  const phone = wahaSession.cleanPhoneNumber(req.body && req.body.phoneNumber);
+  if (!phone) return res.status(400).json({ error: 'phoneNumber: international format, digits only' });
+  try {
+    const r = await waha.requestCode(name, phone);
+    if (!r.ok) return res.status(r.status === 422 ? 409 : 502).json({ error: r.message || 'WAHA refused', wahaStatus: r.status });
+    res.json({ code: r.code });
+  } catch {
+    res.status(502).json({ error: 'WAHA unavailable' });
+  }
+});
+
+// Background check every 60 s: restart a FAILED / STOPPED session at most once per 5 minutes.
+function startWahaWatchdog() {
+  const tick = async () => {
+    try {
+      const { status } = await waha.getSession(DEFAULT_WAHA_SESSION);
+      await wahaRecovery.check(DEFAULT_WAHA_SESSION, status);
+    } catch (err) {
+      console.error('[WAHA] watchdog:', err.message);
+    }
+  };
+  setTimeout(tick, 15_000);
+  return setInterval(tick, 60_000);
+}
 
 // ─── Presentations ────────────────────────────────────────────────────────────
 
@@ -1259,6 +1300,7 @@ cron.schedule('0 10 * * 1', () => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
+  startWahaWatchdog();
   console.log(`\n🟢 BNI SYNERGY server running on http://localhost:${PORT}`);
   console.log(`   Guest form   : http://localhost:${PORT}/guest`);
   console.log(`   Member form  : http://localhost:${PORT}/member`);

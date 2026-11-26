@@ -292,8 +292,8 @@ function LangSwitcher({ collapsed = false }: { collapsed?: boolean }) {
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
-function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk }:
-  { section: Section; collapsed: boolean; onNav: (s: Section) => void; onCollapse: () => void; onLogout: () => void; wahaOk?: boolean | null }) {
+function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk, onWaha }:
+  { section: Section; collapsed: boolean; onNav: (s: Section) => void; onCollapse: () => void; onLogout: () => void; wahaOk?: boolean | null; onWaha?: () => void }) {
   const { t, i18n } = useTranslation()
   const isRtl = i18n.language === 'he'
 
@@ -340,14 +340,15 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk }:
       <div className="flex-shrink-0 p-3 border-t border-white/10 space-y-1">
         {/* WAHA status indicator */}
         {wahaOk !== null && wahaOk !== undefined && (
-          <div className={cn('flex items-center px-3 py-2 rounded-lg', collapsed ? 'justify-center' : 'gap-2')}>
+          <button onClick={onWaha} title="WhatsApp"
+            className={cn('w-full flex items-center px-3 py-2 rounded-lg hover:bg-white/5', collapsed ? 'justify-center' : 'gap-2')}>
             <span className={cn('w-2 h-2 rounded-full flex-shrink-0', wahaOk ? 'bg-green-400' : 'bg-red-500 animate-pulse')} />
             {!collapsed && (
               <span className={cn('text-xs font-medium truncate', wahaOk ? 'text-green-400' : 'text-red-400')}>
                 {wahaOk ? t('ui.waOn') : t('ui.waOff')}
               </span>
             )}
-          </div>
+          </button>
         )}
         <div className={cn('flex items-center py-2 min-w-0', collapsed ? 'justify-center px-0' : 'justify-center px-1')}>
           <LangSwitcher collapsed={collapsed} />
@@ -2721,63 +2722,216 @@ function PresentationsSection() {
   )
 }
 
-// ─── WAHA QR Modal ───────────────────────────────────────────────────────────
+// ─── WhatsApp connection window ──────────────────────────────────────────────
 
-function WahaQrModal({ qr, found, onClose, onConnected }: {
-  qr: string
-  found: boolean
+type WahaInfo = {
+  session: string
+  status: string
+  ok: boolean
+  state: 'connected' | 'scan' | 'starting' | 'restart' | 'unavailable'
+  me: { pushName: string; number: string } | null
+  lastProblem: { at: string; status: string } | null
+}
+
+const WAHA_POLL_MS: Record<WahaInfo['state'], number> = { scan: 3000, starting: 2000, restart: 5000, unavailable: 5000, connected: 15000 }
+
+function WahaConnectModal({ session, onClose, onConnected }: {
+  session?: string
   onClose: () => void
   onConnected: () => void
 }) {
-  const { t } = useTranslation()
-  const [success, setSuccess] = useState(false)
-  const [checking, setChecking] = useState(false)
-  const [qrData, setQrData] = useState({ qr, found })
+  const { t, i18n } = useTranslation()
+  const q = session ? `?session=${encodeURIComponent(session)}` : ''
+  const [info, setInfo] = useState<WahaInfo | null>(null)
+  const [justConnected, setJustConnected] = useState(false)
+  const [tab, setTab] = useState<'qr' | 'code'>('qr')
+  const [qr, setQr] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [confirmOff, setConfirmOff] = useState(false)
+  const [codeSupported, setCodeSupported] = useState(true)
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [codeBusy, setCodeBusy] = useState(false)
+  const openedConnected = useRef<boolean | null>(null)
 
-  // Auto-poll status every 3 s
-  useEffect(() => {
-    const id = setInterval(() => {
-      api('/api/waha/status')
-        .then(r => r.json())
-        .then(d => {
-          if (d.ok) {
-            setSuccess(true)
-            onConnected()
-            clearInterval(id)
-            setTimeout(onClose, 2000)
-          }
-        })
-        .catch(() => {})
-    }, 3000)
-    return () => clearInterval(id)
-  }, [])
-
-  // Auto-refresh QR every 15 s until connected — WAHA QR codes expire quickly
-  useEffect(() => {
-    if (success) return
-    const id = setInterval(() => {
-      api('/api/waha/qr').then(r => r.json())
-        .then(d => setQrData({ qr: d.qr || '', found: !!d.found }))
-        .catch(() => {})
-    }, 15000)
-    return () => clearInterval(id)
-  }, [success])
-
-  const manualCheck = async () => {
-    setChecking(true)
+  const loadStatus = async () => {
     try {
-      const d = await api('/api/waha/status').then(r => r.json())
-      if (d.ok) { setSuccess(true); onConnected(); setTimeout(onClose, 2000) }
-    } finally { setChecking(false) }
+      const d: WahaInfo = await api(`/api/waha/status${q}`).then(r => r.json())
+      setInfo(d)
+      if (openedConnected.current === null) openedConnected.current = d.state === 'connected'
+      if (d.state === 'connected' && openedConnected.current === false) {
+        setJustConnected(true)
+        onConnected()
+        setTimeout(onClose, 2000)
+      }
+      if (d.state === 'connected') onConnected()
+      return d
+    } catch {
+      setInfo(prev => ({ session: session || 'default', status: 'UNAVAILABLE', ok: false, state: 'unavailable', me: null, lastProblem: prev?.lastProblem ?? null }))
+      return null
+    }
   }
 
-  const refreshQr = async () => {
+  // Status polling: 3 s on QR, 2 s while starting, slower otherwise
+  const state = info?.state
+  useEffect(() => {
+    if (justConnected) return
+    const id = setTimeout(loadStatus, state ? WAHA_POLL_MS[state] : 0)
+    return () => clearTimeout(id)
+  }, [info, justConnected])
+
+  const loadQr = async () => {
     setRefreshing(true)
     try {
-      const d = await api('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
-      setQrData({ qr: d.qr || '', found: !!d.found })
-    } finally { setRefreshing(false) }
+      const d = await api(`/api/waha/qr${q}`).then(r => r.json())
+      setQr(d.found ? d.qr : '')
+    } catch { setQr('') } finally { setRefreshing(false) }
+  }
+
+  // QR: fetch when the session starts waiting for a scan, then refresh every 15 s
+  useEffect(() => {
+    if (state !== 'scan' || tab !== 'qr') { if (state !== 'scan') setQr(''); return }
+    loadQr()
+    const id = setInterval(loadQr, 15000)
+    return () => clearInterval(id)
+  }, [state, tab])
+
+  const restart = async () => {
+    setBusy(true)
+    try {
+      await api(`/api/waha/restart${q}`, { method: 'POST' })
+      setInfo(prev => prev ? { ...prev, status: 'STARTING', state: 'starting' } : prev)
+    } finally { setBusy(false) }
+  }
+
+  const disconnect = async () => {
+    setBusy(true)
+    try {
+      await api(`/api/waha/logout${q}`, { method: 'POST' })
+      setConfirmOff(false)
+      openedConnected.current = false
+      await loadStatus()
+    } finally { setBusy(false) }
+  }
+
+  const requestCode = async () => {
+    setCodeBusy(true); setCodeError(''); setCode('')
+    try {
+      const r = await api(`/api/waha/request-code${q}`, { method: 'POST', body: JSON.stringify({ phoneNumber: phone }) })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.code) setCode(String(d.code))
+      else if (r.status === 409) setCodeError(t('ui.waCodeNotInScan'))
+      else if (r.status === 400) setCodeError(t('ui.waCodeBadNumber'))
+      else { setCodeSupported(false); setTab('qr') } // WAHA/engine does not support it: hide the tab
+    } catch { setCodeError(t('ui.waUnavailable')) } finally { setCodeBusy(false) }
+  }
+
+  const problemText = info?.lastProblem
+    ? t('ui.waLastProblem', { time: new Date(info.lastProblem.at).toLocaleString(i18n.language), status: info.lastProblem.status })
+    : ''
+
+  const body = () => {
+    if (!info) return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-gray-400" /></div>
+    switch (info.state) {
+      case 'connected':
+        return (
+          <div className="flex flex-col items-center py-8 gap-4 text-center">
+            <div className="text-5xl">✅</div>
+            <p className="font-semibold text-gray-900">
+              {t('ui.waConnectedAs', { name: info.me?.pushName || '—' })}{' '}
+              <span dir="ltr" className="inline-block text-gray-600">({info.me?.number ? `+${info.me.number}` : '—'})</span>
+            </p>
+            {!confirmOff ? (
+              <button onClick={() => setConfirmOff(true)}
+                className="px-4 py-2 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50">
+                {t('ui.waDisconnect')}
+              </button>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-sm text-gray-600 max-w-xs">{t('ui.waDisconnectConfirm')}</p>
+                <div className="flex gap-2">
+                  <button onClick={disconnect} disabled={busy}
+                    className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
+                    {busy && <Loader2 size={13} className="animate-spin" />} {t('ui.waDisconnectYes')}
+                  </button>
+                  <button onClick={() => setConfirmOff(false)} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold">{t('common.cancel')}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      case 'starting':
+        return (
+          <div className="flex flex-col items-center py-12 gap-3">
+            <Loader2 className="animate-spin text-gray-400" />
+            <p className="text-sm text-gray-500">{t('ui.waStarting')}</p>
+          </div>
+        )
+      case 'restart':
+        return (
+          <div className="flex flex-col items-center py-10 gap-3 text-center">
+            <p className="text-sm text-gray-600">{t('ui.waStopped', { status: info.status })}</p>
+            <button onClick={restart} disabled={busy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
+              {busy ? <Loader2 size={13} className="animate-spin" /> : '🔄'} {t('ui.waRestartBtn')}
+            </button>
+          </div>
+        )
+      case 'unavailable':
+        return (
+          <div className="flex flex-col items-center py-10 gap-2 text-center">
+            <p className="text-sm font-semibold text-red-600">{t('ui.waUnavailable')}</p>
+            <p className="text-xs text-gray-500">{t('ui.waUnavailableHint')}</p>
+          </div>
+        )
+      case 'scan':
+        return (
+          <div>
+            {codeSupported && (
+              <div className="flex gap-1 mb-3 p-1 bg-gray-100 rounded-xl">
+                {(['qr', 'code'] as const).map(k => (
+                  <button key={k} onClick={() => setTab(k)}
+                    className={cn('flex-1 py-1.5 rounded-lg text-sm font-medium', tab === k ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500')}>
+                    {k === 'qr' ? t('ui.waTabQr') : t('ui.waTabCode')}
+                  </button>
+                ))}
+              </div>
+            )}
+            {tab === 'qr' || !codeSupported ? (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-sm font-semibold text-gray-900">{t('ui.scanQr')}</p>
+                <p className="text-xs text-gray-500 text-center">{t('ui.scanPath')}</p>
+                {qr
+                  ? <img src={qr} alt="WhatsApp QR" className="w-full max-w-xs rounded-xl bg-white p-2" />
+                  : <div className="py-10 flex flex-col items-center gap-2 text-sm text-gray-500"><Loader2 className="animate-spin" />{t('ui.waWaitQr')}</div>}
+                <button onClick={loadQr} disabled={refreshing}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+                  {refreshing ? <Loader2 size={13} className="animate-spin" /> : '🔄'} {t('ui.refreshQr')}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <label className="text-xs font-medium text-gray-500">{t('ui.waPhoneLabel')}</label>
+                <input value={phone} onChange={e => setPhone(e.target.value)} dir="ltr" inputMode="tel" placeholder="972501234567"
+                  className={cn('w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400', LTR_INPUT)} />
+                <button onClick={requestCode} disabled={codeBusy || phone.replace(/\D/g, '').length < 8}
+                  className="py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+                  {codeBusy && <Loader2 size={14} className="animate-spin" />} {t('ui.waGetCode')}
+                </button>
+                {codeError && <p className="text-sm text-red-600">{codeError}</p>}
+                {code && (
+                  <div className="text-center">
+                    <p dir="ltr" className="text-4xl font-black tracking-[0.25em] text-gray-900 py-3">{code}</p>
+                    <p className="text-xs text-gray-500">{t('ui.waCodeInstr')}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+    }
   }
 
   return (
@@ -2786,7 +2940,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
       <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
         className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}>
-        {success ? (
+        {justConnected ? (
           <div className="flex flex-col items-center justify-center py-12 px-6">
             <div className="text-5xl mb-4">✅</div>
             <p className="text-xl font-bold text-green-600">{t('ui.waConnectedExcl')}</p>
@@ -2794,50 +2948,11 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
         ) : (
           <>
             <div className="flex items-start justify-between p-5 border-b border-gray-100">
-              <div>
-                <h3 className="font-bold text-gray-900 text-base">{t('ui.scanQr')}</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {t('ui.scanPath')}
-                </p>
-                <p className="text-xs text-amber-600 font-medium mt-1">
-                  {t('ui.maximizeWindow')}
-                </p>
-              </div>
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 ml-4 flex-shrink-0">
-                <X size={16} />
-              </button>
+              <h3 className="font-bold text-gray-900 text-base">{t('ui.waWindowTitle')}</h3>
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 ml-4 flex-shrink-0"><X size={16} /></button>
             </div>
-            <div className="flex-1 overflow-auto p-4 min-h-0">
-              {qrData.found ? (
-                <div className="flex items-center justify-center p-3 rounded-xl bg-white">
-                  <img src={qrData.qr} alt="WhatsApp QR" className="w-full max-w-xs" />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-10 gap-3">
-                  <p className="text-sm text-gray-500 text-center">
-                    {t('ui.qrNotFound')}
-                  </p>
-                  <button onClick={refreshQr} disabled={refreshing}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
-                    {refreshing ? <><Loader2 size={13} className="animate-spin" /> {t('ui.loadingEllipsis')}</> : `🔄 ${t('ui.refreshQr')}`}
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="p-4 border-t border-gray-100 flex gap-2">
-              {qrData.found && (
-                <button onClick={refreshQr} disabled={refreshing}
-                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
-                  {refreshing ? <Loader2 size={13} className="animate-spin" /> : `🔄 ${t('ui.refreshQr')}`}
-                </button>
-              )}
-              <button onClick={manualCheck} disabled={checking}
-                className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2">
-                {checking
-                  ? <><Loader2 size={14} className="animate-spin" /> {t('ui.checking')}</>
-                  : t('ui.checkConnection')}
-              </button>
-            </div>
+            <div className="flex-1 overflow-auto p-4 min-h-0">{body()}</div>
+            {problemText && <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">{problemText}</div>}
           </>
         )}
       </motion.div>
@@ -2858,11 +2973,9 @@ export default function App() {
   const [allMembers, setAllMembers] = useState<Member[]>([])
   const [wahaOk, setWahaOk] = useState<boolean | null>(null)
   const [wahaBannerDismissed, setWahaBannerDismissed] = useState(false)
-  const [wahaRestarting, setWahaRestarting] = useState(false)
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [wahaQrOpen, setWahaQrOpen] = useState(false)
-  const [wahaQrData, setWahaQrData] = useState<{ qr: string; found: boolean }>({ qr: '', found: false })
 
   useEffect(() => {
     if (!authed) return
@@ -2892,19 +3005,6 @@ export default function App() {
   useEffect(() => { if (wahaOk === true) setWahaBannerDismissed(false) }, [wahaOk])
 
   const logout = () => { localStorage.removeItem('admin_token'); setAuthed(false) }
-
-  const handleWahaRestart = async () => {
-    setWahaRestarting(true)
-    try {
-      await api('/api/waha/restart', { method: 'POST' })
-      await new Promise(resolve => setTimeout(resolve, 4000))
-      const d = await api('/api/waha/qr').then(r => r.json()).catch(() => ({ qr: '', found: false }))
-      setWahaQrData({ qr: d.qr || '', found: !!d.found })
-      setWahaQrOpen(true)
-    } catch { /* ignore */ } finally {
-      setWahaRestarting(false)
-    }
-  }
 
   if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />
 
@@ -2936,13 +3036,13 @@ export default function App() {
               <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setDrawerOpen(false)} />
               <Sidebar section={section} collapsed={false}
                 onNav={s => { setSection(s); setDrawerOpen(false) }}
-                onCollapse={() => setDrawerOpen(false)} onLogout={logout} wahaOk={wahaOk} />
+                onCollapse={() => setDrawerOpen(false)} onLogout={logout} wahaOk={wahaOk} onWaha={() => setWahaQrOpen(true)} />
             </>
           )}
         </>
       ) : (
         <Sidebar section={section} collapsed={collapsed} onNav={setSection}
-          onCollapse={() => setCollapsed(c => !c)} onLogout={logout} wahaOk={wahaOk} />
+          onCollapse={() => setCollapsed(c => !c)} onLogout={logout} wahaOk={wahaOk} onWaha={() => setWahaQrOpen(true)} />
       )}
       <main className="transition-all duration-300 min-h-screen"
         style={isRtl ? { paddingRight: sidebarW } : { paddingLeft: sidebarW }}>
@@ -2955,11 +3055,9 @@ export default function App() {
               <span className="text-sm font-medium flex-1">
                 ⚠️ {t('ui.waDownBanner')}
               </span>
-              <button onClick={handleWahaRestart} disabled={wahaRestarting}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-sm font-semibold disabled:opacity-50 flex-shrink-0 transition-colors">
-                {wahaRestarting
-                  ? <><Loader2 size={13} className="animate-spin" /> {t('ui.connecting')}</>
-                  : <>🔄 {t('ui.reconnect')}</>}
+              <button onClick={() => setWahaQrOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-sm font-semibold flex-shrink-0 transition-colors">
+                🔄 {t('ui.reconnect')}
               </button>
               <button onClick={() => setWahaBannerDismissed(true)}
                 className="p-1 rounded hover:bg-red-700 flex-shrink-0">
@@ -2986,9 +3084,7 @@ export default function App() {
       {/* WAHA QR reconnect modal */}
       <AnimatePresence>
         {wahaQrOpen && (
-          <WahaQrModal
-            qr={wahaQrData.qr}
-            found={wahaQrData.found}
+          <WahaConnectModal
             onClose={() => setWahaQrOpen(false)}
             onConnected={() => setWahaOk(true)}
           />
