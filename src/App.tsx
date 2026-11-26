@@ -316,7 +316,7 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk }:
             <span className={cn('w-2 h-2 rounded-full flex-shrink-0', wahaOk ? 'bg-green-400' : 'bg-red-500 animate-pulse')} />
             {!collapsed && (
               <span className={cn('text-xs font-medium truncate', wahaOk ? 'text-green-400' : 'text-red-400')}>
-                {wahaOk ? 'WhatsApp подключён' : 'WhatsApp отключён'}
+                {wahaOk ? t('ui.waOn') : t('ui.waOff')}
               </span>
             )}
           </div>
@@ -622,7 +622,7 @@ function MemberModal({ member, onClose, onSaved }:
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-500 block mb-1">Профессия (иврит)</label>
+              <label className="text-xs font-medium text-gray-500 block mb-1">{t('ui.professionHe')}</label>
               <input
                 value={form.profession_he}
                 onChange={e => setForm(f => ({ ...f, profession_he: e.target.value }))}
@@ -766,7 +766,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Телефон гостя <span className="font-normal text-gray-400">(опционально)</span></label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">{t('ui.phoneOptional')} <span className="font-normal text-gray-400">{t('ui.optional')}</span></label>
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+972 050 000 0000"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
           </div>
@@ -784,7 +784,7 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
         {link && <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-3">{link}</div>}
         {link && presenter?.member_name && (
           <div className="text-xs text-gray-600 mb-3 bg-red-50 rounded-lg px-3 py-2">
-            🎤 Презентор: <span className="font-semibold text-gray-800">{presenter.member_name}</span>
+            🎤 {t('ui.presenterLine')}: <span className="font-semibold text-gray-800">{presenter.member_name}</span>
           </div>
         )}
         <div className="flex gap-2">
@@ -814,7 +814,7 @@ function BirthdayRow({ member }: { member: Member & { daysUntil: number } }) {
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{member.name}</p>
         <p className="text-xs text-gray-400">{member.birthday} · <span className={cn(member.daysUntil === 0 ? 'text-amber-500 font-medium' : member.daysUntil < 0 ? 'text-gray-400' : 'text-gray-400')}>
-          {member.daysUntil === 0 ? t('dashboard.today') : member.daysUntil < 0 ? `${Math.abs(member.daysUntil)} дн. назад` : t('dashboard.inDays', { n: member.daysUntil })}
+          {member.daysUntil === 0 ? t('dashboard.today') : member.daysUntil < 0 ? t('ui.daysAgo', { n: Math.abs(member.daysUntil) }) : t('dashboard.inDays', { n: member.daysUntil })}
         </span></p>
       </div>
       {phone && (
@@ -976,7 +976,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
       <div className="bg-white rounded-2xl px-5 py-3.5 shadow-sm flex items-center gap-3 flex-wrap">
         <span className="text-sm font-medium text-gray-600 flex items-center gap-1.5">
           <Calendar size={14} className="text-gray-400" />
-          Следующая встреча:
+          {t('ui.nextMeeting')}
         </span>
         <div className="flex items-center gap-0.5 border border-gray-200 rounded-xl overflow-hidden">
           <button onClick={() => nextMeeting && saveMeeting(shiftDDMM(nextMeeting, -7))}
@@ -995,14 +995,14 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
         </div>
         <button onClick={() => saveMeeting(getNextMonday())} disabled={savingMeeting}
           className="text-xs px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium transition-colors">
-          Авто
+          {t('ui.auto')}
         </button>
         {savingMeeting && <Loader2 size={14} className="animate-spin text-gray-400" />}
       </div>
 
       {/* Meeting Settings */}
       <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
-        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🏢 Формат встречи</p>
+        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🏢 {t('ui.meetingFormat')}</p>
         <div className="flex gap-2 mb-3">
           {(['offline', 'zoom'] as const).map(type => (
             <button key={type}
@@ -1012,7 +1012,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
                   ? 'border-red-400 text-white'
                   : 'border-gray-200 text-gray-600 hover:border-gray-300')}
               style={meetingType === type ? { background: RED } : {}}>
-              {type === 'offline' ? 'Офлайн' : 'Zoom'}
+              {type === 'offline' ? t('ui.offline') : 'Zoom'}
             </button>
           ))}
         </div>
@@ -1020,7 +1020,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
               <input value={meetingLocation} onChange={e => setMeetingLocation(e.target.value)}
-                placeholder="Адрес встречи…"
+                placeholder={t('ui.meetingAddress')}
                 className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-red-400" />
               <button onClick={() => saveMeetingField('meeting_location', meetingLocation)}
                 disabled={savingMeetingField === 'meeting_location'}
@@ -1055,7 +1055,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
 
       {/* Notifications Settings */}
       <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
-        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🔔 Уведомления</p>
+        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">🔔 {t('ui.notifications')}</p>
         <div className="flex gap-2">
           <input value={unconfirmedNotifyPhone} onChange={e => setUnconfirmedNotifyPhone(e.target.value)}
             placeholder="972501234567"
@@ -1066,19 +1066,19 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
             {savingMeetingField === 'unconfirmed_notify_phone' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1.5">Уведомления о неподтверждённых (телефон)</p>
+        <p className="text-xs text-gray-400 mt-1.5">{t('ui.notifyUnconfirmed')}</p>
       </div>
 
       {/* BNI Connect letters */}
       <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
-        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">📩 Письма BNI Connect</p>
+        <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-1.5">📩 {t('ui.bniLetters')}</p>
         <div className="flex gap-2 mb-3">
           {(['test', 'prod'] as const).map(m => (
             <button key={m}
               onClick={async () => { setMailMode(m); await saveMeetingField('mail_intake_mode', m) }}
               className={cn('flex-1 py-2 rounded-xl text-sm font-medium border',
                 mailMode === m ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300')}>
-              {m === 'test' ? 'Тест (всё Юрию)' : 'Боевой'}
+              {m === 'test' ? t('ui.modeTest') : t('ui.modeProd')}
             </button>
           ))}
         </div>
@@ -1092,7 +1092,7 @@ function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
             {savingMeetingField === 'mail_intake_notify_phone' ? <Loader2 size={13} className="animate-spin" /> : '💾'}
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1.5">Тест: все сообщения идут на этот номер со служебной строкой. Боевой: гостю или участнику.</p>
+        <p className="text-xs text-gray-400 mt-1.5">{t('ui.modeHint')}</p>
       </div>
 
       {/* KPI Cards */}
@@ -1298,10 +1298,10 @@ function GuestsSection() {
   const reviewBadges = (g: Guest) => (
     <>
       {g.source === 'bni_email' && (
-        <span className="ml-2 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">из письма BNI</span>
+        <span className="ml-2 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{t('ui.fromLetter')}</span>
       )}
       {g.needs_review === 1 && (
-        <span className="ml-1 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">проверить</span>
+        <span className="ml-1 align-middle text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">{t('ui.toCheck')}</span>
       )}
     </>
   )
@@ -1311,14 +1311,14 @@ function GuestsSection() {
     : `${g.visits12m} (${g.visitsAll})`
 
   const typeBadge = (g: Guest) => g.guest_type === 'sub'
-    ? <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Замена</span>
-    : <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Гость</span>
+    ? <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{t('ui.substitute')}</span>
+    : <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">{t('ui.guestType')}</span>
 
   const confirmBadge = (g: Guest) => {
     const when = g.confirmed_at ? new Date(g.confirmed_at).toLocaleString('ru-RU', { timeZone: 'Asia/Jerusalem' }) : undefined
-    if (g.confirmed === 1) return <span title={when} className="text-xs font-medium text-green-600 whitespace-nowrap">✅ Подтвердил</span>
-    if (g.confirmed === -1) return <span title={when} className="text-xs font-medium text-red-500 whitespace-nowrap">❌ Отказал</span>
-    return <span className="text-xs text-gray-400 whitespace-nowrap">⏳ Нет</span>
+    if (g.confirmed === 1) return <span title={when} className="text-xs font-medium text-green-600 whitespace-nowrap">✅ {t('ui.confirmedYes')}</span>
+    if (g.confirmed === -1) return <span title={when} className="text-xs font-medium text-red-500 whitespace-nowrap">❌ {t('ui.declined')}</span>
+    return <span className="text-xs text-gray-400 whitespace-nowrap">⏳ {t('ui.confirmedNo')}</span>
   }
 
   const waButton = (g: Guest, extra: string) => (
@@ -1349,7 +1349,7 @@ function GuestsSection() {
     <span
       onClick={() => { setEditingSpecialty(g.id); setSpecialtyDraft(g.specialty || '') }}
       className="cursor-pointer hover:text-blue-600 hover:underline"
-      title="Нажмите чтобы изменить"
+      title={t('ui.clickToEdit')}
     >
       {g.specialty || <span className="text-gray-300 italic">—</span>}
     </span>
@@ -1403,7 +1403,7 @@ function GuestsSection() {
       const r = await api('/api/whatsapp/send-confirmations', { method: 'POST', body: JSON.stringify({ meeting_date: selectedDate }) })
       const { sent } = await r.json()
       setConfirmationSentFor(selectedDate)
-      setToastMsg(`Подтверждения отправлены: ${sent}`)
+      setToastMsg(t('ui.confirmationsSent', { n: sent }))
       setTimeout(() => setToastMsg(''), 4000)
     } finally { setSendingConfirmations(false) }
   }
@@ -1418,12 +1418,12 @@ function GuestsSection() {
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 shadow-xl max-w-sm w-full">
-            <p className="text-sm text-gray-800 mb-4">Удалить гостя <span className="font-semibold">{deleteConfirm.name}</span>? Это действие нельзя отменить.</p>
+            <p className="text-sm text-gray-800 mb-4">{t('ui.deleteGuestQ', { name: deleteConfirm.name })}</p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 rounded-xl text-sm bg-gray-100 text-gray-700 hover:bg-gray-200">Отмена</button>
+                className="px-4 py-2 rounded-xl text-sm bg-gray-100 text-gray-700 hover:bg-gray-200">{t('common.cancel')}</button>
               <button onClick={() => deleteGuest(deleteConfirm.id)}
-                className="px-4 py-2 rounded-xl text-sm bg-red-600 text-white hover:bg-red-700 font-medium">Удалить</button>
+                className="px-4 py-2 rounded-xl text-sm bg-red-600 text-white hover:bg-red-700 font-medium">{t('common.delete')}</button>
             </div>
           </div>
         </div>
@@ -1434,7 +1434,7 @@ function GuestsSection() {
           <button onClick={sendConfirmations} disabled={sendingConfirmations || !selectedDate || searchMode}
             className="text-xs px-3 py-2 rounded-xl border border-blue-200 bg-white text-blue-600 hover:border-blue-300 flex items-center gap-1.5 disabled:opacity-50">
             {sendingConfirmations ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-            Разослать подтверждения
+            {t('ui.sendConfirmations')}
           </button>
           <button onClick={sendCatalog} disabled={sendingCatalog || !selectedDate || searchMode}
             className="text-xs px-3 py-2 rounded-xl border border-green-200 bg-white text-green-600 hover:border-green-300 flex items-center gap-1.5 disabled:opacity-50">
@@ -1458,7 +1458,7 @@ function GuestsSection() {
             onClick={() => { const i = meetings.indexOf(selectedDate); if (i > 0) setSelectedDate(meetings[i - 1]) }}
             disabled={meetings.indexOf(selectedDate) <= 0}
             className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
-            title="Старее">
+            title={t('ui.older')}>
             <ChevronLeft size={15} />
           </button>
           <span className="text-sm font-semibold text-gray-900 min-w-[120px] text-center px-1">
@@ -1470,7 +1470,7 @@ function GuestsSection() {
             onClick={() => { const i = meetings.indexOf(selectedDate); if (i < meetings.length - 1) setSelectedDate(meetings[i + 1]) }}
             disabled={meetings.indexOf(selectedDate) >= meetings.length - 1}
             className="px-2 py-2 hover:bg-gray-50 text-gray-500 disabled:opacity-30 transition-colors"
-            title="Новее">
+            title={t('ui.newer')}>
             <ChevronRight size={15} />
           </button>
         </div>
@@ -1478,7 +1478,7 @@ function GuestsSection() {
         {/* Add date */}
         {showAddDate ? (
           <div className="flex items-center gap-1.5">
-            <input value={addDateVal} onChange={e => setAddDateVal(e.target.value)} placeholder="ДД/ММ"
+            <input value={addDateVal} onChange={e => setAddDateVal(e.target.value)} placeholder={t('ui.ddmm')}
               className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm w-20 focus:outline-none focus:border-red-400" />
             <button onClick={() => {
               const v = addDateVal.trim()
@@ -1496,7 +1496,7 @@ function GuestsSection() {
         ) : (
           <button onClick={() => setShowAddDate(true)}
             className="text-xs px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors">
-            <Plus size={12} /> Добавить дату
+            <Plus size={12} /> {t('ui.addDate')}
           </button>
         )}
         </div>
@@ -1519,7 +1519,7 @@ function GuestsSection() {
           <span className="font-semibold text-gray-900">{statGuests.length}</span> {t('guests.guests')} ·
           <span className="text-green-600 font-semibold">{paid}</span> {t('guests.paid')} ·
           <span className="text-gray-400">{statGuests.length - paid}</span> {t('guests.unpaid')} ·
-          <span className="text-blue-600 font-semibold">{confirmed}</span> подтвердили
+          <span className="text-blue-600 font-semibold">{confirmed}</span> {t('ui.confirmedCount')}
         </div>
       )}
 
@@ -1531,7 +1531,7 @@ function GuestsSection() {
 
       {searchMode && (
         <div className="text-sm text-gray-600">
-          Поиск по всей базе: найдено <span className="font-semibold text-gray-900">{allGuests === null ? '…' : shown.length}</span>
+          {t('ui.searchAll')} <span className="font-semibold text-gray-900">{allGuests === null ? '…' : shown.length}</span>
         </div>
       )}
 
@@ -1556,18 +1556,18 @@ function GuestsSection() {
                   ) : <span className="text-gray-300">—</span>}
                   <div className="min-w-0 text-right text-gray-500 break-words">{specialtyCell(g)}</div>
                 </div>
-                <div className="text-sm text-gray-500 break-words">Пригласил: {g.invitedBy || '—'}</div>
+                <div className="text-sm text-gray-500 break-words">{t('ui.invitedByLabel')}: {g.invitedBy || '—'}</div>
                 <div className="text-sm text-gray-500">{t('ui.colVisits')}: <span title={t('ui.visitsHint')}>{visitsCell(g)}</span></div>
                 <div className="flex items-center flex-wrap gap-2">
                   {waButton(g, 'min-h-[44px] px-4')}
                   {confirmBadge(g)}
                   {payCell(g, 'min-h-[44px] min-w-[44px]')}
-                  <button onClick={() => setDeleteConfirm(g)} title="Удалить гостя"
+                  <button onClick={() => setDeleteConfirm(g)} title={t('ui.deleteGuest')}
                     className="ml-auto min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-300 hover:text-red-500">
                     <Trash2 size={16} />
                   </button>
                 </div>
-                {searchMode && <div className="text-xs text-gray-400">Встреча: {g.meetingDate}</div>}
+                {searchMode && <div className="text-xs text-gray-400">{t('ui.meetingLabel')}: {g.meetingDate}</div>}
               </div>
             ))}
           </div>
@@ -1579,13 +1579,13 @@ function GuestsSection() {
                 <th className="px-4 py-3 font-medium">{t('guests.colPhone')}</th>
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colInvitedBy')}</th>
-                <th className="px-4 py-3 font-medium">Гость/Замена</th>
+                <th className="px-4 py-3 font-medium">{t('ui.colGuestSub')}</th>
                 <th className="px-4 py-3 font-medium" title={t('ui.visitsHint')}>{t('ui.colVisits')}</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
-                <th className="px-4 py-3 font-medium">Подтверждение</th>
+                <th className="px-4 py-3 font-medium">{t('ui.colConfirmation')}</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
                 {!searchMode && <th className="px-4 py-3 font-medium hidden lg:table-cell">Email</th>}
-                {searchMode && <th className="px-4 py-3 font-medium">Встреча</th>}
+                {searchMode && <th className="px-4 py-3 font-medium">{t('ui.meetingLabel')}</th>}
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
@@ -1607,7 +1607,7 @@ function GuestsSection() {
                   {!searchMode && <td className="px-4 py-3 text-gray-500 hidden lg:table-cell">{g.email}</td>}
                   {searchMode && <td className="px-4 py-3 text-gray-500" style={{ whiteSpace: 'nowrap' }}>{g.meetingDate}</td>}
                   <td className="px-4 py-3">
-                    <button onClick={() => setDeleteConfirm(g)} title="Удалить гостя"
+                    <button onClick={() => setDeleteConfirm(g)} title={t('ui.deleteGuest')}
                       className="text-gray-300 hover:text-red-500 transition-colors">
                       <Trash2 size={14} />
                     </button>
@@ -1704,7 +1704,7 @@ function MembersSection() {
     await api('/api/members/reorder', { method: 'PUT', body: JSON.stringify({ order: reorderList.map(m => m.id) }) })
     setSavingOrder(false)
     setReordering(false)
-    setOrderToast('Порядок сохранён')
+    setOrderToast(t('ui.orderSaved'))
     setTimeout(() => setOrderToast(''), 3000)
     load()
   }
@@ -1735,11 +1735,11 @@ function MembersSection() {
           {!reordering && <>
             <button onClick={enterReorder}
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-              ⠿ Упорядочить
+              ⠿ {t('ui.reorder')}
             </button>
             <a href="/members-catalog" target="_blank"
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
-              🌐 Каталог
+              🌐 {t('ui.catalog')}
             </a>
             <a href="/api/pdf/members" target="_blank"
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:border-gray-300 flex items-center gap-1.5">
@@ -1753,12 +1753,12 @@ function MembersSection() {
           {reordering && <>
             <button onClick={exitReorder}
               className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-gray-300">
-              Отмена
+              {t('common.cancel')}
             </button>
             <button onClick={saveOrder} disabled={savingOrder}
               className="text-xs px-4 py-2 rounded-xl text-white flex items-center gap-1.5 disabled:opacity-50" style={{ background: RED }}>
               {savingOrder ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-              Сохранить порядок
+              {t('ui.saveOrder')}
             </button>
           </>}
         </div>
@@ -1766,7 +1766,7 @@ function MembersSection() {
 
       {reordering ? (
         <div className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs text-gray-400 mb-3">Перетащите карточки, чтобы изменить порядок отображения</p>
+          <p className="text-xs text-gray-400 mb-3">{t('ui.dragHint')}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {reorderList.map((m, idx) => (
               <div key={m.id}
@@ -1974,7 +1974,7 @@ function VotingSection() {
       {/* History: previous meetings — shown directly below controls */}
       {history.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-4">История голосований</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t('ui.votingHistory')}</h2>
           <div className="space-y-2">
             {history.map(entry => {
               const maxV = entry.results[0]?.votes || 1
@@ -1987,7 +1987,7 @@ function VotingSection() {
                     <span className="font-semibold text-gray-800 text-sm">{entry.date}</span>
                     <div className="flex items-center gap-3">
                       {entry.results[0] && (
-                        <span className="text-xs text-gray-400">🥇 {entry.results[0].candidateName} · {entry.results[0].votes} голосов</span>
+                        <span className="text-xs text-gray-400">🥇 {entry.results[0].candidateName} · {entry.results[0].votes} {t('dashboard.votes')}</span>
                       )}
                       <ChevronDown size={14} className={cn('text-gray-400 transition-transform flex-shrink-0', isOpen && 'rotate-180')} />
                     </div>
@@ -2134,7 +2134,7 @@ function GroupValueSection() {
       setPending([]); setShowModal(false)
       loadHistory()
       if (data.updated) {
-        setSaveToast(`Данные добавлены к записи за ${meetingDate}`)
+        setSaveToast(t('ui.dataAdded', { date: meetingDate }))
         setTimeout(() => setSaveToast(''), 4000)
       }
     } finally { setSaving(false) }
@@ -2297,16 +2297,16 @@ function GroupValueSection() {
           { label: yearly.prev_year.label, t: yearly.prev_year },
           { label: yearly.prev_prev_year.label, t: yearly.prev_prev_year },
         ].filter(row => hasData(row.t))
-        rows.push({ label: 'За всё время', t: yearly })
+        rows.push({ label: t('ui.allTimeRow'), t: yearly })
         return (
           <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
             <div className="px-5 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-800">Итоги по годам</h2>
+              <h2 className="font-semibold text-gray-800">{t('ui.yearlyTotals')}</h2>
             </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                  <th className="px-4 py-3 font-medium text-left">Показатель</th>
+                  <th className="px-4 py-3 font-medium text-left">{t('ui.metric')}</th>
                   <th className="px-4 py-3 font-medium text-center">{t('groupValue.oneOnOne')}</th>
                   <th className="px-4 py-3 font-medium text-center">{t('groupValue.referrals')}</th>
                   <th className="px-4 py-3 font-medium text-center">{t('groupValue.deals')}</th>
@@ -2336,7 +2336,7 @@ function GroupValueSection() {
             <h2 className="font-semibold text-gray-800">{t('groupValue.history')}</h2>
             {history.length > 4 && (
               <button onClick={() => setHistoryExpanded(v => !v)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
-                {historyExpanded ? 'Свернуть' : `Показать все (${history.length})`}
+                {historyExpanded ? t('ui.collapse') : t('ui.showAll', { n: history.length })}
               </button>
             )}
           </div>
@@ -2450,6 +2450,7 @@ interface PresEditModalProps {
 }
 
 function PresEditModal({ date, members, item, onSave, onClose }: PresEditModalProps) {
+  const { t } = useTranslation()
   const [memberId, setMemberId] = useState<string>(item?.member_id != null ? String(item.member_id) : '')
   const [notes, setNotes] = useState(item?.notes ?? '')
   const [saving, setSaving] = useState(false)
@@ -2478,27 +2479,27 @@ function PresEditModal({ date, members, item, onSave, onClose }: PresEditModalPr
         </div>
         <div className="space-y-3 mb-4">
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Презентор</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">{t('ui.presenter')}</label>
             <select value={memberId} onChange={e => setMemberId(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
-              <option value="">— не назначен —</option>
+              <option value="">{t('ui.notAssigned')}</option>
               {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Заметки</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">{t('ui.notes')}</label>
             <input value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Тема, ссылки и т.д."
+              placeholder={t('ui.notesPlaceholder')}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400" />
           </div>
         </div>
         <div className="flex gap-2">
           <button onClick={save} disabled={saving}
             className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-50" style={{ background: RED }}>
-            {saving ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Сохранить'}
+            {saving ? <Loader2 size={14} className="animate-spin mx-auto" /> : t('common.save')}
           </button>
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium">
-            Отмена
+            {t('common.cancel')}
           </button>
         </div>
       </motion.div>
@@ -2507,7 +2508,7 @@ function PresEditModal({ date, members, item, onSave, onClose }: PresEditModalPr
 }
 
 function PresentationsSection() {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const dayNames = useMemo(() => weekdayShortNames(i18n.language), [i18n.language])
   const [items, setItems] = useState<Presentation[]>([])
   const [members, setMembers] = useState<Member[]>([])
@@ -2580,7 +2581,7 @@ function PresentationsSection() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold text-gray-900">Презентации</h1>
+      <h1 className="text-2xl font-bold text-gray-900">{t('ui.presentationsTitle')}</h1>
 
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         {/* Month navigation */}
@@ -2698,6 +2699,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
   onClose: () => void
   onConnected: () => void
 }) {
+  const { t } = useTranslation()
   const [success, setSuccess] = useState(false)
   const [checking, setChecking] = useState(false)
   const [qrData, setQrData] = useState({ qr, found })
@@ -2757,18 +2759,18 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
         {success ? (
           <div className="flex flex-col items-center justify-center py-12 px-6">
             <div className="text-5xl mb-4">✅</div>
-            <p className="text-xl font-bold text-green-600">WhatsApp подключён!</p>
+            <p className="text-xl font-bold text-green-600">{t('ui.waConnectedExcl')}</p>
           </div>
         ) : (
           <>
             <div className="flex items-start justify-between p-5 border-b border-gray-100">
               <div>
-                <h3 className="font-bold text-gray-900 text-base">Отсканируйте QR код в WhatsApp</h3>
+                <h3 className="font-bold text-gray-900 text-base">{t('ui.scanQr')}</h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  WhatsApp → Связанные устройства → Привязать устройство
+                  {t('ui.scanPath')}
                 </p>
                 <p className="text-xs text-amber-600 font-medium mt-1">
-                  Максимизируйте окно браузера перед сканированием
+                  {t('ui.maximizeWindow')}
                 </p>
               </div>
               <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 ml-4 flex-shrink-0">
@@ -2783,11 +2785,11 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <p className="text-sm text-gray-500 text-center">
-                    QR не найден. Подождите 5 секунд и нажмите «Обновить QR»
+                    {t('ui.qrNotFound')}
                   </p>
                   <button onClick={refreshQr} disabled={refreshing}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50">
-                    {refreshing ? <><Loader2 size={13} className="animate-spin" /> Загрузка…</> : '🔄 Обновить QR'}
+                    {refreshing ? <><Loader2 size={13} className="animate-spin" /> {t('ui.loadingEllipsis')}</> : `🔄 ${t('ui.refreshQr')}`}
                   </button>
                 </div>
               )}
@@ -2796,14 +2798,14 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
               {qrData.found && (
                 <button onClick={refreshQr} disabled={refreshing}
                   className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
-                  {refreshing ? <Loader2 size={13} className="animate-spin" /> : '🔄 Обновить QR'}
+                  {refreshing ? <Loader2 size={13} className="animate-spin" /> : `🔄 ${t('ui.refreshQr')}`}
                 </button>
               )}
               <button onClick={manualCheck} disabled={checking}
                 className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2">
                 {checking
-                  ? <><Loader2 size={14} className="animate-spin" /> Проверяем…</>
-                  : 'Проверить подключение'}
+                  ? <><Loader2 size={14} className="animate-spin" /> {t('ui.checking')}</>
+                  : t('ui.checkConnection')}
               </button>
             </div>
           </>
@@ -2816,7 +2818,7 @@ function WahaQrModal({ qr, found, onClose, onConnected }: {
 // ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const isRtl = i18n.language === 'he'
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('admin_token'))
   const [section, setSection] = useState<Section>('dashboard')
@@ -2893,7 +2895,7 @@ export default function App() {
       {isMobile ? (
         <>
           <div className="sticky top-0 z-30 flex items-center gap-3 h-12 px-3 bg-gray-900 text-white">
-            <button onClick={() => setDrawerOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-white/10" aria-label="Меню">
+            <button onClick={() => setDrawerOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-white/10" aria-label={t('ui.menu')}>
               <Menu size={20} />
             </button>
             <span className="font-black tracking-wider" style={{ color: RED }}>BNI</span>
@@ -2921,13 +2923,13 @@ export default function App() {
               transition={{ duration: 0.2 }}
               className="flex items-center gap-3 bg-red-600 text-white px-5 py-3">
               <span className="text-sm font-medium flex-1">
-                ⚠️ WhatsApp отключён — сообщения не отправляются.
+                ⚠️ {t('ui.waDownBanner')}
               </span>
               <button onClick={handleWahaRestart} disabled={wahaRestarting}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-sm font-semibold disabled:opacity-50 flex-shrink-0 transition-colors">
                 {wahaRestarting
-                  ? <><Loader2 size={13} className="animate-spin" /> Подключение…</>
-                  : <>🔄 Переподключить</>}
+                  ? <><Loader2 size={13} className="animate-spin" /> {t('ui.connecting')}</>
+                  : <>🔄 {t('ui.reconnect')}</>}
               </button>
               <button onClick={() => setWahaBannerDismissed(true)}
                 className="p-1 rounded hover:bg-red-700 flex-shrink-0">
