@@ -860,8 +860,9 @@ function shiftDDMM(ddmm: string, days: number): string {
 
 // ─── Dashboard ──────────────────────────────────────────────────────────────
 
-function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
+function Dashboard({ onInvite, onNavigate, nextMeeting, onNextMeetingChange }: {
   onInvite: () => void
+  onNavigate: (tab: Section) => void
   nextMeeting: string
   onNextMeetingChange: (date: string) => void
 }) {
@@ -1097,16 +1098,17 @@ function Dashboard({ onInvite, nextMeeting, onNextMeetingChange }: {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {([
-          { label: t('dashboard.members'),    value: memberCount,                         icon: <UserCheck size={18} />,    color: 'bg-blue-50 text-blue-600' },
-          { label: t('dashboard.guests'),     value: guestCount.count,                    icon: <Users size={18} />,        color: 'bg-purple-50 text-purple-600' },
-          { label: 'Group Value',             value: `₪${gvTotal.toLocaleString()}`,      icon: <DollarSign size={18} />,   color: 'bg-green-50 text-green-600' },
-          { label: '1-на-1',                  value: gv1on1.toLocaleString(),             icon: <Handshake size={18} />,    color: 'bg-amber-50 text-amber-600' },
-        ] as { label: string; value: string | number; icon: React.ReactNode; color: string }[]).map(c => (
-          <div key={c.label} className="bg-white rounded-2xl p-5 shadow-sm">
+          { label: t('dashboard.members'),    value: memberCount,                         icon: <UserCheck size={18} />,    color: 'bg-blue-50 text-blue-600',     to: 'members' },
+          { label: t('dashboard.guests'),     value: guestCount.count,                    icon: <Users size={18} />,        color: 'bg-purple-50 text-purple-600', to: 'guests' },
+          { label: 'Group Value',             value: `₪${gvTotal.toLocaleString()}`,      icon: <DollarSign size={18} />,   color: 'bg-green-50 text-green-600',   to: 'group-value' },
+          { label: t('groupValue.oneOnOne'),          value: gv1on1.toLocaleString(),             icon: <Handshake size={18} />,    color: 'bg-amber-50 text-amber-600',   to: 'group-value' },
+        ] as { label: string; value: string | number; icon: React.ReactNode; color: string; to: Section }[]).map(c => (
+          <button key={c.label} type="button" onClick={() => onNavigate(c.to)}
+            className="bg-white rounded-2xl p-5 shadow-sm text-start cursor-pointer transition-shadow hover:shadow-md hover:ring-1 hover:ring-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
             <div className={cn('inline-flex p-2.5 rounded-xl mb-2', c.color)}>{c.icon}</div>
             <p className="text-2xl font-bold text-gray-900">{c.value}</p>
             <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -2869,7 +2871,7 @@ export default function App() {
   const showBanner = wahaOk === false && !wahaBannerDismissed
 
   const SECTIONS: Record<Section, React.ReactNode> = {
-    dashboard:     <Dashboard onInvite={() => setInviteForDashboard(true)} nextMeeting={nextMeeting} onNextMeetingChange={setNextMeeting} />,
+    dashboard:     <Dashboard onInvite={() => setInviteForDashboard(true)} onNavigate={setSection} nextMeeting={nextMeeting} onNextMeetingChange={setNextMeeting} />,
     guests:        <GuestsSection />,
     members:       <MembersSection />,
     voting:        <VotingSection />,
