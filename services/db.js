@@ -4,6 +4,8 @@ const path           = require('path');
 const fs             = require('fs');
 const { randomUUID } = require('crypto');
 const Database       = require('better-sqlite3');
+const groupsMigration = require('./groupsMigration');
+const DEFAULT_GROUP = groupsMigration.DEFAULT_GROUP_ID;
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'guests.db');
 
@@ -180,33 +182,35 @@ function normalizePhone(phone) {
 // ─── Guests CRUD ──────────────────────────────────────────────────────────────
 
 function insertGuest({ name, phone, specialty, invitedBy, meetingDate, paid = 0, paidAt = null, email = '',
-                       waEnabled = 1, source = '', needsReview = 0, guestType = 'guest' }) {
+                       waEnabled = 1, source = '', needsReview = 0, guestType = 'guest',
+                       groupId = DEFAULT_GROUP, invitedByMemberId = null }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
     INSERT INTO guests
       (id, name, firstName, lastName, phone, specialty, invitedBy, meetingDate, paid, paidAt, createdAt, wa_enabled, email,
-       source, needs_review, guest_type)
-    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       source, needs_review, guest_type, group_id, invited_by_member_id)
+    VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name.trim(), normalizePhone(phone),
     (specialty || '').trim(), (invitedBy || '').trim(),
     meetingDate, paid, paidAt, createdAt, waEnabled, (email || '').trim(),
     source, needsReview ? 1 : 0, guestType === 'sub' ? 'sub' : 'guest',
+    groupId, invitedByMemberId,
   );
   return id;
 }
 
-function findGuestByDatePhone(meetingDate, phone) {
+function findGuestByDatePhone(meetingDate, phone, groupId = DEFAULT_GROUP) {
   const p = normalizePhone(phone);
   if (!p) return null;
-  return db.prepare('SELECT * FROM guests WHERE meetingDate = ? AND phone = ? LIMIT 1').get(meetingDate, p) || null;
+  return db.prepare('SELECT * FROM guests WHERE meetingDate = ? AND phone = ? AND group_id = ? LIMIT 1').get(meetingDate, p, groupId) || null;
 }
 
-function findGuestByDateName(meetingDate, name) {
+function findGuestByDateName(meetingDate, name, groupId = DEFAULT_GROUP) {
   if (!name) return null;
-  return db.prepare('SELECT * FROM guests WHERE meetingDate = ? AND name = ? LIMIT 1').get(meetingDate, name.trim()) || null;
+  return db.prepare('SELECT * FROM guests WHERE meetingDate = ? AND name = ? AND group_id = ? LIMIT 1').get(meetingDate, name.trim(), groupId) || null;
 }
 
 // Fill only empty text fields of an existing guest (used when a BNI email matches an already registered guest)
@@ -252,11 +256,11 @@ function findSentIntake({ phone, name, meetingDate, statuses }) {
   ).get(...statuses, value, meetingDate) || null;
 }
 
-function findDuplicateGuest(meetingDate, phone, name) {
+function findDuplicateGuest(meetingDate, phone, name, groupId = DEFAULT_GROUP) {
   const normalizedPhone = normalizePhone(phone);
   return db.prepare(
-    'SELECT id FROM guests WHERE meetingDate = ? AND (phone = ? OR name = ?) LIMIT 1'
-  ).get(meetingDate, normalizedPhone, name.trim()) || null;
+    'SELECT id FROM guests WHERE meetingDate = ? AND (phone = ? OR name = ?) AND group_id = ? LIMIT 1'
+  ).get(meetingDate, normalizedPhone, name.trim(), groupId) || null;
 }
 
 function updateSheetRow(id, sheetRow) {
@@ -303,14 +307,25 @@ function toggleWaEnabled(id) {
   return next;
 }
 
-function getGuestsByDate(meetingDate) {
-  return db.prepare(
-    'SELECT * FROM guests WHERE meetingDate = ? ORDER BY createdAt ASC'
-  ).all(meetingDate);
+// The inviter is read by ID (join); the old text stays only for rows without a match.
+// The API keeps the old `invitedBy` key (name) and adds `invitedByMemberId`.
+const GUEST_SELECT = `SELECT g.*, m.name AS _inviter_name FROM guests g LEFT JOIN members m ON m.id = g.invited_by_member_id`;
+function withInviter(rows) {
+  return rows.map(({ _inviter_name, ...g }) => ({
+    ...g,
+    invitedBy: _inviter_name || g.invitedBy,
+    invitedByMemberId: g.invited_by_member_id ?? null,
+  }));
 }
 
-function getAllGuests() {
-  return db.prepare('SELECT * FROM guests ORDER BY meetingDate DESC, createdAt ASC').all();
+function getGuestsByDate(meetingDate, groupId = DEFAULT_GROUP) {
+  return withInviter(db.prepare(
+    `${GUEST_SELECT} WHERE g.meetingDate = ? AND g.group_id = ? ORDER BY g.createdAt ASC`
+  ).all(meetingDate, groupId));
+}
+
+function getAllGuests(groupId = DEFAULT_GROUP) {
+  return withInviter(db.prepare(`${GUEST_SELECT} WHERE g.group_id = ? ORDER BY g.meetingDate DESC, g.createdAt ASC`).all(groupId));
 }
 
 /**
@@ -343,8 +358,8 @@ function _dateScore(dateStr) {
   return year * 10000 + mm * 100 + dd;
 }
 
-function getMeetingDates() {
-  const rows = db.prepare('SELECT DISTINCT meetingDate FROM guests').all();
+function getMeetingDates(groupId = DEFAULT_GROUP) {
+  const rows = db.prepare('SELECT DISTINCT meetingDate FROM guests WHERE group_id = ?').all(groupId);
   return rows
     .map(r => r.meetingDate)
     .sort((a, b) => _dateScore(b) - _dateScore(a)); // newest first
@@ -360,18 +375,18 @@ function findGuestByPhone(rawPhone) {
   return all.find(g => normalizePhone(g.phone) === target) || null;
 }
 
-function getTotalCount() {
-  return db.prepare('SELECT COUNT(*) as c FROM guests').get().c;
+function getTotalCount(groupId = DEFAULT_GROUP) {
+  return db.prepare('SELECT COUNT(*) as c FROM guests WHERE group_id = ?').get(groupId).c;
 }
 
 // ─── Members CRUD ─────────────────────────────────────────────────────────────
 
-function getAllMembers() {
-  return db.prepare('SELECT * FROM members ORDER BY name ASC').all();
+function getAllMembers(groupId = DEFAULT_GROUP) {
+  return db.prepare('SELECT * FROM members WHERE group_id = ? ORDER BY name ASC').all(groupId);
 }
 
-function getActiveMembers() {
-  return db.prepare('SELECT * FROM members WHERE active = 1 ORDER BY sort_order ASC, id ASC').all();
+function getActiveMembers(groupId = DEFAULT_GROUP) {
+  return db.prepare('SELECT * FROM members WHERE active = 1 AND group_id = ? ORDER BY sort_order ASC, id ASC').all(groupId);
 }
 
 function reorderMembers(ids) {
@@ -383,12 +398,12 @@ function getMemberById(id) {
   return db.prepare('SELECT * FROM members WHERE id = ?').get(id);
 }
 
-function insertMember({ name, profession, profession_he, name_he, phone, birthday }) {
+function insertMember({ name, profession, profession_he, name_he, phone, birthday, groupId = DEFAULT_GROUP }) {
   const createdAt = new Date().toISOString();
   const info = db.prepare(
-    `INSERT INTO members (name, profession, profession_he, name_he, phone, birthday, active, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
-  ).run(name.trim(), (profession || '').trim(), (profession_he || '').trim(), (name_he || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt);
+    `INSERT INTO members (name, profession, profession_he, name_he, phone, birthday, active, createdAt, group_id)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
+  ).run(name.trim(), (profession || '').trim(), (profession_he || '').trim(), (name_he || '').trim(), normalizePhone(phone || ''), (birthday || '').trim(), createdAt, groupId);
   return info.lastInsertRowid;
 }
 
@@ -443,10 +458,10 @@ function updateMemberProfile(id, { profession, phone, birthday }) {
 /**
  * Find members whose birthday starts with the given "DD/MM" prefix.
  */
-function getMembersBirthday(ddmm) {
-  return db.prepare(
-    "SELECT * FROM members WHERE birthday LIKE ? AND active = 1"
-  ).all(`${ddmm}%`);
+function getMembersBirthday(ddmm, groupId = null) {
+  return groupId === null
+    ? db.prepare("SELECT * FROM members WHERE birthday LIKE ? AND active = 1").all(`${ddmm}%`)
+    : db.prepare("SELECT * FROM members WHERE birthday LIKE ? AND active = 1 AND group_id = ?").all(`${ddmm}%`, groupId);
 }
 
 // Migrate existing DBs: add photo column to members
@@ -534,13 +549,13 @@ function hasVoted(meetingDate, rawPhone) {
   ).get(meetingDate, phone);
 }
 
-function insertVote({ meetingDate, voterPhone, voterName, candidateId, candidateName }) {
+function insertVote({ meetingDate, voterPhone, voterName, candidateId, candidateName, groupId = DEFAULT_GROUP }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
-    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, meetingDate, normalizePhone(voterPhone), voterName.trim(), candidateId, candidateName, createdAt);
+    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt, group_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, meetingDate, normalizePhone(voterPhone), voterName.trim(), candidateId, candidateName, createdAt, groupId);
   return id;
 }
 
@@ -550,41 +565,41 @@ function hasVotedByIp(meetingDate, ip) {
   ).get(meetingDate, ip);
 }
 
-function insertVoteByIp({ meetingDate, voterIp, candidateId, candidateName }) {
+function insertVoteByIp({ meetingDate, voterIp, candidateId, candidateName, groupId = DEFAULT_GROUP }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
-    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, meetingDate, voterIp, '', candidateId, candidateName, createdAt);
+    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt, group_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, meetingDate, voterIp, '', candidateId, candidateName, createdAt, groupId);
   return id;
 }
 
-function getVoteResults(meetingDate) {
+function getVoteResults(meetingDate, groupId = DEFAULT_GROUP) {
   return db.prepare(`
     SELECT candidateId, candidateName, COUNT(*) as votes
     FROM votes
-    WHERE meetingDate = ?
+    WHERE meetingDate = ? AND group_id = ?
     GROUP BY candidateId, candidateName
     ORDER BY votes DESC
-  `).all(meetingDate);
+  `).all(meetingDate, groupId);
 }
 
-function getVoteCount(meetingDate) {
-  return db.prepare('SELECT COUNT(*) as c FROM votes WHERE meetingDate = ?').get(meetingDate).c;
+function getVoteCount(meetingDate, groupId = DEFAULT_GROUP) {
+  return db.prepare('SELECT COUNT(*) as c FROM votes WHERE meetingDate = ? AND group_id = ?').get(meetingDate, groupId).c;
 }
 
-function deleteVotesByDate(meetingDate) {
-  db.prepare('DELETE FROM votes WHERE meetingDate = ?').run(meetingDate);
+function deleteVotesByDate(meetingDate, groupId = DEFAULT_GROUP) {
+  db.prepare('DELETE FROM votes WHERE meetingDate = ? AND group_id = ?').run(meetingDate, groupId);
 }
 
-function insertAnonymousVote({ meetingDate, candidateId, candidateName }) {
+function insertAnonymousVote({ meetingDate, candidateId, candidateName, groupId = DEFAULT_GROUP }) {
   const id        = randomUUID();
   const createdAt = new Date().toISOString();
   db.prepare(`
-    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, meetingDate, id, '', candidateId, candidateName, createdAt);
+    INSERT INTO votes (id, meetingDate, voterPhone, voterName, candidateId, candidateName, createdAt, group_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, meetingDate, id, '', candidateId, candidateName, createdAt, groupId);
 }
 
 // ─── Schema: member_socials ───────────────────────────────────────────────────
@@ -642,17 +657,17 @@ db.exec(`
 
 // ─── Presentations CRUD ───────────────────────────────────────────────────────
 
-function getPresentations(meetingDate) {
+function getPresentations(meetingDate, groupId = DEFAULT_GROUP) {
   return meetingDate
-    ? db.prepare('SELECT * FROM presentations WHERE meeting_date = ? ORDER BY created_at DESC').all(meetingDate)
-    : db.prepare('SELECT * FROM presentations ORDER BY meeting_date DESC, created_at DESC').all();
+    ? db.prepare('SELECT * FROM presentations WHERE meeting_date = ? AND group_id = ? ORDER BY created_at DESC').all(meetingDate, groupId)
+    : db.prepare('SELECT * FROM presentations WHERE group_id = ? ORDER BY meeting_date DESC, created_at DESC').all(groupId);
 }
 
-function insertPresentation({ meeting_date, member_name, change_description, notes }) {
+function insertPresentation({ meeting_date, member_name, change_description, notes, groupId = DEFAULT_GROUP }) {
   const info = db.prepare(`
-    INSERT INTO presentations (meeting_date, member_name, change_description, notes)
-    VALUES (?, ?, ?, ?)
-  `).run(meeting_date.trim(), member_name.trim(), change_description.trim(), (notes || '').trim());
+    INSERT INTO presentations (meeting_date, member_name, change_description, notes, group_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(meeting_date.trim(), member_name.trim(), change_description.trim(), (notes || '').trim(), groupId);
   return info.lastInsertRowid;
 }
 
@@ -692,15 +707,19 @@ function deletePresentation(id) {
 try { db.exec('ALTER TABLE presentations ADD COLUMN member_id INTEGER REFERENCES members(id)'); } catch {}
 
 // Deduplicate: keep only the lowest-id row per meeting_date (needed before UNIQUE index)
-db.exec(`
-  DELETE FROM presentations
-  WHERE id NOT IN (
-    SELECT MIN(id) FROM presentations GROUP BY meeting_date
-  )
-`);
+if (!groupsMigration.hasColumn(db, 'presentations', 'group_id')) {
+  db.exec(`
+    DELETE FROM presentations
+    WHERE id NOT IN (
+      SELECT MIN(id) FROM presentations GROUP BY meeting_date
+    )
+  `);
+}
 
 // Create UNIQUE index on meeting_date (idempotent)
-try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pres_date_unique ON presentations(meeting_date)'); } catch {}
+if (!groupsMigration.hasColumn(db, 'presentations', 'group_id')) {
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pres_date_unique ON presentations(meeting_date)'); } catch {}
+}
 
 // Seed upcoming schedule — INSERT OR IGNORE skips existing dates
 ;(function seedPresentations() {
@@ -734,33 +753,33 @@ try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pres_date_unique ON present
 // Match member_id from members table by name (idempotent, runs every startup)
 db.exec(`
   UPDATE presentations SET member_id = (
-    SELECT id FROM members WHERE name LIKE '%' || member_name || '%' LIMIT 1
+    SELECT id FROM members WHERE name LIKE '%' || member_name || '%'${groupsMigration.hasColumn(db, 'presentations', 'group_id') ? ' AND members.group_id = presentations.group_id' : ''} LIMIT 1
   ) WHERE member_id IS NULL AND member_name IS NOT NULL AND member_name != ''
 `);
 
 // ─── Presentations: calendar CRUD ────────────────────────────────────────────
 
-function getPresentationByDate(date) {
+function getPresentationByDate(date, groupId = DEFAULT_GROUP) {
   return db.prepare(`
     SELECT p.*, m.profession AS member_profession, m.photo AS member_photo
     FROM presentations p
     LEFT JOIN members m ON p.member_id = m.id
-    WHERE p.meeting_date = ?
-  `).get(date) || null;
+    WHERE p.meeting_date = ? AND p.group_id = ?
+  `).get(date, groupId) || null;
 }
 
-function upsertPresentationByDate(date, { member_id, member_name, notes }) {
-  const existing = db.prepare('SELECT id FROM presentations WHERE meeting_date = ?').get(date);
+function upsertPresentationByDate(date, { member_id, member_name, notes }, groupId = DEFAULT_GROUP) {
+  const existing = db.prepare('SELECT id FROM presentations WHERE meeting_date = ? AND group_id = ?').get(date, groupId);
   if (existing) {
     db.prepare(
-      'UPDATE presentations SET member_id = ?, member_name = ?, notes = ? WHERE meeting_date = ?'
-    ).run(member_id ?? null, (member_name || '').trim(), (notes || '').trim(), date);
+      'UPDATE presentations SET member_id = ?, member_name = ?, notes = ? WHERE meeting_date = ? AND group_id = ?'
+    ).run(member_id ?? null, (member_name || '').trim(), (notes || '').trim(), date, groupId);
   } else {
     db.prepare(
-      "INSERT INTO presentations (meeting_date, member_id, member_name, notes, change_description) VALUES (?, ?, ?, ?, '')"
-    ).run(date, member_id ?? null, (member_name || '').trim(), (notes || '').trim());
+      "INSERT INTO presentations (meeting_date, member_id, member_name, notes, change_description, group_id) VALUES (?, ?, ?, ?, '', ?)"
+    ).run(date, member_id ?? null, (member_name || '').trim(), (notes || '').trim(), groupId);
   }
-  return getPresentationByDate(date);
+  return getPresentationByDate(date, groupId);
 }
 
 // ─── Schema: group_value ──────────────────────────────────────────────────────
@@ -783,13 +802,13 @@ db.exec(`
 
 // ─── Group Value CRUD ─────────────────────────────────────────────────────────
 
-function getGroupValue(meetingDate) {
+function getGroupValue(meetingDate, groupId = DEFAULT_GROUP) {
   return meetingDate
-    ? db.prepare('SELECT * FROM group_value WHERE meeting_date = ? ORDER BY member_name ASC').all(meetingDate)
-    : db.prepare('SELECT * FROM group_value ORDER BY meeting_date DESC, member_name ASC').all();
+    ? db.prepare('SELECT * FROM group_value WHERE meeting_date = ? AND group_id = ? ORDER BY member_name ASC').all(meetingDate, groupId)
+    : db.prepare('SELECT * FROM group_value WHERE group_id = ? ORDER BY meeting_date DESC, member_name ASC').all(groupId);
 }
 
-function getGroupValueSummary() {
+function getGroupValueSummary(groupId = DEFAULT_GROUP) {
   return db.prepare(`
     SELECT meeting_date,
            SUM(meetings_1on1) as total_1on1,
@@ -798,30 +817,31 @@ function getGroupValueSummary() {
            SUM(deal_amount)   as total_amount,
            COUNT(*)           as member_count
     FROM group_value
+    WHERE group_id = ?
     GROUP BY meeting_date
     ORDER BY meeting_date DESC
-  `).all();
+  `).all(groupId);
 }
 
-function getGroupValueTotals() {
+function getGroupValueTotals(groupId = DEFAULT_GROUP) {
+  return db.prepare(`
+    SELECT SUM(meetings_1on1) as total_1on1,
+           SUM(referrals)     as total_referrals,
+           SUM(closed_deals)  as total_deals,
+           SUM(deal_amount)   as total_amount
+    FROM meeting_stats WHERE group_id = ?
+  `).get(groupId);
+}
+
+function getGroupValueTotalsByPeriod(days, groupId = DEFAULT_GROUP) {
   return db.prepare(`
     SELECT SUM(meetings_1on1) as total_1on1,
            SUM(referrals)     as total_referrals,
            SUM(closed_deals)  as total_deals,
            SUM(deal_amount)   as total_amount
     FROM meeting_stats
-  `).get();
-}
-
-function getGroupValueTotalsByPeriod(days) {
-  return db.prepare(`
-    SELECT SUM(meetings_1on1) as total_1on1,
-           SUM(referrals)     as total_referrals,
-           SUM(closed_deals)  as total_deals,
-           SUM(deal_amount)   as total_amount
-    FROM meeting_stats
-    WHERE created_at >= datetime('now', ? || ' days')
-  `).get(`-${days}`);
+    WHERE created_at >= datetime('now', ? || ' days') AND group_id = ?
+  `).get(`-${days}`, groupId);
 }
 
 // Отчётный год BNI: с 1 октября по 30 сентября. offset 0 = текущий год, 1 = прошлый, 2 = позапрошлый.
@@ -836,7 +856,7 @@ function bniYearRange(offset = 0) {
 // meeting_date в meeting_stats хранится строкой DD/MM/YY (не ISO) — сравнение
 // напрямую с ISO-границами дало бы бессмысленный результат, поэтому конвертируем
 // обе стороны в сортируемый вид YYYYMMDD прямо в SQL.
-function getGroupValueTotalsByYear(startDate, endDate) {
+function getGroupValueTotalsByYear(startDate, endDate, groupId = DEFAULT_GROUP) {
   const startKey = startDate.replace(/-/g, '');
   const endKey = endDate.replace(/-/g, '');
   return db.prepare(`
@@ -847,13 +867,14 @@ function getGroupValueTotalsByYear(startDate, endDate) {
     FROM meeting_stats
     WHERE ('20' || substr(meeting_date, 7, 2) || substr(meeting_date, 4, 2) || substr(meeting_date, 1, 2)) >= ?
       AND ('20' || substr(meeting_date, 7, 2) || substr(meeting_date, 4, 2) || substr(meeting_date, 1, 2)) <= ?
-  `).get(startKey, endKey);
+      AND group_id = ?
+  `).get(startKey, endKey, groupId);
 }
 
-function upsertGroupValue({ meeting_date, member_id, member_name, meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 }) {
+function upsertGroupValue({ meeting_date, member_id, member_name, meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0, groupId = DEFAULT_GROUP }) {
   const existing = member_id
-    ? db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_id = ?').get(meeting_date, member_id)
-    : db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_name = ? AND member_id IS NULL').get(meeting_date, member_name);
+    ? db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_id = ? AND group_id = ?').get(meeting_date, member_id, groupId)
+    : db.prepare('SELECT id FROM group_value WHERE meeting_date = ? AND member_name = ? AND member_id IS NULL AND group_id = ?').get(meeting_date, member_name, groupId);
 
   if (existing) {
     db.prepare(`
@@ -864,9 +885,9 @@ function upsertGroupValue({ meeting_date, member_id, member_name, meetings_1on1 
     return existing.id;
   } else {
     const info = db.prepare(`
-      INSERT INTO group_value (meeting_date, member_id, member_name, meetings_1on1, referrals, closed_deals, deal_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(meeting_date, member_id || null, member_name, meetings_1on1, referrals, closed_deals, deal_amount);
+      INSERT INTO group_value (meeting_date, member_id, member_name, meetings_1on1, referrals, closed_deals, deal_amount, group_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(meeting_date, member_id || null, member_name, meetings_1on1, referrals, closed_deals, deal_amount, groupId);
     return info.lastInsertRowid;
   }
 }
@@ -914,14 +935,14 @@ db.exec(`UPDATE meeting_stats SET meeting_date = meeting_date || '/26' WHERE mee
 
 // ─── Meeting Stats CRUD ───────────────────────────────────────────────────────
 
-function getAllMeetingStats() {
-  return db.prepare('SELECT * FROM meeting_stats ORDER BY meeting_date DESC').all();
+function getAllMeetingStats(groupId = DEFAULT_GROUP) {
+  return db.prepare('SELECT * FROM meeting_stats WHERE group_id = ? ORDER BY meeting_date DESC').all(groupId);
 }
 
-function upsertMeetingStats(meeting_date, { meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 } = {}) {
+function upsertMeetingStats(meeting_date, { meetings_1on1 = 0, referrals = 0, closed_deals = 0, deal_amount = 0 } = {}, groupId = DEFAULT_GROUP) {
   const existing = db.prepare(
-    'SELECT id FROM meeting_stats WHERE meeting_date = ?'
-  ).get(meeting_date);
+    'SELECT id FROM meeting_stats WHERE meeting_date = ? AND group_id = ?'
+  ).get(meeting_date, groupId);
 
   if (existing) {
     db.prepare(`
@@ -930,27 +951,27 @@ function upsertMeetingStats(meeting_date, { meetings_1on1 = 0, referrals = 0, cl
         referrals     = referrals     + ?,
         closed_deals  = closed_deals  + ?,
         deal_amount   = deal_amount   + ?
-      WHERE meeting_date = ?
-    `).run(meetings_1on1, referrals, closed_deals, deal_amount, meeting_date);
+      WHERE meeting_date = ? AND group_id = ?
+    `).run(meetings_1on1, referrals, closed_deals, deal_amount, meeting_date, groupId);
     return true; // accumulated into existing record
   } else {
     db.prepare(`
-      INSERT INTO meeting_stats (meeting_date, meetings_1on1, referrals, closed_deals, deal_amount)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(meeting_date, meetings_1on1, referrals, closed_deals, deal_amount);
+      INSERT INTO meeting_stats (meeting_date, meetings_1on1, referrals, closed_deals, deal_amount, group_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(meeting_date, meetings_1on1, referrals, closed_deals, deal_amount, groupId);
     return false; // new record created
   }
 }
 
-function getMeetingStatsTotals(days) {
-  const where = days ? `WHERE created_at >= datetime('now', '-${Number(days)} days')` : '';
+function getMeetingStatsTotals(days, groupId = DEFAULT_GROUP) {
+  const where = `WHERE group_id = ?${days ? ` AND created_at >= datetime('now', '-${Number(days)} days')` : ''}`;
   return db.prepare(`
     SELECT SUM(meetings_1on1) as total_1on1,
            SUM(referrals)     as total_referrals,
            SUM(closed_deals)  as total_deals,
            SUM(deal_amount)   as total_amount
     FROM meeting_stats ${where}
-  `).get();
+  `).get(groupId);
 }
 
 function deleteMeetingStats(id) {
@@ -958,13 +979,14 @@ function deleteMeetingStats(id) {
 }
 
 /** Last N meeting winners (1 per meeting date) from votes table. */
-function getLastWinners(limit = 3) {
+function getLastWinners(limit = 3, groupId = DEFAULT_GROUP) {
   const rows = db.prepare(`
     SELECT meetingDate AS date, candidateName AS winner_name, COUNT(*) AS votes
     FROM votes
+    WHERE group_id = ?
     GROUP BY meetingDate, candidateId
     ORDER BY meetingDate DESC, votes DESC
-  `).all();
+  `).all(groupId);
   const seen = new Set();
   const result = [];
   for (const row of rows) {
@@ -977,7 +999,16 @@ function getLastWinners(limit = 3) {
   return result;
 }
 
+// ─── Multi-group migration (task 17) ──────────────────────────────────────────
+// Runs after all legacy schema code; idempotent; backup first; one transaction.
+const migrationResult = groupsMigration.runMigration(db, {
+  backupsDir: process.env.BACKUP_DIR || path.join(dir, '..', 'backups'),
+});
+groupsMigration.seedPositionsFromFile(db, path.join(__dirname, '..', 'scripts', 'positions_he.json'));
+
 module.exports = {
+  DEFAULT_GROUP,
+  migrationResult,
   db,
   // guests
   insertGuest,

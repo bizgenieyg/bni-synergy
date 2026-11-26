@@ -5,7 +5,7 @@ const fs    = require('fs');
 const path  = require('path');
 
 const WAHA_URL     = (process.env.WAHA_URL     || 'http://localhost:3001').replace(/\/$/, '');
-const WAHA_SESSION = process.env.WAHA_SESSION  || 'bni-synergy';
+const DEFAULT_SESSION = process.env.WAHA_SESSION || 'bni-synergy';
 const WAHA_API_KEY = process.env.WAHA_API_KEY  || '';
 
 const WAHA_HEADERS = WAHA_API_KEY ? { 'X-Api-Key': WAHA_API_KEY } : {};
@@ -34,152 +34,165 @@ function toChatId(phone) {
 
 // ─── Core send ────────────────────────────────────────────────────────────────
 
-async function sendMessage(phone, text) {
-  const chatId = toChatId(phone);
-  try {
-    const res = await axios.post(
-      `${WAHA_URL}/api/sendText`,
-      { session: WAHA_SESSION, chatId, text },
-      { headers: WAHA_HEADERS, timeout: 15_000 },
-    );
-    return res.data;
-  } catch (err) {
-    const detail = err.response?.data || err.message;
-    console.error(`[WhatsApp] sendMessage to ${chatId} failed:`, detail);
-    throw err;
-  }
-}
-
-/**
- * Send a message to a WhatsApp group using its raw group chat ID.
- * The groupChatId should be in the format "120363XXXX@g.us".
- */
-async function sendGroupMessage(groupChatId, text) {
-  try {
-    const res = await axios.post(
-      `${WAHA_URL}/api/sendText`,
-      { session: WAHA_SESSION, chatId: groupChatId, text },
-      { headers: WAHA_HEADERS, timeout: 15_000 },
-    );
-    return res.data;
-  } catch (err) {
-    const detail = err.response?.data || err.message;
-    console.error(`[WhatsApp] sendGroupMessage to ${groupChatId} failed:`, detail);
-    throw err;
-  }
-}
-
-/**
- * Is this number registered in WhatsApp? (WAHA GET /api/contacts/check-exists → { numberExists, chatId })
- * Throws if the check itself fails (session not WORKING, network).
- */
-async function checkNumberExists(phone) {
-  const res = await axios.get(`${WAHA_URL}/api/contacts/check-exists`, {
-    params: { phone: String(phone).replace(/\D/g, ''), session: WAHA_SESSION },
-    headers: WAHA_HEADERS,
-    timeout: 20_000,
-  });
-  return res.data.numberExists === true;
-}
-
-/**
- * Send several messages to one number in order, with the usual short pause between them.
- * Stops at the first failure (a later message must not arrive without the earlier one).
- */
-async function sendSequence(phone, texts) {
-  for (let i = 0; i < texts.length; i++) {
-    await sendMessage(phone, texts[i]);
-    if (i < texts.length - 1) await new Promise(resolve => setTimeout(resolve, randomDelay()));
-  }
-}
-
-// ─── Broadcast ────────────────────────────────────────────────────────────────
-
-/**
- * Send a message to each recipient with a random delay (1500–4000 ms) between sends.
- *
- * @param {Array<{phone, firstName, ...}>} recipients
- * @param {(recipient) => string} buildText — returns the message body
- */
-async function broadcast(recipients, buildText) {
-  const results = [];
-
-  for (const r of recipients) {
+// One API per WAHA session (one session per group). `forSession(name)` returns a cached instance.
+function create(WAHA_SESSION) {
+  async function sendMessage(phone, text) {
+    const chatId = toChatId(phone);
     try {
-      const text = buildText(r);
-      await sendMessage(r.phone, text);
-      results.push({ phone: r.phone, status: 'sent' });
+      const res = await axios.post(
+        `${WAHA_URL}/api/sendText`,
+        { session: WAHA_SESSION, chatId, text },
+        { headers: WAHA_HEADERS, timeout: 15_000 },
+      );
+      return res.data;
     } catch (err) {
-      results.push({ phone: r.phone, status: 'error', error: err.message });
+      const detail = err.response?.data || err.message;
+      console.error(`[WhatsApp] sendMessage to ${chatId} failed:`, detail);
+      throw err;
     }
-    await new Promise(resolve => setTimeout(resolve, randomDelay()));
   }
 
-  const ok   = results.filter(r => r.status === 'sent').length;
-  const fail = results.length - ok;
-  console.log(`[WhatsApp] Broadcast done: ${ok} sent, ${fail} failed`);
-  return results;
-}
-
-/**
- * Send messages with a longer random delay (5–25 s) between sends.
- * Returns { sent, failed, errors }.
- */
-async function sendWithDelay(recipients, messageFn) {
-  const results = { sent: 0, failed: 0, errors: [] };
-  for (const recipient of recipients) {
-    if (!recipient.phone) { results.failed++; continue; }
+  /**
+   * Send a message to a WhatsApp group using its raw group chat ID.
+   * The groupChatId should be in the format "120363XXXX@g.us".
+   */
+  async function sendGroupMessage(groupChatId, text) {
     try {
-      const text = messageFn(recipient);
-      await sendMessage(recipient.phone, text);
-      results.sent++;
-      console.log(`[WA] Sent to ${recipient.phone}`);
-    } catch (e) {
-      results.failed++;
-      results.errors.push({ phone: recipient.phone, error: e.message });
-      console.error(`[WA] Failed for ${recipient.phone}:`, e.message);
+      const res = await axios.post(
+        `${WAHA_URL}/api/sendText`,
+        { session: WAHA_SESSION, chatId: groupChatId, text },
+        { headers: WAHA_HEADERS, timeout: 15_000 },
+      );
+      return res.data;
+    } catch (err) {
+      const detail = err.response?.data || err.message;
+      console.error(`[WhatsApp] sendGroupMessage to ${groupChatId} failed:`, detail);
+      throw err;
     }
-    const delay = Math.random() * 20000 + 5000; // 5–25 s
-    console.log(`[WA] Waiting ${Math.round(delay / 1000)}s...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
   }
-  return results;
-}
 
-function getFirstName(fullName) {
-  if (!fullName) return 'Гость';
-  return fullName.trim().split(' ')[0];
-}
-
-async function sendImage(phone, filePath, caption) {
-  const chatId  = toChatId(phone);
-  const data    = fs.readFileSync(filePath);
-  const base64  = data.toString('base64');
-  const ext     = path.extname(filePath).toLowerCase();
-  const mimetype = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-  const filename = path.basename(filePath);
-  try {
-    const res = await axios.post(
-      `${WAHA_URL}/api/sendImage`,
-      {
-        session: WAHA_SESSION,
-        chatId,
-        file: { mimetype, filename, data: base64 },
-        caption: caption || '',
-      },
-      { headers: WAHA_HEADERS, timeout: 30_000 },
-    );
-    return res.data;
-  } catch (err) {
-    const detail = err.response?.data || err.message;
-    console.error(`[WhatsApp] sendImage to ${chatId} failed:`, detail);
-    throw err;
+  /**
+   * Is this number registered in WhatsApp? (WAHA GET /api/contacts/check-exists → { numberExists, chatId })
+   * Throws if the check itself fails (session not WORKING, network).
+   */
+  async function checkNumberExists(phone) {
+    const res = await axios.get(`${WAHA_URL}/api/contacts/check-exists`, {
+      params: { phone: String(phone).replace(/\D/g, ''), session: WAHA_SESSION },
+      headers: WAHA_HEADERS,
+      timeout: 20_000,
+    });
+    return res.data.numberExists === true;
   }
+
+  /**
+   * Send several messages to one number in order, with the usual short pause between them.
+   * Stops at the first failure (a later message must not arrive without the earlier one).
+   */
+  async function sendSequence(phone, texts) {
+    for (let i = 0; i < texts.length; i++) {
+      await sendMessage(phone, texts[i]);
+      if (i < texts.length - 1) await new Promise(resolve => setTimeout(resolve, randomDelay()));
+    }
+  }
+
+  // ─── Broadcast ────────────────────────────────────────────────────────────────
+
+  /**
+   * Send a message to each recipient with a random delay (1500–4000 ms) between sends.
+   *
+   * @param {Array<{phone, firstName, ...}>} recipients
+   * @param {(recipient) => string} buildText — returns the message body
+   */
+  async function broadcast(recipients, buildText) {
+    const results = [];
+
+    for (const r of recipients) {
+      try {
+        const text = buildText(r);
+        await sendMessage(r.phone, text);
+        results.push({ phone: r.phone, status: 'sent' });
+      } catch (err) {
+        results.push({ phone: r.phone, status: 'error', error: err.message });
+      }
+      await new Promise(resolve => setTimeout(resolve, randomDelay()));
+    }
+
+    const ok   = results.filter(r => r.status === 'sent').length;
+    const fail = results.length - ok;
+    console.log(`[WhatsApp] Broadcast done: ${ok} sent, ${fail} failed`);
+    return results;
+  }
+
+  /**
+   * Send messages with a longer random delay (5–25 s) between sends.
+   * Returns { sent, failed, errors }.
+   */
+  async function sendWithDelay(recipients, messageFn) {
+    const results = { sent: 0, failed: 0, errors: [] };
+    for (const recipient of recipients) {
+      if (!recipient.phone) { results.failed++; continue; }
+      try {
+        const text = messageFn(recipient);
+        await sendMessage(recipient.phone, text);
+        results.sent++;
+        console.log(`[WA] Sent to ${recipient.phone}`);
+      } catch (e) {
+        results.failed++;
+        results.errors.push({ phone: recipient.phone, error: e.message });
+        console.error(`[WA] Failed for ${recipient.phone}:`, e.message);
+      }
+      const delay = Math.random() * 20000 + 5000; // 5–25 s
+      console.log(`[WA] Waiting ${Math.round(delay / 1000)}s...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    return results;
+  }
+
+  function getFirstName(fullName) {
+    if (!fullName) return 'Гость';
+    return fullName.trim().split(' ')[0];
+  }
+
+  async function sendImage(phone, filePath, caption) {
+    const chatId  = toChatId(phone);
+    const data    = fs.readFileSync(filePath);
+    const base64  = data.toString('base64');
+    const ext     = path.extname(filePath).toLowerCase();
+    const mimetype = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    const filename = path.basename(filePath);
+    try {
+      const res = await axios.post(
+        `${WAHA_URL}/api/sendImage`,
+        {
+          session: WAHA_SESSION,
+          chatId,
+          file: { mimetype, filename, data: base64 },
+          caption: caption || '',
+        },
+        { headers: WAHA_HEADERS, timeout: 30_000 },
+      );
+      return res.data;
+    } catch (err) {
+      const detail = err.response?.data || err.message;
+      console.error(`[WhatsApp] sendImage to ${chatId} failed:`, detail);
+      throw err;
+    }
+  }
+
+  async function getSessionStatus() {
+    const { data } = await axios.get(`${WAHA_URL}/api/sessions/${WAHA_SESSION}`, { headers: WAHA_HEADERS, timeout: 10000 });
+    return data.status;
+  }
+
+
+  return { getSessionStatus, checkNumberExists, sendSequence, sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId, session: WAHA_SESSION };
 }
 
-async function getSessionStatus() {
-  const { data } = await axios.get(`${WAHA_URL}/api/sessions/${WAHA_SESSION}`, { headers: WAHA_HEADERS, timeout: 10000 });
-  return data.status;
+const instances = new Map();
+function forSession(name) {
+  const n = name || DEFAULT_SESSION;
+  if (!instances.has(n)) instances.set(n, create(n));
+  return instances.get(n);
 }
 
-module.exports = { getSessionStatus, checkNumberExists, sendSequence, sendMessage, sendGroupMessage, sendImage, broadcast, sendWithDelay, getFirstName, toChatId };
+module.exports = { ...forSession(DEFAULT_SESSION), forSession, create };
