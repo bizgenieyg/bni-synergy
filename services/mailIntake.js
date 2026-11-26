@@ -275,6 +275,7 @@ async function processGuestMail(parsed, deps) {
     guestType: isSub ? 'sub' : 'guest',
     source: 'bni_email',
     needsReview,
+    invitedByMemberId: inviter ? inviter.id : null,
   });
   if (deps.afterCreate) {
     try {

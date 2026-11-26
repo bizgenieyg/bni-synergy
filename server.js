@@ -23,9 +23,37 @@ const { computeVisitCounts } = require('./services/visitCounts');
 const pdf      = require('./services/pdf');
 const authGuard = require('./services/authGuard');
 const wahaSession = require('./services/wahaSession');
+const groupsService = require('./services/groups');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
+
+// ─── Groups ───────────────────────────────────────────────────────────────────
+// Group data lives in `groups`; admin routes work on req.groupId (group 1 unless ?group_id= is given),
+// public routes find the group from the member's ref or ?group=<slug>. WhatsApp uses the group's WAHA session.
+
+const groups = groupsService.createGroups(db, { log: m => console.warn(m) });
+const GROUP1 = db.DEFAULT_GROUP;
+const meetingDateFor = gid => groups.meetingDateFor(gid);
+const waFor = gid => { const g = groups.getGroup(gid); return whatsapp.forSession(g && g.waha_session); };
+const votingKey = gid => (gid === GROUP1 ? 'voting_open' : `voting_open:${gid}`);
+
+// Settings as the message builders and the admin UI know them: global settings plus the group's
+// address / Waze / Zoom (which moved from `settings` to `groups`).
+function settingsFor(gid) {
+  const g = groups.getGroup(gid);
+  const all = db.getAllSettings();
+  if (!g) return all;
+  return { ...all, meeting_location: g.address, meeting_waze_url: g.waze_url, meeting_zoom_url: g.zoom_url,
+    payment_url: g.payment_url, payment_amount: g.payment_amount == null ? '' : String(g.payment_amount) };
+}
+
+// Payment block of a message: only when the group has a payment link.
+function paymentBlock(gid) {
+  const g = groups.getGroup(gid);
+  if (!g || !g.payment_url) return '';
+  return `💳 Оплата участия${g.payment_amount ? ` (${g.payment_amount}₪)` : ''}:\n${g.payment_url}\n\n`;
+}
 
 // NEXT_MEETING_DATE: DB value takes priority over .env
 // If DB has nothing yet, seed it from .env so future edits persist in DB.
@@ -48,13 +76,11 @@ if (NEXT_MEETING_DATE && NEXT_MEETING_DATE.split('/').length < 3) {
   db.setSetting('next_meeting_date', NEXT_MEETING_DATE);
 }
 
-if (db.getSetting('meeting_waze_url') === null) db.setSetting('meeting_waze_url', '');
 if (db.getSetting('unconfirmed_notify_phone') === null) db.setSetting('unconfirmed_notify_phone', '');
 if (db.getSetting('mail_intake_notify_phone') === null) db.setSetting('mail_intake_notify_phone', '972523695741');
 if (db.getSetting('mail_intake_auto_register') === null) db.setSetting('mail_intake_auto_register', '0');
 if (db.getSetting('mail_intake_mode') === null) db.setSetting('mail_intake_mode', 'test');
 
-const PAYBOX_LINK       = 'https://links.payboxapp.com/7SB6P3stE6b';
 
 // ─── Multer (photo uploads) ───────────────────────────────────────────────────
 
@@ -257,6 +283,20 @@ app.post('/api/admin/login', (req, res) => {
 // services/authGuard.js PUBLIC_ROUTES. Registered before all other /api routes.
 app.use('/api', auth.guard);
 
+// Which group a request works on: admin ?group_id=, anyone ?group=<slug>, otherwise group 1.
+app.use('/api', (req, res, next) => {
+  let gid = GROUP1;
+  if (req.query.group) {
+    const g = groups.getGroupBySlug(req.query.group);
+    if (g) gid = g.id;
+  } else if (req.query.group_id && auth.isAdminRequest(req)) {
+    const g = groups.getGroup(Number(req.query.group_id));
+    if (g) gid = g.id;
+  }
+  req.groupId = gid;
+  next();
+});
+
 // ─── HTML pages ───────────────────────────────────────────────────────────────
 
 app.get('/guest', (req, res) => {
@@ -266,8 +306,13 @@ app.get('/guest', (req, res) => {
     const m = db.db.prepare('SELECT name FROM members WHERE id = ?').get(Number(ref));
     if (m) invitedByName = m.name;
   }
+  let gid = GROUP1;
+  if (/^\d+$/.test(ref)) gid = groups.groupOfMember(Number(ref)) || GROUP1;
+  else if (req.query.group) gid = (groups.getGroupBySlug(req.query.group) || { id: GROUP1 }).id;
+  const pub = groups.publicGroup(groups.getGroup(gid)) || {};
   const html = fs.readFileSync(path.join(__dirname, 'public', 'guest.html'), 'utf8');
-  const injected = html.replace('<script>', `<script>window.__REF_NAME__=${JSON.stringify(invitedByName)};\n`);
+  const injected = html.replace('<script>', `<script>window.__REF_NAME__=${JSON.stringify(invitedByName)};\n` +
+    `window.__GROUP__=${JSON.stringify({ slug: pub.slug, waze_url: pub.waze_url, payment_url: pub.payment_url, payment_amount: pub.payment_amount }).replace(/</g, '\\u003c')};\n`);
   res.type('html').send(injected);
 });
 app.get('/admin',           (req, res) => {
@@ -288,14 +333,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─── Health / test ────────────────────────────────────────────────────────────
 
 app.get('/api/test', (req, res) => {
-  const s = db.getAllSettings();
+  const s = settingsFor(req.groupId);
   res.json({
     status:           'ok',
-    nextMeeting:      NEXT_MEETING_DATE,
-    totalGuests:      db.getTotalCount(),
+    nextMeeting:      meetingDateFor(req.groupId),
+    totalGuests:      db.getTotalCount(req.groupId),
     meeting_location: s.meeting_location || '',
     meeting_type:     s.meeting_type     || 'offline',
-    meeting_zoom_url: s.meeting_zoom_url || '',
   });
 });
 
@@ -303,10 +347,17 @@ app.get('/api/test', (req, res) => {
 
 app.post('/api/register', async (req, res) => {
   const { name, phone, specialty, type, meetingDate: bodyDate, email } = req.body;
+  // The inviter is stored by member ID; the group is the inviter's group (group 1 when unknown).
   let invitedBy = req.body.invitedBy || '';
-  if (/^\d+$/.test(invitedBy)) {
-    const m = db.db.prepare('SELECT name FROM members WHERE id = ?').get(Number(invitedBy));
-    if (m) invitedBy = m.name;
+  let invitedByMemberId = null;
+  let gid = req.groupId;
+  const rawRef = req.body.invitedByMemberId ?? (/^\d+$/.test(String(invitedBy)) ? invitedBy : null);
+  if (rawRef !== null && rawRef !== undefined && /^\d+$/.test(String(rawRef))) {
+    const m = db.getMemberById(Number(rawRef));
+    if (m) { invitedByMemberId = m.id; invitedBy = m.name; gid = m.group_id; }
+  } else if (invitedBy.trim()) {
+    const m = db.getAllMembers(gid).find(x => x.name.trim() === invitedBy.trim()); // exact match only
+    if (m) invitedByMemberId = m.id;
   }
 
   if (!name || !phone) {
@@ -322,10 +373,10 @@ app.post('/api/register', async (req, res) => {
     return res.status(400).json({ error: 'Пожалуйста, введите имя и фамилию' });
   }
 
-  const meetingDate = (bodyDate && /^\d{2}\/\d{2}\/\d{2}$/.test(bodyDate.trim()) ? bodyDate.trim() : null) || NEXT_MEETING_DATE;
+  const meetingDate = (bodyDate && /^\d{2}\/\d{2}\/\d{2}$/.test(bodyDate.trim()) ? bodyDate.trim() : null) || meetingDateFor(gid);
 
   // Deduplication: silently succeed if same name or phone already registered for this meeting
-  const duplicate = db.findDuplicateGuest(meetingDate, phone, name);
+  const duplicate = db.findDuplicateGuest(meetingDate, phone, name, gid);
   if (duplicate) return res.json({ success: true, duplicate: true, id: duplicate.id });
 
   const isSub       = type === 'sub';
@@ -337,6 +388,7 @@ app.post('/api/register', async (req, res) => {
     paid:   isSub ? 1 : 0,
     paidAt: isSub ? new Date().toISOString() : null,
     guestType: isSub ? 'sub' : 'guest',
+    groupId: gid, invitedByMemberId,
   });
 
   // 2. Google Sheets — non-blocking
@@ -346,11 +398,11 @@ app.post('/api/register', async (req, res) => {
     .catch(err => console.error('[Sheets] appendGuest failed:', err.message));
 
   // 3. WhatsApp — different message for substitutions
-  const settings  = db.getAllSettings();
+  const settings  = settingsFor(gid);
   const regLocation = settings.meeting_location || '';
 
   // Lookup presenter for this meeting date
-  const presenter = db.getPresentationByDate(meetingDate);
+  const presenter = db.getPresentationByDate(meetingDate, gid);
   const presenterLine = (presenter && presenter.member_name)
     ? `\n\n🎤 На встрече выступит:\n${presenter.member_name}${presenter.member_profession ? ' — ' + presenter.member_profession : ''}`
     : '';
@@ -372,7 +424,7 @@ app.post('/api/register', async (req, res) => {
       `${INVITE_BLOCK_1}\n\n${INVITE_BLOCK_2}\n\n` +
       `📅 ${meetingDate} в 7:30\n` +
       `📍 ${regLocation}${presenterLine}\n\n` +
-      `💳 Оплата участия (80₪):\n${PAYBOX_LINK}\n\n` +
+      paymentBlock(gid) +
       `🗺️ Навигатор:\n${settings.meeting_waze_url || ''}\n\n` +
       `До встречи! 🙌`;
   }
@@ -384,13 +436,13 @@ app.post('/api/register', async (req, res) => {
     return fs.existsSync(fp) ? fp : null;
   }
 
-  whatsapp.sendMessage(phone, waText)
+  waFor(gid).sendMessage(phone, waText)
     .then(async () => {
       db.markWaSent(id);
       const photoPath = presenterPhotoPath(presenter);
       if (photoPath) {
         const caption = `${presenter.member_name}${presenter.member_profession ? '\n' + presenter.member_profession : ''}`;
-        await whatsapp.sendImage(phone, photoPath, caption)
+        await waFor(gid).sendImage(phone, photoPath, caption)
           .catch(err => console.error('[WhatsApp] sendImage (presenter) failed:', err.message));
       }
     })
@@ -400,7 +452,7 @@ app.post('/api/register', async (req, res) => {
   if (settings.confirmation_round1_for === meetingDate || settings.confirmation_round2_for === meetingDate) {
     const confirmMsg = buildConfirmationMessage({ id, name }, settings);
     setTimeout(() => {
-      whatsapp.sendMessage(phone, confirmMsg)
+      waFor(gid).sendMessage(phone, confirmMsg)
         .then(() => db.markWaSent(id))
         .catch(err => console.error('[WhatsApp] late-reg confirm failed:', err.message));
     }, 30000); // 30s delay so registration WA goes first
@@ -468,7 +520,7 @@ function onIntakeGuestCreated(g) {
     .catch(err => console.error('[Sheets] appendGuest (mail intake) failed:', err.message));
 
   if (!g.phone || !g.waEnabled || isMeetingInPast(g.meetingDate)) return;
-  const msg = buildIntakeInviteMessage(g, db.getAllSettings(), db.getPresentationByDate(g.meetingDate));
+  const msg = buildIntakeInviteMessage(g, settingsFor(GROUP1), db.getPresentationByDate(g.meetingDate, GROUP1));
   whatsapp.sendMessage(g.phone, msg)
     .then(() => {
       db.markWaSent(g.id);
@@ -500,15 +552,15 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
   try {
     const out = await mailIntake.handleIncomingMail(req.body, {
       db,
-      nextMeetingDate: () => NEXT_MEETING_DATE,
+      nextMeetingDate: () => meetingDateFor(GROUP1),
       afterCreate: onIntakeGuestCreated,
       autoRegister: () => db.getSetting('mail_intake_auto_register') === '1',
       mode: () => db.getSetting('mail_intake_mode'),
       notifyPhone: () => db.getSetting('mail_intake_notify_phone'),
-      checkWhatsApp: whatsapp.checkNumberExists,
-      sendSequence: whatsapp.sendSequence,
+      checkWhatsApp: (...a) => waFor(GROUP1).checkNumberExists(...a),
+      sendSequence: (...a) => waFor(GROUP1).sendSequence(...a),
       isPast: isMeetingInPast,
-      buildInvite: g => buildMailInviteMessage(g, db.getAllSettings()),
+      buildInvite: g => buildMailInviteMessage(g, settingsFor(GROUP1)),
       buildMemberRequest: buildMailMemberRequest,
     });
     res.json(out);
@@ -523,7 +575,7 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
 app.get('/api/guests', (req, res) => {
   const { date } = req.query;
   // Visit counters are computed over the whole guests table, then filtered for the response
-  const all = db.getAllGuests();
+  const all = db.getAllGuests(req.groupId);
   const counts = computeVisitCounts(all);
   const guests = date ? all.filter(g => g.meetingDate === date) : all;
   res.json(guests.map(g => ({
@@ -534,8 +586,9 @@ app.get('/api/guests', (req, res) => {
 });
 
 app.get('/api/meetings', (req, res) => {
-  const dates = db.getMeetingDates().filter(d => d !== NEXT_MEETING_DATE);
-  const all   = NEXT_MEETING_DATE ? [NEXT_MEETING_DATE, ...dates] : dates;
+  const next  = meetingDateFor(req.groupId);
+  const dates = db.getMeetingDates(req.groupId).filter(d => d !== next);
+  const all   = next ? [next, ...dates] : dates;
   res.json(all);
 });
 
@@ -576,7 +629,7 @@ app.patch('/api/guests/:id', (req, res) => {
 app.get('/api/guests/:id/public', (req, res) => {
   const guest = db.getGuestById(req.params.id);
   if (!guest) return res.status(404).json({ error: 'Гость не найден' });
-  const settings = db.getAllSettings();
+  const settings = settingsFor(guest.group_id);
   res.json({
     name:        guest.name || `${guest.firstName || ''} ${guest.lastName || ''}`.trim(),
     meetingDate: guest.meetingDate,
@@ -596,7 +649,7 @@ app.post('/api/guests/:id/confirm', (req, res) => {
   } else {
     db.markConfirmed(guest.id);
     if (guest.wa_enabled && guest.phone && db.claimGuideSent(guest.id)) {
-      whatsapp.sendMessage(guest.phone, buildGuestGuideMessage(guest))
+      waFor(guest.group_id).sendMessage(guest.phone, buildGuestGuideMessage(guest))
         .catch(err => {
           console.error('[GuestGuide] send failed:', err.message);
           db.releaseGuideSent(guest.id);
@@ -611,8 +664,8 @@ app.post('/api/guests/:id/confirm', (req, res) => {
 app.get('/api/members', (req, res) => {
   const { active } = req.query;
   const members = active === 'true'
-    ? db.getActiveMembers()
-    : db.getAllMembers();
+    ? db.getActiveMembers(req.groupId)
+    : db.getAllMembers(req.groupId);
   res.json(auth.isAdminRequest(req) ? members : members.map(authGuard.publicMemberList));
 });
 
@@ -620,7 +673,7 @@ app.post('/api/members', (req, res) => {
   const { name, profession, name_he, phone, birthday } = req.body;
   if (!name) return res.status(400).json({ error: 'name обязателен' });
   try {
-    const id = db.insertMember({ name, profession, name_he, phone, birthday });
+    const id = db.insertMember({ name, profession, name_he, phone, birthday, groupId: req.groupId });
     res.json({ success: true, id });
   } catch (err) {
     if (err.message.includes('UNIQUE')) {
@@ -651,7 +704,7 @@ app.delete('/api/members/:id', (req, res) => {
 });
 
 app.get('/api/members/count', (req, res) => {
-  res.json({ count: db.getActiveMembers().length });
+  res.json({ count: db.getActiveMembers(req.groupId).length });
 });
 
 app.get('/api/members/:id', (req, res) => {
@@ -708,14 +761,15 @@ app.put('/api/members/:id/socials', (req, res) => {
 });
 
 app.get('/api/guests/active-count', (req, res) => {
-  const count = NEXT_MEETING_DATE ? db.getGuestsByDate(NEXT_MEETING_DATE).length : 0;
-  res.json({ count, date: NEXT_MEETING_DATE });
+  const next  = meetingDateFor(req.groupId);
+  const count = next ? db.getGuestsByDate(next, req.groupId).length : 0;
+  res.json({ count, date: next });
 });
 
 app.get('/api/guests/stats', (req, res) => {
-  const dates = db.getMeetingDates().slice(0, 8).reverse();
+  const dates = db.getMeetingDates(req.groupId).slice(0, 8).reverse();
   const stats  = dates.map(d => {
-    const guests = db.getGuestsByDate(d);
+    const guests = db.getGuestsByDate(d, req.groupId);
     return { date: d, total: guests.length, paid: guests.filter(g => g.paid).length };
   });
   res.json(stats);
@@ -724,7 +778,7 @@ app.get('/api/guests/stats', (req, res) => {
 // ─── Public catalog ───────────────────────────────────────────────────────────
 
 app.get('/api/catalog', (req, res) => {
-  const members = db.getActiveMembers();
+  const members = db.getActiveMembers(req.groupId);
   const result  = members.map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
   res.json(auth.isAdminRequest(req) ? result : result.map(authGuard.publicCatalogMember));
 });
@@ -732,53 +786,87 @@ app.get('/api/catalog', (req, res) => {
 // ─── PDF endpoints ────────────────────────────────────────────────────────────
 
 app.get('/api/pdf/list', (req, res) => {
-  const date   = req.query.date || NEXT_MEETING_DATE;
-  const guests = db.getGuestsByDate(date);
+  const date   = req.query.date || meetingDateFor(req.groupId);
+  const guests = db.getGuestsByDate(date, req.groupId);
   pdf.generateGuestList(res, guests, date);
 });
 
 app.get('/api/pdf/badges', (req, res) => {
-  const date   = req.query.date || NEXT_MEETING_DATE;
-  const guests = db.getGuestsByDate(date);
+  const date   = req.query.date || meetingDateFor(req.groupId);
+  const guests = db.getGuestsByDate(date, req.groupId);
   pdf.generateBadges(res, guests, date);
 });
 
 app.get('/api/pdf/members', (req, res) => {
-  const members = db.getActiveMembers().map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
+  const members = db.getActiveMembers(req.groupId).map(m => ({ ...m, socials: db.getMemberSocials(m.id) }));
   pdf.generateMembersCatalog(res, members, UPLOADS_DIR);
 });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
+// While the group's meeting weekday is not set, the date is the old manual setting (group 1 only).
 app.get('/api/settings/next-meeting', (req, res) => {
-  res.json({ date: NEXT_MEETING_DATE });
+  res.json({ date: meetingDateFor(req.groupId), auto: groups.scheduleIsSet(req.groupId) });
 });
 
 app.patch('/api/settings/next-meeting', (req, res) => {
+  if (groups.scheduleIsSet(req.groupId)) return res.status(409).json({ error: 'Дата рассчитывается по расписанию группы' });
+  if (req.groupId !== GROUP1) return res.status(409).json({ error: 'Задайте день встречи в настройках группы' });
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date обязателен' });
   const trimmed = String(date).trim();
   db.setSetting('next_meeting_date', trimmed);
-  NEXT_MEETING_DATE = trimmed;
-  res.json({ success: true, date: NEXT_MEETING_DATE });
+  res.json({ success: true, date: trimmed });
 });
 
+// Public: only the whitelisted keys, taken from the requested group (?group=slug, default group 1).
 app.get('/api/settings', (req, res) => {
-  res.json(authGuard.filterSettings(db.getAllSettings(), auth.isAdminRequest(req)));
+  res.json(authGuard.filterSettings(settingsFor(req.groupId), auth.isAdminRequest(req)));
 });
 
+// Address / Waze / Zoom moved to the group: writes of the old keys go there.
+const GROUP_SETTING_KEYS = { meeting_location: 'address', meeting_waze_url: 'waze_url', meeting_zoom_url: 'zoom_url' };
 app.put('/api/settings', adminAuth, (req, res) => {
   const { key, value } = req.body;
   if (!key) return res.status(400).json({ error: 'key обязателен' });
+  if (GROUP_SETTING_KEYS[key]) {
+    const r = groups.updateGroup(req.groupId, { [GROUP_SETTING_KEYS[key]]: value ?? '' });
+    if (r.error) return res.status(400).json({ error: r.error });
+    return res.json({ success: true });
+  }
   db.setSetting(key, value ?? '');
-  if (key === 'next_meeting_date') NEXT_MEETING_DATE = String(value ?? '');
   res.json({ success: true });
+});
+
+// ─── Group settings & positions (admin) ───────────────────────────────────────
+
+app.get('/api/group', (req, res) => {
+  const g = groups.getGroup(req.groupId);
+  if (!g) return res.status(404).json({ error: 'group not found' });
+  const { waha_session, ...rest } = g;
+  res.json({ ...rest, waha_session, next_meeting: meetingDateFor(req.groupId), schedule_set: groups.scheduleIsSet(req.groupId) });
+});
+
+app.put('/api/group', (req, res) => {
+  const r = groups.updateGroup(req.groupId, req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ success: true, group: r.group, next_meeting: meetingDateFor(req.groupId) });
+});
+
+app.get('/api/positions', (req, res) => {
+  res.json({ positions: groups.listPositions(req.groupId), assignments: groups.memberPositionsMap(req.groupId) });
+});
+
+app.put('/api/members/:id/positions', (req, res) => {
+  const r = groups.setMemberPositions(Number(req.params.id), req.body && req.body.positions);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ success: true, positions: r.positions });
 });
 
 // ─── Birthdays ────────────────────────────────────────────────────────────────
 
 app.get('/api/birthdays/upcoming', (req, res) => {
-  const members = db.getActiveMembers();
+  const members = db.getActiveMembers(req.groupId);
   const result  = [];
   const today   = new Date(); today.setHours(0, 0, 0, 0);
 
@@ -839,7 +927,7 @@ app.post('/api/members/:id/wish-birthday', async (req, res) => {
     `Желаем процветания бизнесу и здоровья! 🥂`;
 
   try {
-    await whatsapp.sendMessage(member.phone, msg);
+    await waFor(member.group_id).sendMessage(member.phone, msg);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -854,18 +942,22 @@ app.post('/api/voting', (req, res) => {
     return res.status(400).json({ error: 'Выберите участника' });
   }
 
-  if (db.getSetting('voting_open') !== '1') {
+  const gid = req.groupId;
+  if (db.getSetting(votingKey(gid)) !== '1') {
     return res.status(403).json({ error: 'voting_closed' });
   }
+  // the candidate must be a member of this group
+  const cand = db.getMemberById(Number(candidateId));
+  if (!cand || cand.group_id !== gid) return res.status(400).json({ error: 'Выберите участника' });
 
-  const meetingDate = NEXT_MEETING_DATE;
-  db.insertAnonymousVote({ meetingDate, candidateId: Number(candidateId), candidateName });
+  const meetingDate = meetingDateFor(gid);
+  db.insertAnonymousVote({ meetingDate, candidateId: Number(candidateId), candidateName, groupId: gid });
 
   // Auto-close when all expected voters have voted
-  const voteCount = db.getVoteCount(meetingDate);
-  const expected  = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled !== 0).length;
+  const voteCount = db.getVoteCount(meetingDate, gid);
+  const expected  = db.getActiveMembers(gid).length + db.getGuestsByDate(meetingDate, gid).filter(g => g.wa_enabled !== 0).length;
   if (expected > 0 && voteCount >= expected) {
-    db.setSetting('voting_open', '0');
+    db.setSetting(votingKey(gid), '0');
   }
 
   res.json({ success: true });
@@ -875,55 +967,57 @@ app.get('/api/voting/results', (req, res) => {
   if (!req.query.date) {
     const parseDMY = d => { const p = d.split('/'); return new Date(2000 + parseInt(p[2] || 0), parseInt(p[1]) - 1, parseInt(p[0])); };
     const allDates = db.db.prepare(
-      'SELECT DISTINCT meetingDate FROM votes'
-    ).all().map(r => r.meetingDate)
+      'SELECT DISTINCT meetingDate FROM votes WHERE group_id = ?'
+    ).all(req.groupId).map(r => r.meetingDate)
       .sort((a, b) => parseDMY(b) - parseDMY(a));
-    return res.json(allDates.map(d => ({ date: d, results: db.getVoteResults(d) })));
+    return res.json(allDates.map(d => ({ date: d, results: db.getVoteResults(d, req.groupId) })));
   }
-  res.json(db.getVoteResults(req.query.date));
+  res.json(db.getVoteResults(req.query.date, req.groupId));
 });
 
 app.get('/api/voting/status', (req, res) => {
-  const meetingDate = NEXT_MEETING_DATE;
-  const open        = db.getSetting('voting_open') === '1';
-  const voteCount   = db.getVoteCount(meetingDate);
-  const expected    = db.getActiveMembers().length + db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled !== 0).length;
+  const gid         = req.groupId;
+  const meetingDate = meetingDateFor(gid);
+  const open        = db.getSetting(votingKey(gid)) === '1';
+  const voteCount   = db.getVoteCount(meetingDate, gid);
+  const expected    = db.getActiveMembers(gid).length + db.getGuestsByDate(meetingDate, gid).filter(g => g.wa_enabled !== 0).length;
   res.json({ open, voteCount, expected, meetingDate });
 });
 
 app.post('/api/voting/open', (req, res) => {
-  const meetingDate = NEXT_MEETING_DATE;
-  db.setSetting('voting_open', '1');
-  db.deleteVotesByDate(meetingDate);
+  const gid = req.groupId;
+  const meetingDate = meetingDateFor(gid);
+  db.setSetting(votingKey(gid), '1');
+  db.deleteVotesByDate(meetingDate, gid);
   res.json({ success: true });
 
   const votingMsg = `🗳️ Голосование открыто!\n\nВыберите лучшую презентацию встречи BNI SYNERGY:\nhttps://bnisynergy.biz/voting`;
 
-  const guestsForVoting = db.getGuestsByDate(meetingDate).filter(g => g.wa_enabled === 1 && g.waSent === 1);
+  const guestsForVoting = db.getGuestsByDate(meetingDate, gid).filter(g => g.wa_enabled === 1 && g.waSent === 1);
   if (guestsForVoting.length) {
-    whatsapp.sendWithDelay(guestsForVoting, () => votingMsg)
+    waFor(gid).sendWithDelay(guestsForVoting, () => votingMsg)
       .catch(err => console.error('[Voting/open] individual notify failed:', err.message));
   }
 
   const groupId = process.env.WAHA_GROUP_ID || '';
   if (groupId) {
-    whatsapp.sendGroupMessage(groupId,
+    waFor(gid).sendGroupMessage(groupId,
       `🗳️ *Голосование открыто!*\n\nВыберите лучшую презентацию встречи BNI SYNERGY:\nhttps://bnisynergy.biz/voting`
     ).catch(err => console.error('[Voting/open] group notify failed:', err.message));
   }
 });
 
 app.get('/api/voting/winners', (req, res) => {
-  res.json(db.getLastWinners(3));
+  res.json(db.getLastWinners(3, req.groupId));
 });
 
 app.post('/api/voting/close', (req, res) => {
-  db.setSetting('voting_open', '0');
+  db.setSetting(votingKey(req.groupId), '0');
   res.json({ success: true });
 });
 
 app.post('/api/voting/reset', (req, res) => {
-  db.deleteVotesByDate(NEXT_MEETING_DATE);
+  db.deleteVotesByDate(meetingDateFor(req.groupId), req.groupId);
   res.json({ success: true });
 });
 
@@ -935,13 +1029,13 @@ app.post('/api/send-voting', async (req, res) => {
     return res.status(400).json({ error: 'date и votingLink обязательны' });
   }
 
-  const guests  = db.getGuestsByDate(date).filter(g => g.wa_enabled === 1);
+  const guests  = db.getGuestsByDate(date, req.groupId).filter(g => g.wa_enabled === 1);
   const groupId = process.env.WAHA_GROUP_ID || '';
 
   res.json({ success: true, total: guests.length, groupSent: !!groupId, message: 'Рассылка запущена' });
 
   // Individual messages to guests (random variant per message)
-  whatsapp.sendWithDelay(guests, g =>
+  waFor(req.groupId).sendWithDelay(guests, g =>
     pickVariant(VOTING_VARIANTS)(whatsapp.getFirstName(g.name), votingLink)
   ).catch(err => console.error('[Broadcast] send-voting guests error:', err.message));
 });
@@ -952,10 +1046,10 @@ app.post('/api/send-contacts', async (req, res) => {
     return res.status(400).json({ error: 'date и contactsText обязательны' });
   }
 
-  const guests = db.getGuestsByDate(date).filter(g => g.wa_enabled !== 0);
+  const guests = db.getGuestsByDate(date, req.groupId).filter(g => g.wa_enabled !== 0);
   res.json({ success: true, total: guests.length, message: 'Рассылка запущена' });
 
-  whatsapp.broadcast(guests, g =>
+  waFor(req.groupId).broadcast(guests, g =>
     pickVariant(CONTACTS_VARIANTS)((g.name || '').split(' ')[0], contactsText)
   ).catch(err => console.error('[Broadcast] send-contacts error:', err.message));
 });
@@ -964,7 +1058,7 @@ app.post('/api/whatsapp/send-catalog', async (req, res) => {
   const { meeting_date } = req.body;
   if (!meeting_date) return res.status(400).json({ error: 'meeting_date обязателен' });
 
-  const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled !== 0);
+  const guests = db.getGuestsByDate(meeting_date, req.groupId).filter(g => g.wa_enabled !== 0);
   res.json({ sent: guests.length });
 
   catalog.sendManual(meeting_date)
@@ -975,13 +1069,13 @@ app.post('/api/whatsapp/send-confirmations', async (req, res) => {
   const { meeting_date } = req.body;
   if (!meeting_date) return res.status(400).json({ error: 'meeting_date обязателен' });
 
-  const guests = db.getGuestsByDate(meeting_date).filter(g => g.wa_enabled === 1 && !g.confirmed);
-  const settings = db.getAllSettings();
+  const guests = db.getGuestsByDate(meeting_date, req.groupId).filter(g => g.wa_enabled === 1 && !g.confirmed);
+  const settings = settingsFor(req.groupId);
   db.setSetting('confirmation_sent_for', meeting_date);
   db.setSetting('confirmation_round1_for', meeting_date); // manual send enables the 30-second confirmation for late registrations
   res.json({ sent: guests.length });
 
-  whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings))
+  waFor(req.groupId).sendWithDelay(guests, g => buildConfirmationMessage(g, settings))
     .then(r => {
       console.log(`[Confirmations] Done: ${r.sent} sent, ${r.failed} failed`);
     })
@@ -1086,13 +1180,13 @@ function startWahaWatchdog() {
 // ─── Presentations ────────────────────────────────────────────────────────────
 
 app.get('/api/presentations', (req, res) => {
-  res.json(db.getPresentations(null));
+  res.json(db.getPresentations(null, req.groupId));
 });
 
 // GET by date: path param uses dashes (DD-MM-YY) to avoid URL slash ambiguity
 app.get('/api/presentations/:date', (req, res) => {
   const date = req.params.date.replace(/-/g, '/');
-  res.json(db.getPresentationByDate(date));
+  res.json(db.getPresentationByDate(date, req.groupId));
 });
 
 app.post('/api/presentations', (req, res) => {
@@ -1100,7 +1194,7 @@ app.post('/api/presentations', (req, res) => {
   if (!meeting_date || !member_name || !change_description) {
     return res.status(400).json({ error: 'Заполните обязательные поля' });
   }
-  const id = db.insertPresentation({ meeting_date, member_name, change_description, notes });
+  const id = db.insertPresentation({ meeting_date, member_name, change_description, notes, groupId: req.groupId });
   res.json({ success: true, id });
 });
 
@@ -1115,7 +1209,7 @@ app.put('/api/presentations/:dateOrId', (req, res) => {
   // Calendar: upsert by date (DD-MM-YY in URL → DD/MM/YY in DB)
   const date = param.replace(/-/g, '/');
   const { member_id, member_name, notes } = req.body;
-  const item = db.upsertPresentationByDate(date, { member_id, member_name, notes });
+  const item = db.upsertPresentationByDate(date, { member_id, member_name, notes }, req.groupId);
   res.json({ success: true, item });
 });
 
@@ -1138,9 +1232,9 @@ function yearLabel(range) {
   return `${range.start.slice(0, 4)}-${range.end.slice(2, 4)}`;
 }
 
-function yearBucket(offset) {
+function yearBucket(offset, gid) {
   const range = db.bniYearRange(offset);
-  const totals = db.getGroupValueTotalsByYear(range.start, range.end) || {};
+  const totals = db.getGroupValueTotalsByYear(range.start, range.end, gid) || {};
   return {
     label: yearLabel(range),
     start: range.start,
@@ -1156,22 +1250,22 @@ app.get('/api/group-value/totals', (req, res) => {
   const period = req.query.period || 'all';
   const periodDays = { week: 7, month: 30, quarter: 90 };
   const days = periodDays[period];
-  const t = days ? db.getGroupValueTotalsByPeriod(days) : db.getGroupValueTotals();
+  const t = days ? db.getGroupValueTotalsByPeriod(days, req.groupId) : db.getGroupValueTotals(req.groupId);
   res.json({
     ...(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 }),
-    current_year: yearBucket(0),
-    prev_year: yearBucket(1),
-    prev_prev_year: yearBucket(2),
+    current_year: yearBucket(0, req.groupId),
+    prev_year: yearBucket(1, req.groupId),
+    prev_prev_year: yearBucket(2, req.groupId),
   });
 });
 
 app.get('/api/group-value/summary', (req, res) => {
-  res.json(db.getGroupValueSummary());
+  res.json(db.getGroupValueSummary(req.groupId));
 });
 
 app.get('/api/group-value', (req, res) => {
   const { date } = req.query;
-  res.json(db.getGroupValue(date || null));
+  res.json(db.getGroupValue(date || null, req.groupId));
 });
 
 app.post('/api/group-value', (req, res) => {
@@ -1187,6 +1281,7 @@ app.post('/api/group-value', (req, res) => {
     referrals:     Number(referrals)     || 0,
     closed_deals:  Number(closed_deals)  || 0,
     deal_amount:   Number(deal_amount)   || 0,
+    groupId:       req.groupId,
   });
   res.json({ success: true, id });
 });
@@ -1209,12 +1304,12 @@ app.get('/api/meeting-stats/totals', adminAuth, (req, res) => {
   const period = req.query.period || 'all';
   const periodDays = { week: 7, month: 30, quarter: 90 };
   const days = periodDays[period];
-  const t = db.getMeetingStatsTotals(days);
+  const t = db.getMeetingStatsTotals(days, req.groupId);
   res.json(t || { total_1on1: 0, total_referrals: 0, total_deals: 0, total_amount: 0 });
 });
 
 app.get('/api/meeting-stats', adminAuth, (req, res) => {
-  res.json(db.getAllMeetingStats());
+  res.json(db.getAllMeetingStats(req.groupId));
 });
 
 app.post('/api/meeting-stats', adminAuth, (req, res) => {
@@ -1225,7 +1320,7 @@ app.post('/api/meeting-stats', adminAuth, (req, res) => {
     referrals:     Number(referrals)     || 0,
     closed_deals:  Number(closed_deals)  || 0,
     deal_amount:   Number(deal_amount)   || 0,
-  });
+  }, req.groupId);
   res.json({ ok: true, updated });
 });
 
@@ -1257,7 +1352,7 @@ function checkBirthdays() {
       `Вся группа BNI SYNERGY поздравляет вас с праздником! 🎉\n` +
       `Желаем процветания бизнесу и здоровья! 🥂`;
 
-    whatsapp.sendMessage(member.phone, msg)
+    waFor(member.group_id).sendMessage(member.phone, msg)
       .then(() => console.log(`[Birthday] Sent to ${member.name}`))
       .catch(err => console.error(`[Birthday] Failed for ${member.name}:`, err.message));
   }
@@ -1277,11 +1372,13 @@ checkBirthdays();
 // ─── Cron: confirmation waves — Thu 10:00 (list 11:00) and Sun 18:00 (list 19:00), Asia/Jerusalem ─
 
 const catalog = require('./services/catalogBroadcast').createCatalog({
-  db, whatsapp, getTodayStr, getSessionStatus: whatsapp.getSessionStatus,
+  db, whatsapp: waFor(GROUP1), getTodayStr, getSessionStatus: () => waFor(GROUP1).getSessionStatus(),
 });
 const waves = require('./services/confirmationWaves').createWaves({
-  db, whatsapp, buildConfirmationMessage, getTodayStr, formatMeetingDate,
-  getNextMeeting: () => db.getSetting('next_meeting_date') || NEXT_MEETING_DATE,
+  db, whatsapp: waFor(GROUP1), buildConfirmationMessage, getTodayStr, formatMeetingDate,
+  getNextMeeting: () => meetingDateFor(GROUP1),
+  groupId: GROUP1,
+  getNotifyPhone: () => groups.unconfirmedNotifyPhone(GROUP1), // head of the notifying position; old setting as fallback
 });
 const { runConfirmationWave, sendUnconfirmedList } = waves;
 
@@ -1307,5 +1404,5 @@ app.listen(PORT, () => {
   console.log(`   Voting       : http://localhost:${PORT}/voting`);
   console.log(`   Admin panel  : http://localhost:${PORT}/admin`);
   console.log(`   Test API     : http://localhost:${PORT}/api/test`);
-  console.log(`   Next meeting : ${NEXT_MEETING_DATE || '(not set)'}\n`);
+  console.log(`   Next meeting : ${meetingDateFor(GROUP1) || '(not set)'}\n`);
 });

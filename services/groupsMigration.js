@@ -35,7 +35,8 @@ function backupBeforeMigration(db, backupsDir, log = console.log) {
   const rows = ['guests', 'members'].reduce((n, t) => n + (hasTable(db, t) ? db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c : 0), 0);
   if (rows === 0) return null;
   fs.mkdirSync(backupsDir, { recursive: true });
-  const file = path.join(backupsDir, `guests-pre-groups-${stamp()}.db`);
+  let file = path.join(backupsDir, `guests-pre-groups-${stamp()}.db`);
+  for (let i = 2; fs.existsSync(file); i++) file = path.join(backupsDir, `guests-pre-groups-${stamp()}-${i}.db`);
   db.prepare('VACUUM INTO ?').run(file);
   log(`[Migration 17] backup written: ${file}`);
   return file;
@@ -151,7 +152,7 @@ function runMigration(db, opts = {}) {
   const result = { migrated: false, backup: null, unmatchedInviters: [] };
   if (!needsMigration(db)) return result;
 
-  result.backup = backupBeforeMigration(db, opts.backupsDir || path.join(process.cwd(), 'backups'), log);
+  if (opts.backup !== false) result.backup = backupBeforeMigration(db, opts.backupsDir || path.join(process.cwd(), 'backups'), log);
 
   db.pragma('foreign_keys = OFF');
   try {

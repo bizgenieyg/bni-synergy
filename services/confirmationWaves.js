@@ -4,7 +4,7 @@
 // Wave 1: Thursday 10:00, list to the manager at 11:00. Wave 2: Sunday 18:00, list at 19:00.
 // Each wave keeps its own state so "already sent today" never blocks the other one.
 
-function createWaves({ db, whatsapp, buildConfirmationMessage, getTodayStr, formatMeetingDate, getNextMeeting }) {
+function createWaves({ db, whatsapp, buildConfirmationMessage, getTodayStr, formatMeetingDate, getNextMeeting, groupId = 1, getNotifyPhone = null }) {
   const CONFIRM_WAVES = {
     1: { label: 'Волна 1 (чт 10:00)', forKey: 'confirmation_round1_for', dateKey: 'confirmation_round1_date', greeting: 'Добрый день' },
     2: { label: 'Волна 2 (вс 18:00)', forKey: 'confirmation_round2_for', dateKey: 'confirmation_round2_date', greeting: 'Добрый вечер' },
@@ -26,8 +26,8 @@ function createWaves({ db, whatsapp, buildConfirmationMessage, getTodayStr, form
     db.setSetting('confirmation_sent_for', nextMeeting); // shown in the admin UI
 
     const guests = db.db.prepare(
-      'SELECT * FROM guests WHERE meetingDate=? AND wa_enabled=1 AND confirmed=0'
-    ).all(nextMeeting);
+      'SELECT * FROM guests WHERE meetingDate=? AND wa_enabled=1 AND confirmed=0 AND group_id=?'
+    ).all(nextMeeting, groupId);
     console.log(`[Cron] ${w.label}: найдено ${guests.length} неподтверждённых гостей на ${nextMeeting}`);
 
     const results = await whatsapp.sendWithDelay(guests, g => buildConfirmationMessage(g, settings));
@@ -41,7 +41,7 @@ function createWaves({ db, whatsapp, buildConfirmationMessage, getTodayStr, form
       console.log(`[Cron] Список после волны ${round}: волна сегодня не проходила, пропускаем`);
       return;
     }
-    const phone = db.getSetting('unconfirmed_notify_phone');
+    const phone = getNotifyPhone ? getNotifyPhone() : db.getSetting('unconfirmed_notify_phone');
     if (!phone) {
       console.log('[Cron] unconfirmed_notify_phone не настроен, пропускаем');
       return;
@@ -50,8 +50,8 @@ function createWaves({ db, whatsapp, buildConfirmationMessage, getTodayStr, form
     if (!nextMeeting) return;
 
     const unconfirmed = db.db.prepare(
-      'SELECT name, phone FROM guests WHERE meetingDate=? AND confirmed=0 AND wa_enabled=1 ORDER BY name ASC'
-    ).all(nextMeeting);
+      'SELECT name, phone FROM guests WHERE meetingDate=? AND confirmed=0 AND wa_enabled=1 AND group_id=? ORDER BY name ASC'
+    ).all(nextMeeting, groupId);
     if (!unconfirmed.length) {
       console.log(`[Cron] Список после волны ${round}: все гости подтвердили участие, не отправляем`);
       return;

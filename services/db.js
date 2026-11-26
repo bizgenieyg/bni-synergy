@@ -12,6 +12,8 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'guest
 const dir = path.dirname(DB_PATH);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
+// A brand new file has nothing to back up before the first migration.
+const dbFileExisted = fs.existsSync(DB_PATH) && fs.statSync(DB_PATH).size > 0;
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -1003,6 +1005,7 @@ function getLastWinners(limit = 3, groupId = DEFAULT_GROUP) {
 // Runs after all legacy schema code; idempotent; backup first; one transaction.
 const migrationResult = groupsMigration.runMigration(db, {
   backupsDir: process.env.BACKUP_DIR || path.join(dir, '..', 'backups'),
+  backup: dbFileExisted,
 });
 groupsMigration.seedPositionsFromFile(db, path.join(__dirname, '..', 'scripts', 'positions_he.json'));
 

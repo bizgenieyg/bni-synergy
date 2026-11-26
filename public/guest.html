@@ -328,10 +328,10 @@
       </div>
       <div class="action-buttons">
         <!-- Hidden for substitutions -->
-        <a href="https://links.payboxapp.com/7SB6P3stE6b"
+        <a href="#" style="display:none"
            target="_blank" rel="noopener"
            class="btn-action btn-pay" id="payBtn">
-          💳 Оплатить 80₪
+          💳 Оплатить
         </a>
         <a href="#" id="navBtn"
            target="_blank" rel="noopener"
@@ -343,7 +343,17 @@
   </div>
 
   <script>
-    fetch('/api/settings')
+    // Group data (payment link, amount, navigator) is injected by the server for the guest's group.
+    const GROUP = window.__GROUP__ || {};
+    const groupQuery = GROUP.slug ? '?group=' + encodeURIComponent(GROUP.slug) : '';
+    if (GROUP.payment_url && /^https?:\/\//i.test(GROUP.payment_url)) {
+      const pay = document.getElementById('payBtn');
+      pay.href = GROUP.payment_url;
+      pay.textContent = '💳 Оплатить' + (GROUP.payment_amount ? ' ' + GROUP.payment_amount + '₪' : '');
+      pay.style.display = '';
+    }
+    if (GROUP.waze_url) document.getElementById('navBtn').href = GROUP.waze_url;
+    fetch('/api/settings' + groupQuery)
       .then(r => r.json())
       .then(cfg => { if (cfg.meeting_waze_url) document.getElementById('navBtn').href = cfg.meeting_waze_url; })
       .catch(() => {});
@@ -389,7 +399,7 @@
 
     // ── Meeting info ──────────────────────────────────────────────────────────
     // Fetch from server to get location and next meeting date
-    fetch('/api/test')
+    fetch('/api/test' + groupQuery)
       .then(r => r.json())
       .then(data => {
         const dateToShow = dateParam || data.nextMeeting;
@@ -516,6 +526,7 @@
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
             name, phone, email, specialty, invitedBy,
+            invitedByMemberId: (refParam && /^\d+$/.test(refParam)) ? Number(refParam) : null,
             type: typeParam || 'guest',
             meetingDate: dateParam || '',
           }),
@@ -537,7 +548,7 @@
         document.getElementById('successView').style.display = 'block';
 
         // Zoom hint: show if meeting type is zoom
-        fetch('/api/settings')
+        fetch('/api/settings' + groupQuery)
           .then(r => r.json())
           .then(cfg => {
             if (cfg.meeting_type === 'zoom') {
