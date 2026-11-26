@@ -13,6 +13,7 @@ const db       = require('./services/db');
 const sheets   = require('./services/sheets');
 const whatsapp = require('./services/whatsapp');
 const mailIntake = require('./services/mailIntake');
+const { computeVisitCounts } = require('./services/visitCounts');
 const pdf      = require('./services/pdf');
 
 const app  = express();
@@ -508,8 +509,15 @@ app.post('/internal/mail-intake', express.raw({ type: () => true, limit: '2mb' }
 
 app.get('/api/guests', (req, res) => {
   const { date } = req.query;
-  const guests = date ? db.getGuestsByDate(date) : db.getAllGuests();
-  res.json(guests.map(g => ({ ...g, name: g.name || `${g.firstName || ''} ${g.lastName || ''}`.trim() })));
+  // Visit counters are computed over the whole guests table, then filtered for the response
+  const all = db.getAllGuests();
+  const counts = computeVisitCounts(all);
+  const guests = date ? all.filter(g => g.meetingDate === date) : all;
+  res.json(guests.map(g => ({
+    ...g,
+    name: g.name || `${g.firstName || ''} ${g.lastName || ''}`.trim(),
+    ...(counts.get(g.id) || {}),
+  })));
 });
 
 app.get('/api/meetings', (req, res) => {

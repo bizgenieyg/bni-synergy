@@ -4,6 +4,10 @@ import { initReactI18next } from 'react-i18next';
 const resources = {
   en: {
     translation: {
+      ui: {
+        colVisits: 'Visits',
+        visitsHint: 'Last 12 months (all time)',
+      },
       nav: {
         guests: 'Guests',
         members: 'Members',
@@ -193,6 +197,10 @@ const resources = {
   },
   ru: {
     translation: {
+      ui: {
+        colVisits: 'Визиты',
+        visitsHint: 'За 12 месяцев (за всё время)',
+      },
       nav: {
         guests: 'Гости',
         members: 'Участники',
@@ -382,6 +390,10 @@ const resources = {
   },
   he: {
     translation: {
+      ui: {
+        colVisits: 'ביקורים',
+        visitsHint: 'ב-12 החודשים האחרונים (בסך הכול)',
+      },
       nav: {
         guests: 'אורחים',
         members: 'חברים',

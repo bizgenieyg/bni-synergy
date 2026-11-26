@@ -37,6 +37,8 @@ interface Guest {
   source?: string
   needs_review?: number
   guest_type?: string
+  visits12m?: number
+  visitsAll?: number
 }
 
 interface Member {
@@ -1301,6 +1303,10 @@ function GuestsSection() {
     </>
   )
 
+  const visitsCell = (g: Guest) => g.visitsAll === undefined || g.visits12m === undefined
+    ? '—'
+    : `${g.visits12m} (${g.visitsAll})`
+
   const typeBadge = (g: Guest) => g.guest_type === 'sub'
     ? <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Замена</span>
     : <span className="inline-block whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">Гость</span>
@@ -1548,6 +1554,7 @@ function GuestsSection() {
                   <div className="min-w-0 text-right text-gray-500 break-words">{specialtyCell(g)}</div>
                 </div>
                 <div className="text-sm text-gray-500 break-words">Пригласил: {g.invitedBy || '—'}</div>
+                <div className="text-sm text-gray-500">{t('ui.colVisits')}: <span title={t('ui.visitsHint')}>{visitsCell(g)}</span></div>
                 <div className="flex items-center flex-wrap gap-2">
                   {waButton(g, 'min-h-[44px] px-4')}
                   {confirmBadge(g)}
@@ -1570,6 +1577,7 @@ function GuestsSection() {
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colSpecialty')}</th>
                 <th className="px-4 py-3 font-medium hidden md:table-cell">{t('guests.colInvitedBy')}</th>
                 <th className="px-4 py-3 font-medium">Гость/Замена</th>
+                <th className="px-4 py-3 font-medium" title={t('ui.visitsHint')}>{t('ui.colVisits')}</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colWA')}</th>
                 <th className="px-4 py-3 font-medium">Подтверждение</th>
                 <th className="px-4 py-3 font-medium">{t('guests.colPayment')}</th>
@@ -1589,6 +1597,7 @@ function GuestsSection() {
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{specialtyCell(g)}</td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{g.invitedBy}</td>
                   <td className="px-4 py-3">{typeBadge(g)}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap" title={t('ui.visitsHint')}>{visitsCell(g)}</td>
                   <td className="px-4 py-3">{waButton(g, '')}</td>
                   <td className="px-4 py-3">{confirmBadge(g)}</td>
                   <td className="px-4 py-3">{payCell(g, '')}</td>
