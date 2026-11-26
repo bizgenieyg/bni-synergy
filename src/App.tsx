@@ -710,7 +710,7 @@ function MemberModal({ member, onClose, onSaved }:
 function InviteModal({ members, defaultMember, nextMeeting, onClose }:
   { members: Member[]; defaultMember?: Member; nextMeeting: string; onClose: () => void }) {
   const { t } = useTranslation()
-  const [selectedId, setSelectedId] = useState<number>(defaultMember?.id ?? members[0]?.id ?? 0)
+  const [selectedId, setSelectedId] = useState<number>(defaultMember?.id ?? 0) // 0 = not chosen yet
   const [date, setDate] = useState(nextMeeting)
   const [type, setType] = useState<'guest' | 'substitute'>('guest')
   const [phone, setPhone] = useState('')
@@ -754,8 +754,9 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
         <div className="space-y-3 mb-4">
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">{t('invite.memberLabel')}</label>
-            <select value={selectedId} onChange={e => setSelectedId(+e.target.value)}
+            <select value={selectedId || ''} onChange={e => setSelectedId(+e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400">
+              <option value="" disabled hidden>{t('ui.chooseMember')}</option>
               {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
@@ -780,15 +781,15 @@ function InviteModal({ members, defaultMember, nextMeeting, onClose }:
             </button>
           ))}
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-3">{link || '—'}</div>
-        {presenter?.member_name && (
+        {link && <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 break-all mb-3">{link}</div>}
+        {link && presenter?.member_name && (
           <div className="text-xs text-gray-600 mb-3 bg-red-50 rounded-lg px-3 py-2">
             🎤 Презентор: <span className="font-semibold text-gray-800">{presenter.member_name}</span>
           </div>
         )}
         <div className="flex gap-2">
-          <button onClick={copy} disabled={!link} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium disabled:opacity-40">{t('invite.copy')}</button>
-          <button onClick={wa} disabled={!link} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40" style={{ background: '#25D366' }}>{t('invite.whatsapp')}</button>
+          <button onClick={copy} disabled={!link} className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">{t('invite.copy')}</button>
+          <button onClick={wa} disabled={!link} className="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale" style={{ background: '#25D366' }}>{t('invite.whatsapp')}</button>
         </div>
       </motion.div>
     </motion.div>

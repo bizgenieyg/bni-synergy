@@ -5,6 +5,7 @@ const resources = {
   en: {
     translation: {
       ui: {
+        chooseMember: 'Choose a member',
         colVisits: 'Visits',
         visitsHint: 'Last 12 months (all time)',
       },
@@ -198,6 +199,7 @@ const resources = {
   ru: {
     translation: {
       ui: {
+        chooseMember: 'Выбрать участника',
         colVisits: 'Визиты',
         visitsHint: 'За 12 месяцев (за всё время)',
       },
@@ -391,6 +393,7 @@ const resources = {
   he: {
     translation: {
       ui: {
+        chooseMember: 'בחר חבר',
         colVisits: 'ביקורים',
         visitsHint: 'ב-12 החודשים האחרונים (בסך הכול)',
       },
