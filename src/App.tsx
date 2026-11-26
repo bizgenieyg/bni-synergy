@@ -242,7 +242,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
 // ─── Language Switcher ───────────────────────────────────────────────────────
 
-function LangSwitcher() {
+function LangSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   const { i18n } = useTranslation()
   const LANGS = [
     { code: 'en', label: 'EN' },
@@ -256,10 +256,11 @@ function LangSwitcher() {
     document.documentElement.lang = lang
   }
   return (
-    <div className="flex gap-1">
+    <div dir="ltr" className={cn('flex gap-1 min-w-0 max-w-full', collapsed ? 'flex-col items-stretch w-full' : 'flex-wrap justify-center')}>
       {LANGS.map(l => (
-        <button key={l.code} onClick={() => changeLang(l.code)}
-          className={cn('text-xs px-2.5 py-1 rounded-lg font-medium transition-colors',
+        <button key={l.code} onClick={() => changeLang(l.code)} title={l.label}
+          className={cn('font-medium transition-colors rounded-lg text-center',
+            collapsed ? 'text-[10px] px-0 py-1 w-full' : 'text-xs px-2 py-1 min-w-0',
             i18n.language === l.code ? 'text-white' : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white')}
           style={i18n.language === l.code ? { background: RED } : {}}>
           {l.label}
@@ -328,8 +329,8 @@ function Sidebar({ section, collapsed, onNav, onCollapse, onLogout, wahaOk }:
             )}
           </div>
         )}
-        <div className={cn('flex items-center px-3 py-2', collapsed ? 'justify-center' : 'gap-3')}>
-          <LangSwitcher />
+        <div className={cn('flex items-center py-2 min-w-0', collapsed ? 'justify-center px-0' : 'justify-center px-1')}>
+          <LangSwitcher collapsed={collapsed} />
         </div>
         <button onClick={onLogout} title={collapsed ? t('nav.logout') : undefined}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 text-sm">
